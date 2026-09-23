@@ -1,0 +1,3 @@
+﻿newmtl Mat_Pepe
+Kd 1.0 1.0 1.0
+map_Kd ../Textures/PePeTexture.png

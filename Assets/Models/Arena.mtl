@@ -1,0 +1,369 @@
+Wavefront OBJ material file
+# Contains 28 materials
+
+newmtl Stone
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Grass_Block
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Dirt
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Cobblestone
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Oak_Planks
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Gravel
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Oak_Log
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Leaves
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+map_d ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Grass
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+map_d ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Wool
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Block_of_Iron
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Double_Stone_Slab
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Stone_Slab
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Cobblestone_Stairs
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Snow
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Clay
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Stone_Bricks
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Brown_Mushroom_(block)
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Stone_Brick_Stairs
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Double_Wooden_Slab
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Wooden_Slab
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Spruce_Stairs
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Jungle_Stairs
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Block_of_Quartz
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Quartz_Stairs
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Stained_Clay
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Iron_Trapdoor
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+map_d ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Carpet
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Arena.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Arena.png
+illum 2
+# d 1
+# Tr 0

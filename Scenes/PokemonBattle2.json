@@ -1,0 +1,143 @@
+{
+  "Actors": {
+    "0": {
+      "Name": "Actor_0",
+      "RootComponentUUID": 1,
+      "Type": "Actor",
+      "bVisible": true
+    },
+    "3": {
+      "Name": "Actor_1",
+      "RootComponentUUID": 4,
+      "Type": "Actor",
+      "bVisible": true
+    },
+    "6": {
+      "Name": "Actor_2",
+      "RootComponentUUID": 7,
+      "Type": "Actor",
+      "bVisible": true
+    },
+    "9": {
+      "Name": "Actor_3",
+      "RootComponentUUID": 10,
+      "Type": "Actor",
+      "bVisible": true
+    }
+  },
+  "Components": {
+    "1": {
+      "Location": [
+        0.0,
+        0.0,
+        -5.960464477539063e-08
+      ],
+      "MeshKey": "Assets/Models/Mineways2Skfb.obj",
+      "Name": "StaticMeshComponent_0",
+      "OverrideMaterials": {},
+      "OwnerActorUUID": 0,
+      "Rotation": [
+        -90.0,
+        2.0086859876755625e-05,
+        2.0486595531110652e-05
+      ],
+      "Scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "Type": "StaticMeshComponent",
+      "bIsVisible": true,
+      "bVisible": true
+    },
+    "10": {
+      "Location": [
+        0.0,
+        -1.0959471464157104,
+        0.13025370240211487
+      ],
+      "MeshKey": "Assets/Models/sobble_v9_23062021.obj",
+      "Name": "StaticMeshComponent_3",
+      "OverrideMaterials": {},
+      "OwnerActorUUID": 9,
+      "Rotation": [
+        0.0,
+        0.0,
+        -90.0
+      ],
+      "Scale": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.10000000149011612
+      ],
+      "Type": "StaticMeshComponent",
+      "bIsVisible": true,
+      "bVisible": true
+    },
+    "4": {
+      "Location": [
+        0.7060842514038086,
+        -0.044346194714307785,
+        0.27195796370506287
+      ],
+      "MeshKey": "Assets/Models/Pepe.obj",
+      "Name": "StaticMeshComponent_1",
+      "OverrideMaterials": {},
+      "OwnerActorUUID": 3,
+      "Rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "Scale": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.10000000149011612
+      ],
+      "Type": "StaticMeshComponent",
+      "bIsVisible": true,
+      "bVisible": true
+    },
+    "7": {
+      "Location": [
+        0.09227348119020462,
+        0.9904563426971436,
+        0.13864998519420624
+      ],
+      "MeshKey": "Assets/Models/ScorBunny.obj",
+      "Name": "StaticMeshComponent_2",
+      "OverrideMaterials": {},
+      "OwnerActorUUID": 6,
+      "Rotation": [
+        0.0,
+        0.0,
+        90.0
+      ],
+      "Scale": [
+        0.30000001192092896,
+        0.30000001192092896,
+        0.30000001192092896
+      ],
+      "Type": "StaticMeshComponent",
+      "bIsVisible": true,
+      "bVisible": true
+    }
+  },
+  "NextUUID": 12,
+  "PerspectiveCamera": {
+    "FOV": 1.0471973419189453,
+    "FarZ": 1000.0,
+    "Location": [
+      -0.7271046042442322,
+      -0.2642817497253418,
+      0.39571794867515564
+    ],
+    "NearZ": 0.10000000149011612,
+    "Rotation": [
+      -2.2429373264312744,
+      61.0153923034668,
+      6.588554413156089e-08
+    ]
+  },
+  "Version": 1
+}

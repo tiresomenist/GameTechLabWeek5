@@ -1,0 +1,216 @@
+Wavefront OBJ material file
+# Contains 16 materials
+
+newmtl Grass_Block
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Dirt
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Oak_Planks
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Glass
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0.03 0.03 0.03
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+map_d ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Powered_Rail
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+map_d ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Wool
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Stone_Slab
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Stone_Button
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Stained_Glass
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0.03 0.03 0.03
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+map_d ../Textures/Mineways2Skfb-RGBA.png
+illum 4
+# d 0.5
+# Tr 0.5
+Tf 0.5 0.5 0.5
+
+newmtl Stone_Bricks
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Stone_Brick_Stairs
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Quartz_Stairs
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Colored_Terracotta
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Stained_Glass_Pane
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0.03 0.03 0.03
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+map_d ../Textures/Mineways2Skfb-RGBA.png
+illum 4
+# d 0.5
+# Tr 0.5
+Tf 0.5 0.5 0.5
+
+newmtl Concrete
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0
+
+newmtl Unknown_Block
+Ns 0
+Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+map_Ka ../Textures/Mineways2Skfb-RGBA.png
+# for G3D, to make textures look blocky:
+interpolateMode NEAREST_MAGNIFICATION_TRILINEAR_MIPMAP_MINIFICATION
+map_Kd ../Textures/Mineways2Skfb-RGBA.png
+illum 2
+# d 1
+# Tr 0

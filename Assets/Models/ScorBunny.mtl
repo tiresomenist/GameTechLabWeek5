@@ -1,0 +1,72 @@
+# Blender 5.2.1 LTS MTL File: 'None'
+# www.blender.org
+
+newmtl Body00
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd TexturePNG/pm0954_00_00_Body_col.png
+map_d TexturePNG/pm0954_00_00_Body_col.png
+
+newmtl Body01
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd TexturePNG/pm0954_00_00_Body_col.png
+map_d TexturePNG/pm0954_00_00_Body_col.png
+
+newmtl Body02
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd TexturePNG/pm0954_00_00_Body_col.png
+map_d TexturePNG/pm0954_00_00_Body_col.png
+
+newmtl BodyVco00
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd TexturePNG/pm0954_00_00_Body_col.png
+map_d TexturePNG/pm0954_00_00_Body_col.png
+
+newmtl BodyVco01
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd TexturePNG/pm0954_00_00_Body_col.png
+map_d TexturePNG/pm0954_00_00_Body_col.png
+
+newmtl LEye
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd TexturePNG/pm0954_00_00_Eye_col.png
+map_d TexturePNG/pm0954_00_00_Eye_col.png
+
+newmtl REye
+Ns 20.000006
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd TexturePNG/pm0954_00_00_Eye_col.png
+map_d TexturePNG/pm0954_00_00_Eye_col.png

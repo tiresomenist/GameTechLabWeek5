@@ -1,0 +1,139 @@
+#pragma	once
+#include <vector>
+#include <stdexcept>
+#include <functional>
+#include <algorithm>
+
+#include "Core/Core.h"
+
+template<typename T>
+class TArray
+{
+private:
+	std::vector<T> Array;
+
+public:
+
+	TArray()
+		: Array()
+	{
+	}
+
+	TArray(size_t Size)
+		: Array(Size)
+	{
+	}
+
+	TArray(const std::initializer_list<T>& List)
+		: Array(List)
+	{
+	}
+
+	void Add(const T& Element)
+	{
+		Array.push_back(Element);
+	}
+
+	void Add(T&& Element)
+	{
+		Array.push_back(std::move(Element));
+	}
+
+	void Empty()
+	{
+		Array.clear();
+	}
+
+	bool IsEmpty() const
+	{
+		return Array.empty();
+	}
+
+	T Pop()
+	{
+		if (Array.empty()) throw std::runtime_error("Stack empty");
+		T Top = Array.back();
+		Array.pop_back();
+		return Top;
+	}
+
+	void Remove(const T& Element)
+	{
+		Array.erase(std::remove(Array.begin(), Array.end(), Element), Array.end());
+	}
+
+	int Num() const
+	{
+		return Array.size();
+	}
+
+	void SetNum(size_t Size)
+	{
+		Array.resize(Size);
+	}
+
+	T* GetData()
+	{
+		return Array.data();
+	}
+
+	void RemoveAt(size_t Index)
+	{
+		Array.erase(Array.begin() + Index);
+	}
+
+	T& operator[](size_t Index)
+	{
+		return Array[Index];
+	}
+
+	const T& operator[](size_t Index) const
+	{
+		return Array[Index];
+	}
+
+	T& Last()
+	{
+		if (Array.empty()) throw std::runtime_error("Array empty");
+		return Array.back();
+	}
+	const T& Last() const
+	{
+		if (Array.empty())
+			throw std::runtime_error("Array empty");
+		return Array.back();
+	}
+
+	void Sort(std::function<bool(const T&, const T&)> Compare = std::less<T>())
+	{
+		std::sort(Array.begin(), Array.end(), Compare);
+	}
+
+	void assign(T* first, T* last)
+	{
+		Array.assign(first, last);
+	}
+
+	void resize(size_t Index)
+	{
+		Array.resize(Index);
+	}
+
+	std::vector<T>& GetVector() { return Array; }
+
+	auto begin() { return Array.begin(); }
+	auto end() { return Array.end(); }
+
+	auto begin() const { return Array.begin(); }
+	auto end() const { return Array.end(); }
+
+	void Reserve(size_t Capacity)
+	{
+		Array.reserve(Capacity);
+	}
+	const T* GetData() const
+	{
+		return Array.data();
+	}
+
+};

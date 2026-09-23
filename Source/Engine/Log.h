@@ -1,0 +1,18 @@
+
+#include "Engine/Engine.h"
+#include "Engine/Console.h"
+#include "Core/Container/String.h"
+
+#include <format>
+#include <utility>
+
+template <typename... Args>
+void UE_LOG(std::format_string<Args...> Format, Args&&... Arguments)
+{
+	GEngine& Engine = *GEngine::GetInstance();
+	FConsole* Console = Engine.GetConsole();
+	if (!Console) return;
+
+	FString Message = std::format(Format, std::forward<Args>(Arguments)...);
+	Console->Append(Message);
+}

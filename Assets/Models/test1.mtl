@@ -1,0 +1,15 @@
+# Multi-Material Definition for test1.obj
+newmtl Mat_Sun
+Kd 1.0 1.0 1.0
+d 1.0
+map_Kd ../Textures/sun.png
+
+newmtl Mat_Earth
+Kd 1.0 1.0 1.0
+d 1.0
+map_Kd ../Textures/earth.png
+
+newmtl Mat_Moon
+Kd 1.0 1.0 1.0
+d 1.0
+map_Kd ../Textures/moon.png

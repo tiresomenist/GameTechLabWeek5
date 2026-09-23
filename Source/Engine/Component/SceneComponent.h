@@ -1,0 +1,79 @@
+#pragma once
+#include <vector>
+
+#include "Engine/Component/ActorComponent.h"
+#include "Core/Core.h"
+#include "Core/Math/Vector.h"
+#include "Core/Math/Quaternion.h"
+#include "Engine/Object/ClassType.h"
+#include "Core/Math/Matrix.h"
+#include "Core/Math/Rotator.h"
+
+class USceneComponent : public UActorComponent
+{
+
+    UCLASS(USceneComponent, "SceneComponent", UActorComponent)
+
+public:
+	virtual bool CanBeRootComponent() const { return true; }
+	~USceneComponent() override;
+
+    FVector& GetRelativeLocation() { return RelativeLocation; };
+	const FVector& GetRelativeLocation() const { return RelativeLocation; }
+    const FRotator& GetRelativeRotator() const { return RelativeRotator;}
+    const FQuaternion& GetRelativeRotation() const { return RelativeRotation; }
+    FVector& GetRelativeScale3D() { return RelativeScale3D; };
+	const FVector& GetRelativeScale3D() const { return RelativeScale3D; }
+
+    void SetRelativeRotation(const FRotator& Rotation);
+    void SetRelativeLocation(const FVector& Location);
+    void SetRelativeRotation(const FQuaternion& Rotation);
+    void AddLocalRotation(const FQuaternion& Delta);
+    void AddWorldRotation(const FQuaternion& Delta);
+    void SetRelativeScale3D(const FVector& Scale3D);
+
+    // 같은 Actor 안에서만 부모-자식 Transform 관계를 만든다.
+    // Attach 후 Relative Transform은 Parent 기준 오프셋으로 해석된다.
+    bool AttachTo(USceneComponent* Parent);
+    void DetachFromParent();
+    USceneComponent* GetAttachParent() const { return AttachParent; }
+    const TArray<USceneComponent*>& GetAttachChildren() const { return AttachChildren; }
+
+    const FMatrix& GetWorldMatrix() const;
+    FVector GetWorldLocation() const
+    {
+        const FMatrix& WorldMat = GetWorldMatrix();
+        return GetWorldMatrix().GetOrigin();
+    }
+
+    virtual void Serialize(FArchive& Archive) override;
+
+    bool GetVisibility() const { return bVisible; }
+    void SetVisibility(bool bIsVisible) { bVisible = bIsVisible; }
+    bool IsVisible() const;
+
+protected:
+    // 로컬 트랜스폼
+    FVector RelativeLocation;
+    // Transform의 기본 스케일은 단위 스케일이어야 한다. FVector의 기본값은
+    // (0, 0, 0)이므로 명시하지 않으면 메시 정점이 원점으로 붕괴한다.
+    FVector RelativeScale3D{ 1.0f, 1.0f, 1.0f };
+
+    // 계층 구조
+    USceneComponent* AttachParent = nullptr;
+    TArray<USceneComponent*> AttachChildren;
+
+    // 최종 월드 행렬 캐싱
+    mutable FMatrix CachedWorldMatrix;
+
+    void UpdateWorldTransform() const;
+private:
+    // 행렬 회전 합성용 쿼터니언
+    FQuaternion RelativeRotation;
+
+    //편집, 저장용 각도
+    FRotator RelativeRotator;
+
+    bool bVisible = true;
+};
+
