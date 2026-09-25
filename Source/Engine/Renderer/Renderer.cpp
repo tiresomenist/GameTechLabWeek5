@@ -14,6 +14,7 @@
 #include <utility>
 #include <cstdlib>
 #include <chrono>
+#include <dxgi1_5.h>
 
 using Microsoft::WRL::ComPtr;
 
@@ -96,6 +97,7 @@ void FRenderer::Shutdown()
 	ReleaseDepthStencilBuffer();
 	ReleaseFrameBuffer();
 	SwapChain.Reset();
+	bTearingSupported = false;
 	ViewportInfo = {};
 
 	DeviceContext = nullptr;
@@ -117,10 +119,16 @@ void FRenderer::SwapBuffer()
 {
 	if (!IsRenderReady() || !SwapChain.Get()) { return; }
 
+	// 독점 전체화면에서는 티어링 Present 플래그를 사용할 수 없다.
+	BOOL Fullscreen = FALSE;
+	const UINT PresentFlags = bTearingSupported &&
+		SUCCEEDED(SwapChain->GetFullscreenState(&Fullscreen, nullptr)) && !Fullscreen
+		? DXGI_PRESENT_ALLOW_TEARING : 0;
+
 	using Clock = std::chrono::high_resolution_clock;
 	auto StartWait = Clock::now();
 
-	const HRESULT Result = SwapChain->Present(0, 0);
+	const HRESULT Result = SwapChain->Present(0, PresentFlags);
 
 	auto EndWait = Clock::now();
 	float CurWaitMs = std::chrono::duration<float, std::milli>(EndWait - StartWait).count();
@@ -195,6 +203,15 @@ bool FRenderer::CreateSwapChain(HWND HWnd, uint32 Width, uint32 Height)
 		return false;
 	}
 
+	bTearingSupported = false;
+	ComPtr<IDXGIFactory5> Factory5;
+	if (SUCCEEDED(Factory.As(&Factory5)))
+	{
+		BOOL AllowTearing = FALSE;
+		bTearingSupported = SUCCEEDED(Factory5->CheckFeatureSupport(
+			DXGI_FEATURE_PRESENT_ALLOW_TEARING, &AllowTearing, sizeof(AllowTearing))) && AllowTearing;
+	}
+
 	DXGI_SWAP_CHAIN_DESC Desc{};
 	Desc.BufferDesc.Width = Width;
 	Desc.BufferDesc.Height = Height;
@@ -205,6 +222,7 @@ bool FRenderer::CreateSwapChain(HWND HWnd, uint32 Width, uint32 Height)
 	Desc.OutputWindow = HWnd;
 	Desc.Windowed = TRUE;
 	Desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	Desc.Flags = bTearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
 	ComPtr<IDXGISwapChain> NewSwapChain;
 
@@ -338,7 +356,8 @@ void FRenderer::OnResize(uint32 Width, uint32 Height)
 
 	Context.Flush();
 
-	const HRESULT Result = SwapChain->ResizeBuffers(0,Width,Height,	DXGI_FORMAT_UNKNOWN, 0);
+	const UINT SwapChainFlags = bTearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+	const HRESULT Result = SwapChain->ResizeBuffers(0,Width,Height,	DXGI_FORMAT_UNKNOWN, SwapChainFlags);
 
 	if (FAILED(Result))
 	{

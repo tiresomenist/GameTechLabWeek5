@@ -57,6 +57,7 @@ private:
 	D3D11_VIEWPORT ViewportInfo{};
 	bool bRenderReady = false;
 	bool bGraphicsFailed = false;
+	bool bTearingSupported = false;
 
 	FGPUTimer GPUTimer;
 	float DrawTimeMs = 0.0f;
