@@ -75,7 +75,7 @@ void UPlaceActorWindow::Render(float DeltaTime)
 			&NumberOfSpawn,
 			&Step))
 		{
-			NumberOfSpawn = std::clamp(NumberOfSpawn, 1u, 20u);
+			NumberOfSpawn = std::clamp(NumberOfSpawn, 1u, 50000u);
 		}
 
 		ImGui::SeparatorText("Static Mesh");
