@@ -130,7 +130,7 @@ void GEngine::Tick()
     auto StartGame = Clock::now();
 	if (DeltaTime > 0.1f)
 	{
-		UE_LOG("[경고] 프레임 업데이트 시간이 100ms를 초과했습니다. 걸린 시간: {:.1f} ms", DeltaTime * 1000);
+		//UE_LOG("[경고] 프레임 업데이트 시간이 100ms를 초과했습니다. 걸린 시간: {:.1f} ms", DeltaTime * 1000);
 	}
 
     if (ApplicationMode == EApplicationMode::Editor)

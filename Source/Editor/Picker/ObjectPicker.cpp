@@ -12,6 +12,7 @@
 #include "Editor/Editor.h"
 #include "Engine/Actor/Actor.h"
 #include "Engine/Component/Light/SpotLightComponent.h"
+#include "Editor/Util/ScopeCycleCounter.h"
 
 FObjectPicker::FObjectPicker(FEditor* InEditor)
 	: Editor{ InEditor }
@@ -117,6 +118,7 @@ bool FObjectPicker::RayAABBIntersect(const FRay& Ray,const FVector& BoundsMin,co
 	return true;
 }
 
+// 피킹 시간 계산 로직 추가
 USceneComponent* FObjectPicker::Pick()
 {
 	if (!Editor) { return nullptr; }
@@ -134,6 +136,9 @@ USceneComponent* FObjectPicker::Pick()
 	FRay Ray;
 
 	if (!MakeWorldRay(Ray, CurrViewport)) { return nullptr; }
+	// 피킹 횟수 계산 시작
+	FScopeCycleCounter PickCounter;
+	TotalPickCount++;
 
 	// 프리미티브와 광원을 같은 선택 결과로 취급함
 	USceneComponent* SelectedObject = nullptr;
@@ -262,5 +267,14 @@ USceneComponent* FObjectPicker::Pick()
 			}
 		}
 	);
+
+	LastPickTimeMs = PickCounter.Finish();
+	TotalPickTimeMs += LastPickTimeMs;
+
+	// 임시로 피킹 결과값을 로그로 찍는다. 추후에 스탯창처럼 띄우는게 나을듯 함.
+	UE_LOG("[Picking] Count={} Last={:.3f} ms Total={:.3f} ms Avg={:.3f} ms",
+		TotalPickCount, LastPickTimeMs, TotalPickTimeMs,
+		TotalPickTimeMs / static_cast<double>(TotalPickCount));
+
 	return SelectedObject;
 }

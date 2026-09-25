@@ -23,6 +23,10 @@ public:
 
 private:
 	FEditor* Editor;
+
+	uint32 TotalPickCount = 0;
+	double LastPickTimeMs = 0.0;
+	double TotalPickTimeMs = 0.0;
 };
 
 
