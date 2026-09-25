@@ -54,9 +54,11 @@ local function ConfigureApplication(ProjectName, OutputDirectory)
             symbols "On"
 
         -- 기존 Release 최적화 정책을 유지합니다.
+	-- 실험용으로 optimize Speed로 바꿔봄
         filter "configurations:Release"
             defines { "NDEBUG" }
-            optimize "Off"
+            optimize "Speed"
+	    symbols "On"
             functionlevellinking "Off"
             intrinsics "Off"
             stringpooling "Off"
