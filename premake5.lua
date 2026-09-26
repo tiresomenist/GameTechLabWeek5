@@ -54,9 +54,14 @@ local function ConfigureApplication(ProjectName, OutputDirectory)
             symbols "On"
 
         -- 기존 Release 최적화 정책을 유지합니다.
+	-- 실험용으로 optimize Speed로 바꿔봄
+	-- 기존 옵션은 optimize off, symbols 없음, editandcontinue 없음.
         filter "configurations:Release"
             defines { "NDEBUG" }
+	    runtime "Release"
             optimize "Off"
+	    symbols "On"
+    	    editandcontinue "Off"
             functionlevellinking "Off"
             intrinsics "Off"
             stringpooling "Off"
@@ -71,7 +76,7 @@ local function ConfigureApplication(ProjectName, OutputDirectory)
 end
 
 -- 기존 에디터 프로젝트의 이름과 출력 위치를 유지합니다.
-ConfigureApplication("GameTechlabWeek4", "bin/%{cfg.buildcfg}")
+ConfigureApplication("GameTechlabWeek5", "bin/%{cfg.buildcfg}")
 
 -- Viewer 실행 파일을 별도로 생성하고 전용 빌드 정의를 추가합니다.
 ConfigureApplication("ObjViewer", "bin/ObjViewer/%{cfg.buildcfg}")

@@ -318,6 +318,7 @@ void FEditor::Initialize()
 	InitializeWindows();
 	InitializeGrids();
 	LoadEditorSetting();
+	ToggleMaxView(0);
 
 	bInitialized = true;
 }
