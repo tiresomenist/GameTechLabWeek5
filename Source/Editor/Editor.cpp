@@ -536,7 +536,9 @@ void FEditor::SpawnStaticMesh(const FName& MeshKey, int Count)
 {
 	UScene* CurrentScene = GetCurrentScene();
 	if (!CurrentScene || MeshKey.IsNone() || Count <= 0) return;
-
+	
+	NotifyOutlinerRowsChanged();
+	
 	for (int i = 0; i < Count; ++i)
 	{
 		AActor* Actor = nullptr;
@@ -583,6 +585,8 @@ void FEditor::SpawnComponent(FClassType* ComponentClass, int Count)
 
 	UScene* CurrentScene = GetCurrentScene();
 
+	NotifyOutlinerRowsChanged();
+
 	for (int i = 0; i < Count; ++i)
 	{
 		AActor* Actor = CurrentScene->SpawnActor<AActor*>(AActor::GetClass());
@@ -601,6 +605,8 @@ void FEditor::CreateEmptyActor()
 {
 	AActor* Actor = GetCurrentScene()->SpawnActor<AActor*>(AActor::GetClass());
 	SetSelectedActor(Actor);
+	NotifyOutlinerRowsChanged();
+
 }
 
 void FEditor::NewScene()
@@ -727,7 +733,12 @@ void FEditor::DeleteSelectedActor()
 {
 	if (SelectedActor == nullptr) { return; }
 
+	AActor* ActorToDelete = SelectedActor;
+
 	CancelWindowRenames();
+
+	NotifyOutlinerActorDeleting(ActorToDelete);
+
 	UScene* CurrentScene = GetCurrentScene();
 	CurrentScene->DestroyActor(SelectedActor);
 
@@ -1230,6 +1241,29 @@ void FEditor::CancelWindowRenames()
 		else if (Window->IsA(UOutlinerWindow::GetClass()))
 		{
 			static_cast<UOutlinerWindow*>(Window)->FinishRename(false);
+		}
+	}
+}
+
+void FEditor::NotifyOutlinerRowsChanged()
+{
+	for (UEditorWindow* Window : Windows)
+	{
+		if (Window->IsA(UOutlinerWindow::GetClass()))
+		{
+			static_cast<UOutlinerWindow*>(Window)->InvalidateRows();
+		}
+	}
+}
+
+void FEditor::NotifyOutlinerActorDeleting(AActor* Actor)
+{
+	for (UEditorWindow* Window : Windows)
+	{
+		if (Window->IsA(UOutlinerWindow::GetClass()))
+		{
+			static_cast<UOutlinerWindow*>(Window)
+				->OnActorDeleting(Actor);
 		}
 	}
 }

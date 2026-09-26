@@ -226,6 +226,8 @@ public:
 	// 이번 프레임에 렌더링할 카메라와 뷰포트 목록을 구성합니다.
 	virtual TArray<FRenderView> BuildRenderViews(const D3D11_VIEWPORT& FullViewport) const;
 
+	void NotifyOutlinerRowsChanged();
+	void NotifyOutlinerActorDeleting(AActor* Actor);
 
 public:
 	friend TArray<FPrimitiveRenderData> RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera);
