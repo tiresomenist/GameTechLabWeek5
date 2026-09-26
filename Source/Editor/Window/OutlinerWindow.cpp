@@ -83,35 +83,31 @@ void UOutlinerWindow::Render(float DeltaTime)
 
 		ImGuiListClipper Clipper;
 		Clipper.Begin(AllRows.Num());
-
-		auto IncludeActor = [&](AActor* Actor){
-				if (!Actor){ return; }
-				for (int32 i = 0; i < AllRows.Num(); ++i)
-				{
-					if (AllRows[i].Actor == Actor)
-					{
-						Clipper.IncludeItemByIndex(i);
-						return;
-					}
-				}
+		
+		auto IncludeActor = [&](AActor* Actor, FInteractionRowCache& Cache){
+				const int32 RowIndex = FindInteractionRow(Actor, Cache);
+				if (RowIndex >= 0){ Clipper.IncludeItemByIndex(RowIndex); }
 			};
 
-		IncludeActor(RenameTarget);
-		IncludeActor(PopupActor);
+		IncludeActor(RenameTarget, RenameRowCache);
+		IncludeActor(PopupActor, PopupRowCache);
+
+		AActor* DragActor = nullptr;
 
 		// 드래그 소스가 화면 밖으로 나가도 계속 제출
 		if (const ImGuiPayload* Payload = ImGui::GetDragDropPayload())
 		{
 			if (Payload->IsDataType("EDITOR_ACTOR") &&	Payload->DataSize == sizeof(AActor*))
 			{
-				AActor* DragActor =	*static_cast<AActor* const*>(Payload->Data);
-				IncludeActor(DragActor);
+				DragActor =	*static_cast<AActor* const*>(Payload->Data);
 			}
 		}
 
+		IncludeActor(DragActor, DragRowCache);
+
 		while (Clipper.Step())
 		{
-			for (int32 i = Clipper.DisplayStart; i < Clipper.DisplayEnd;	++i)
+			for (int32 i = Clipper.DisplayStart; i < Clipper.DisplayEnd; ++i)
 			{
 				DrawActorRow(AllRows[i]);
 			}
@@ -256,6 +252,7 @@ bool UOutlinerWindow::CanReparent(AActor* Source, AActor* Target) const
 // 씬 교체시 전체 Row를 재구축
 void UOutlinerWindow::RebuildRows(UScene* Scene)
 {
+	ResetInteractionRowCaches();
 	AllRows.Empty();
 	Scene->ForEachActor([this](AActor* Actor) {
 		if (Actor->GetParentActor() == nullptr) { AppendRows(Actor, 0); }
@@ -394,6 +391,8 @@ void UOutlinerWindow::ResetSceneCache()
 {
 	FinishRename(false);
 
+	ResetInteractionRowCaches();
+
 	AllRows.Empty();
 	CachedLabel.Empty();
 	CollapsedActors.Empty();
@@ -404,6 +403,37 @@ void UOutlinerWindow::ResetSceneCache()
 	PendingReparentTarget = nullptr;
 
 	bRowsDirty = true;
+}
+
+int32 UOutlinerWindow::FindInteractionRow(AActor* Actor, FInteractionRowCache& Cache)
+{
+	// 같은 대상이고 행 목록도 재구성되지 않았을 때
+	if (Cache.Actor == Actor){return Cache.RowIndex;}
+
+	Cache.Actor = Actor;
+	Cache.RowIndex = -1;
+
+	// 상호작용이 끝난 경우.
+	if (!Actor){ return -1; }
+
+	// 대상이 바뀌었을 때 한 번만 검색한다.
+	for (int32 i = 0; i < AllRows.Num(); ++i)
+	{
+		if (AllRows[i].Actor == Actor)
+		{
+			Cache.RowIndex = i;
+			break;
+		}
+	}
+
+	return Cache.RowIndex;
+}
+
+void UOutlinerWindow::ResetInteractionRowCaches()
+{
+	RenameRowCache = FInteractionRowCache{};
+	PopupRowCache = FInteractionRowCache{};
+	DragRowCache = FInteractionRowCache{};
 }
 
 void UOutlinerWindow::OnActorDeleting(AActor* Actor)

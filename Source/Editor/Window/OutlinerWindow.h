@@ -13,6 +13,11 @@ struct FOutlinerRow
 	int32 Depth;
 };
 
+struct FInteractionRowCache
+{
+	AActor* Actor = nullptr;
+	int32 RowIndex = -1;
+};
 
 class UOutlinerWindow : public UEditorWindow
 {
@@ -25,7 +30,6 @@ public:
 	void OnActorDeleting(AActor* Actor);
 
 private:
-	//void DrawActorTree(AActor* Actor);
 	void SetVisibilitySubtree(AActor* Actor, bool bVisible);
 	void DrawRenameInput(AActor* Actor, const ImVec2& Position, float Width);
 
@@ -59,4 +63,12 @@ private:
 	AActor* PopupActor = nullptr;
 
 	void ResetSceneCache();
+
+	FInteractionRowCache RenameRowCache;
+	FInteractionRowCache PopupRowCache;
+	FInteractionRowCache DragRowCache;
+
+	int32 FindInteractionRow(AActor* Actor,	FInteractionRowCache& Cache);
+
+	void ResetInteractionRowCaches();
 };
