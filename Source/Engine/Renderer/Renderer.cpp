@@ -461,16 +461,6 @@ void FRenderer::Render(float DeltaTime, FEditor* Editor, UScene* Scene, const TA
 // Viewport,Scissor 설정
 void FRenderer::SetViewportAndScissor(const D3D11_VIEWPORT& Viewport)
 {
-	GContext::GetInstance()->SetViewport(Viewport);
 
-	// Viewport는 정수 픽셀 경계로 구성한다.
-	const D3D11_RECT ScissorRect
-	{
-		static_cast<LONG>(Viewport.TopLeftX),
-		static_cast<LONG>(Viewport.TopLeftY),
-		static_cast<LONG>(Viewport.TopLeftX + Viewport.Width),
-		static_cast<LONG>(Viewport.TopLeftY + Viewport.Height)
-	};
-
-	DeviceContext->RSSetScissorRects(1, &ScissorRect);
+	GContext::GetInstance()->SetViewportAndScissor(Viewport);
 }
