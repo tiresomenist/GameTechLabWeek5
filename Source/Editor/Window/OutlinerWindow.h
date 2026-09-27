@@ -29,6 +29,8 @@ public:
 	void InvalidateRows(){ bRowsDirty = true; }
 	void OnActorDeleting(AActor* Actor);
 
+	void CancelPendingEdits();
+
 private:
 	void SetVisibilitySubtree(AActor* Actor, bool bVisible);
 	void DrawRenameInput(AActor* Actor, const ImVec2& Position, float Width);

@@ -1226,7 +1226,7 @@ void FEditor::CancelWindowRenames()
 		}
 		else if (Window->IsA(UOutlinerWindow::GetClass()))
 		{
-			static_cast<UOutlinerWindow*>(Window)->FinishRename(false);
+			static_cast<UOutlinerWindow*>(Window)->CancelPendingEdits();
 		}
 	}
 }

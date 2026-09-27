@@ -389,19 +389,10 @@ const FString& UOutlinerWindow::GetCachedName(AActor* Actor)
 
 void UOutlinerWindow::ResetSceneCache()
 {
-	FinishRename(false);
-
-	ResetInteractionRowCaches();
-
+	CancelPendingEdits();
 	AllRows.Empty();
 	CachedLabel.Empty();
 	CollapsedActors.Empty();
-
-	PopupActor = nullptr;
-	PendingDeleteTarget = nullptr;
-	PendingReparentSource = nullptr;
-	PendingReparentTarget = nullptr;
-
 	bRowsDirty = true;
 }
 
@@ -460,5 +451,15 @@ void UOutlinerWindow::OnActorDeleting(AActor* Actor)
 	}
 
 	bRowsDirty = true;
+}
+
+void UOutlinerWindow::CancelPendingEdits()
+{
+	FinishRename(false);
+	PopupActor = nullptr;
+	PendingDeleteTarget = nullptr;
+	PendingReparentSource = nullptr;
+	PendingReparentTarget = nullptr;
+	ResetInteractionRowCaches();
 }
 
