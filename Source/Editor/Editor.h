@@ -95,6 +95,10 @@ private:
 	
 	void PrepareSceneCameraForSave();
 
+	// Tick 분리용 함수들
+	void HandleSelectionClick(float Time);
+	void SelectViewportAt(float PixelX, float PixelY);
+	void UpdateGizmoAndCamera(float DeltaTime, bool bWasDragging, bool bWantToCaptureMouse, bool bWantToCaptureKeyboard);
 public:
 	virtual ~FEditor() = default;
 
