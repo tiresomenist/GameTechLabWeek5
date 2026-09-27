@@ -705,11 +705,17 @@ void FEditor::RemoveSelectedComponent()
 	{
 		return;
 	}
-	CancelWindowRenames();
 	AActor* Actor = SelectedActor;
-	if (Actor->RemoveComponent(SelectedComponent))
+	UActorComponent* ComponentToDelete = SelectedComponent;
+	CancelWindowRenames();
+	SetSelectedActor(nullptr);
+	if (Actor->RemoveComponent(ComponentToDelete))
 	{
 		SetSelectedActor(Actor);
+	}
+	else
+	{
+		SetSelectedComponent(ComponentToDelete);
 	}
 }
 
@@ -718,15 +724,11 @@ void FEditor::DeleteSelectedActor()
 	if (SelectedActor == nullptr) { return; }
 
 	AActor* ActorToDelete = SelectedActor;
-
-	CancelWindowRenames();
-
-	NotifyOutlinerActorDeleting(ActorToDelete);
-
 	UScene* CurrentScene = GetCurrentScene();
-	CurrentScene->DestroyActor(SelectedActor);
-
+	CancelWindowRenames();
+	NotifyOutlinerActorDeleting(ActorToDelete);
 	SetSelectedActor(nullptr);
+	CurrentScene->DestroyActor(ActorToDelete);
 }
 
 void FEditor::RegisterGizmo(FClassType* Type)
