@@ -92,6 +92,9 @@ private:
 
 	// 등록된 Property·Outliner 창에서 진행 중인 이름 편집을 취소한다.
 	void CancelWindowRenames();
+	
+	void PrepareSceneCameraForSave();
+
 public:
 	virtual ~FEditor() = default;
 
@@ -228,6 +231,7 @@ public:
 
 	void NotifyOutlinerRowsChanged();
 	void NotifyOutlinerActorDeleting(AActor* Actor);
+
 
 public:
 	friend TArray<FPrimitiveRenderData> RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera);

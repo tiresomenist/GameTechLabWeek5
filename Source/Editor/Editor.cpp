@@ -642,30 +642,14 @@ void FEditor::LoadSceneFromPath(const std::filesystem::path& ScenePath)
 void FEditor::SaveScene(FStringView SceneName)
 {
 	GSceneManager* SceneManager = GSceneManager::GetInstance();
-
-	for (const auto& Viewport : Viewports)
-	{
-		if (Viewport.GetViewportType() == EViewportType::Perspective)
-		{
-			GetCurrentScene()->SetMainCameraSaveData(Viewport.GetCamera());
-			break;
-		}
-	}
-
+	PrepareSceneCameraForSave();
 	SceneManager->SaveScene(SceneName);
 }
 
 void FEditor::SaveSceneToPath(const std::filesystem::path& ScenePath)
 {
 	GSceneManager* SceneManager = GSceneManager::GetInstance();
-	for (const auto& Viewport : Viewports)
-	{
-		if (Viewport.GetViewportType() == EViewportType::Perspective)
-		{
-			GetCurrentScene()->SetMainCameraSaveData(Viewport.GetCamera());
-			break;
-		}
-	}
+	PrepareSceneCameraForSave();
 	SceneManager->SaveSceneToPath(ScenePath);
 }
 
@@ -1264,6 +1248,20 @@ void FEditor::NotifyOutlinerActorDeleting(AActor* Actor)
 		{
 			static_cast<UOutlinerWindow*>(Window)
 				->OnActorDeleting(Actor);
+		}
+	}
+}
+
+void FEditor::PrepareSceneCameraForSave()
+{
+	UScene* Scene = GetCurrentScene();
+	if (!Scene) { return; }
+	for (const auto& Viewport : Viewports)
+	{
+		if (Viewport.GetViewportType() == EViewportType::Perspective)
+		{
+			Scene->SetMainCameraSaveData(Viewport.GetCamera());
+			break;
 		}
 	}
 }
