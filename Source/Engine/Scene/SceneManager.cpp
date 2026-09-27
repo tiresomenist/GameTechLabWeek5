@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <memory>
+#include "Engine/Scene/TestSceneImporter.h"
 
 namespace
 {
@@ -138,7 +139,17 @@ void GSceneManager::InternalLoadScene()
         // 파일 경로가 있으면 파일에서 생성하고, 없으면 빈 씬 Reader를 생성한다.
         if (!NextScenePath.empty())
         {
-            Reader = FJsonReader::FromFile(NextScenePath);
+            //Reader = FJsonReader::FromFile(NextScenePath);
+            
+            //
+            // 원본 테스트 씬의 모델 경로를 프로젝트 리소스에 연결한다.
+            const FTestSceneImporter::FMeshPathMap MeshPaths
+            {
+                { "Data/apple_mid.obj", "Assets/Models/apple_mid.obj" },
+                { "Data/bitten_apple_mid.obj", "Assets/Models/bitten_apple_mid.obj" }
+            };
+            // 테스트 씬은 메모리에서 변환하고, 기존 엔진 씬은 그대로 읽는다.
+            Reader = std::make_unique<FJsonReader>(FTestSceneImporter::Load(NextScenePath, MeshPaths));
         }
         else if (!NextSceneFile.empty())
         {
