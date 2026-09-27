@@ -6,6 +6,7 @@ class UScene;
 class FEditor;
 class UPrimitiveComponent;
 class USceneComponent;
+class UCameraComponent;
 
 struct FRay {
 	FVector Origin;
@@ -27,6 +28,10 @@ private:
 	uint32 TotalPickCount = 0;
 	double LastPickTimeMs = 0.0;
 	double TotalPickTimeMs = 0.0;
+
+	void PickPrimitives(UScene* Scene, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
+	void PickIcon(UScene* Scene, const UCameraComponent* Camera, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
+
 };
 
 
