@@ -32,6 +32,19 @@ namespace
             throw std::runtime_error("Reserved scene name");
         return (std::filesystem::path(SceneDirectory) / (Name + ".json")).generic_string();
     }
+
+    void WriteValidatedScene(UScene& Scene, FJsonWriter& Writer) {
+        // 파일 전체에 대한 버전과 다음 UUID를 루트에 기록한다.
+        int32 Version = 1;
+        uint32 NextUUID = GObjectStatics::GetNextUUID(EObjectDomain::EOT_Scene);
+        Writer.Field("Version", Version);
+        Writer.Field("NextUUID", NextUUID);
+        Scene.Serialize(Writer);
+
+        // 완성된 메모리상의 문서를 검사한 뒤 실제 파일에 저장한다.
+        FJsonReader ValidationReader(Writer.ToString());
+        ValidateSceneArchive(ValidationReader);
+    }
 }
 
 GSceneManager* GSceneManager::GetInstance()
@@ -191,18 +204,8 @@ void GSceneManager::SaveScene(FStringView SerializedName)
     {
         const FString FileName = GetScenePath(SerializedName);
         FJsonWriter Writer;
-
-        // 파일 전체에 대한 버전과 다음 UUID를 루트에 기록한다.
-        int32 Version = 1;
-        uint32 NextUUID = GObjectStatics::GetNextUUID(EObjectDomain::EOT_Scene);
-        Writer.Field("Version", Version);
-        Writer.Field("NextUUID", NextUUID);
-        CurrentScene->Serialize(Writer);
-
-        // 완성된 메모리상의 문서를 검사한 뒤 실제 파일에 저장한다.
-        FJsonReader ValidationReader(Writer.ToString());
-        ValidateSceneArchive(ValidationReader);
-
+        WriteValidatedScene(*CurrentScene,Writer);
+        
         std::filesystem::create_directories(SceneDirectory);
         Writer.SaveToFile(FileName);
     }
@@ -219,17 +222,7 @@ void GSceneManager::SaveSceneToPath(const std::filesystem::path& ScenePath)
     try
     {
         FJsonWriter Writer;
-
-        // 파일 전체에 대한 버전과 다음 UUID를 루트에 기록한다.
-        int32 Version = 1;
-        uint32 NextUUID = GObjectStatics::GetNextUUID(EObjectDomain::EOT_Scene);
-        Writer.Field("Version", Version);
-        Writer.Field("NextUUID", NextUUID);
-        CurrentScene->Serialize(Writer);
-
-        // 완성된 메모리상의 문서를 검사한 뒤 실제 파일에 저장한다.
-        FJsonReader ValidationReader(Writer.ToString());
-        ValidateSceneArchive(ValidationReader);
+        WriteValidatedScene(*CurrentScene, Writer);
 
         std::filesystem::create_directories(SceneDirectory);
         Writer.SaveToFilePath(ScenePath);
@@ -239,3 +232,4 @@ void GSceneManager::SaveSceneToPath(const std::filesystem::path& ScenePath)
         UE_LOG("[SceneManager] Save {} failed: {}", ScenePath.string(), Error.what());
     }
 }
+
