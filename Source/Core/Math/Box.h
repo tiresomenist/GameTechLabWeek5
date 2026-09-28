@@ -9,6 +9,7 @@ struct FBoundingBox
 
     FBoundingBox() = default;
 
+
     FBoundingBox(const FVector& InMin, const FVector& InMax)
         : Min(InMin), Max(InMax)
     {
@@ -45,7 +46,7 @@ struct FBoundingBox
         return Result;
     }*/
 
-    inline FBoundingBox TransformBounds(const FMatrix& World) const
+    FBoundingBox TransformBounds(const FMatrix& World) const
     {
         const FVector LocalCenter = (Min + Max) * 0.5f;
         const FVector LocalExtent = (Max - Min) * 0.5f;

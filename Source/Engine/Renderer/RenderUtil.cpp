@@ -58,6 +58,7 @@ TArray<FPrimitiveRenderData> RenderUtil::GetRenderList(FEditor* Editor, UScene* 
 			for (FPrimitiveRenderData& Data : RenderDataList)
 			{
 				Data.WorldMatrix = &Primitive->GetRenderWorldMatrix(Camera);
+				Data.Owner = Primitive;
 				RenderList.Add(Data);
 			}
 		}

@@ -1331,6 +1331,13 @@ void GResourceManager::RegisterDefaultBlendStates()
     AdditiveTarget.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
     RegisterBlendState(FName("Blend.Additive"), AdditiveDesc);
+
+    D3D11_BLEND_DESC OcclusionBlendDesc{};
+    OcclusionBlendDesc.AlphaToCoverageEnable = FALSE;
+    OcclusionBlendDesc.IndependentBlendEnable = FALSE;
+    OcclusionBlendDesc.RenderTarget[0].BlendEnable = FALSE;
+    OcclusionBlendDesc.RenderTarget[0].RenderTargetWriteMask = 0;  // 프레임 버퍼 색상은 바뀌지 않음
+    RegisterBlendState(FName("Blend.Occlusion"), OcclusionBlendDesc);
 }
 
 void GResourceManager::RegisterDepthStencilState(const FName& Name, const D3D11_DEPTH_STENCIL_DESC& Desc)
@@ -1398,6 +1405,9 @@ void GResourceManager::RegisterDefaultDepthStencilStates()
 
     // 선택된 메시: 스텐실 마스크 기록
     D3D11_DEPTH_STENCIL_DESC StencilWriteDesc = DefaultDesc;
+    StencilWriteDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+    StencilWriteDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+
     StencilWriteDesc.StencilEnable = TRUE;
     StencilWriteDesc.StencilReadMask = 0xFF;
     StencilWriteDesc.StencilWriteMask = 0xFF;
@@ -1428,4 +1438,11 @@ void GResourceManager::RegisterDefaultDepthStencilStates()
     OutlineDesc.BackFace = OutlineDesc.FrontFace;
 
     RegisterDepthStencilState(FName("Depth.Outline"), OutlineDesc);
+
+    D3D11_DEPTH_STENCIL_DESC OcclusionDepthDesc{};
+    OcclusionDepthDesc.DepthEnable = TRUE;
+    OcclusionDepthDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+    OcclusionDepthDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+    OcclusionDepthDesc.StencilEnable = FALSE;
+    RegisterDepthStencilState(FName("Depth.Occlusion"), OcclusionDepthDesc);
 }

@@ -50,6 +50,7 @@ void FViewRenderer::Create(ID3D11Device* InDevice, ID3D11DeviceContext* InContex
 	CreateAlphaBlendState();
 	CreateDepthStencilStates();
 	CreateTextResources();
+	OcclusionCuller.CreateProxyMesh(D3DDevice);
 }
 
 void FViewRenderer::Shutdown()
@@ -167,7 +168,8 @@ void FViewRenderer::CreateAlphaBlendState()
 	GResourceManager& Resources = *GResourceManager::GetInstance();
 	AlphaBlendState = Resources.GetBlendState(FName("Blend.Alpha"));
 	AdditiveBlendState = Resources.GetBlendState(FName("Blend.Additive"));
-	if (!AlphaBlendState || !AdditiveBlendState)
+	OcclusionBlendState = Resources.GetBlendState(FName("Blend.Occlusion"));
+	if (!AlphaBlendState || !AdditiveBlendState || !OcclusionBlendState)
 	{
 		throw std::runtime_error("Required blend states are missing");
 	}
@@ -178,6 +180,7 @@ void FViewRenderer::ReleaseAlphaBlendState()
 	// 공유 자원은 ResourceManager가 해제한다.
 	AlphaBlendState = nullptr;
 	AdditiveBlendState = nullptr;
+	OcclusionBlendState = nullptr;
 }
 
 void FViewRenderer::CreateDepthStencilStates()
@@ -190,6 +193,7 @@ void FViewRenderer::CreateDepthStencilStates()
 	TextDepthStencilState = Resources.GetDepthStencilState(FName("Depth.Text"));
 	StencilWriteDepthStencilState = Resources.GetDepthStencilState(FName("Depth.StencilWrite"));
 	OutlineDepthStencilState = Resources.GetDepthStencilState(FName("Depth.Outline"));
+	OcclusionDepthStencilState = Resources.GetDepthStencilState(FName("Depth.Occlusion"));
 	const TArray<ID3D11DepthStencilState*> RequiredStates
 	{
 		DefaultDepthStencilState,
@@ -198,7 +202,8 @@ void FViewRenderer::CreateDepthStencilStates()
 		TranslucentDepthStencilState,
 		TextDepthStencilState,
 		StencilWriteDepthStencilState,
-		OutlineDepthStencilState
+		OutlineDepthStencilState,
+		OcclusionDepthStencilState
 	};
 
 	for (ID3D11DepthStencilState* State : RequiredStates)
@@ -220,6 +225,7 @@ void FViewRenderer::ReleaseDepthStencilStates()
 	TextDepthStencilState = nullptr;
 	StencilWriteDepthStencilState = nullptr;
 	OutlineDepthStencilState = nullptr;
+	OcclusionDepthStencilState = nullptr;
 }
 
 void FViewRenderer::CreateTextResources()
@@ -380,7 +386,8 @@ void FViewRenderer::RenderPrimitive(const FPrimitiveRenderData& Data, EViewModeI
 	}
 	else
 	{
-		DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
+		//DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
+		DeviceContext->OMSetDepthStencilState(OcclusionDepthStencilState, 0);
 	}
 
 	DeviceContext->DrawIndexed(Data.IndexCount,Data.IndexStart,0);
@@ -416,23 +423,105 @@ void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& 
 	LineBatcher.Clear();
 
 	FMatrix ViewProjMatrix = Camera->GetViewMatrix() * Camera->GetProjectionMatrix();
+
+	// test
+	bool bCameraMoved = !bHasPreviousViewProjection;
+	constexpr float MatrixEpsilon = 0.0001f;
+	if (!bCameraMoved)
+	{
+		for (int32 Row = 0; Row < 4 && !bCameraMoved; ++Row)
+		{
+			for (int32 Column = 0; Column < 4; ++Column)
+			{
+				if (std::fabs(PreviousViewProjection.M[Row][Column] - ViewProjMatrix.M[Row][Column]) > MatrixEpsilon)
+				{
+					bCameraMoved = true;
+					break;
+				}
+			}
+		}
+	}
+	PreviousViewProjection = ViewProjMatrix;
+	bHasPreviousViewProjection = true;
+
 	const FFrustum Frustum = FFrustum::FrustumFromViewProjection(ViewProjMatrix);
 
 	TArray<FPrimitiveRenderData> RenderList = RenderUtil::GetRenderList(Editor, Scene, Camera, &Frustum);
 
+	OcclusionCuller.UpdateQueryResults(DeviceContext);
 	const bool bShowPrimitives = ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives);
-
 	const EViewModeIndex ViewMode = ViewSettings.ViewMode;
+
+	for (const FPrimitiveRenderData& Item : RenderList)
+	{
+		if (Item.Material.BlendMode == EPrimitiveBlendMode::Additive)
+		{
+			continue;
+		}
+		RenderOcclusionDepth(Item, ViewProjMatrix);
+	}
+
+	for (const FPrimitiveRenderData& Item : RenderList)
+	{
+		if (!Item.Owner || Item.Material.BlendMode == EPrimitiveBlendMode::Additive)
+		{
+			continue;
+		}
+		FOcclusionState& State = OcclusionCuller.Create(D3DDevice, Item.Owner);
+		if (!State.Query || State.bQueryPending)
+		{
+			continue;
+		}
+		DeviceContext->Begin(State.Query.Get());
+		const bool bProwyDrawn = RenderOcclusionProxy(Item, ViewProjMatrix);
+		DeviceContext->End(State.Query.Get());
+		if (bProwyDrawn)
+		{
+			State.bQueryPending = true;
+		}
+	}
+
+	DeviceContext->RSSetState(DefaultRasterizerState);
+	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
+	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
+
+	TArray<FPrimitiveRenderData> OcclusionVisibleList;
+	OcclusionVisibleList.Reserve(RenderList.Num());
+	for (const FPrimitiveRenderData& Item : RenderList)
+	{
+		if (!Item.Owner)
+		{
+			OcclusionVisibleList.Add(Item);
+			continue;
+		}
+		if (Item.Material.BlendMode == EPrimitiveBlendMode::Additive)
+		{
+			OcclusionVisibleList.Add(Item);
+			continue;
+		}
+		if (Item.isSelected)
+		{
+			OcclusionVisibleList.Add(Item);
+			continue;
+		}
+		if (bCameraMoved || OcclusionCuller.VisibleLastFrame(Item.Owner))
+		{
+			OcclusionVisibleList.Add(Item);
+		}
+	}
 
 	TArray<const FPrimitiveRenderData*> AdditiveRenderList;
 	TArray<const FPrimitiveRenderData*> OutlineRenderList;
 
-	for (auto& Item : RenderList)
+	const TArray<FPrimitiveRenderData>& VisibleList = bCameraMoved ? RenderList : OcclusionVisibleList;
+
+	for (auto& Item : VisibleList)
 	{
 		if (!Item.WorldMatrix || !Item.VertexBuffer || !Item.IndexBuffer || Item.IndexCount == 0)
 		{
 			continue;
 		}
+
 		if (bShowPrimitives) 
 		{
 			if (Item.Material.BlendMode == EPrimitiveBlendMode::Additive)
@@ -660,4 +749,68 @@ bool FViewRenderer::BindMaterial(const FMaterial& Material)
 void FViewRenderer::SetViewportAndScissor(const D3D11_VIEWPORT& Viewport)
 {
 	GContext::GetInstance()->SetViewportAndScissor(Viewport);
+}
+
+bool FViewRenderer::RenderOcclusionProxy(const FPrimitiveRenderData& Item, const FMatrix& ViewProjection)
+{
+	ID3D11Buffer* ProxyVertexBuffer = OcclusionCuller.GetProxyVertexBuffer();
+	ID3D11Buffer* ProxyIndexBuffer = OcclusionCuller.GetProxyIndexBuffer();
+
+	if (!Item.WorldMatrix || !ProxyVertexBuffer || !ProxyIndexBuffer)
+	{
+		return false;
+	}
+
+	const FVector LocalCenter = (Item.Min + Item.Max) * 0.5f;
+	const FVector LocalExtent = (Item.Max - Item.Min) * 0.5f;
+
+	if (LocalExtent.X <= EPSILON || LocalExtent.Y <= EPSILON || LocalExtent.Z <= EPSILON)
+	{
+		return false;
+	}
+
+	const FMatrix ProxyWorld =
+		FMatrix::MakeScaleMatrix(LocalExtent)
+		* FMatrix::MakeTranslationMatrix(LocalCenter)
+		* (*Item.WorldMatrix);
+
+	UpdateTransformConstantBuffer(ProxyWorld, ViewProjection);
+	BindShader(*SimpleShader);
+
+	const UINT Stride = sizeof(FVertexSimple);
+	const UINT Offset = 0;
+
+	DeviceContext->IASetVertexBuffers(0, 1, &ProxyVertexBuffer, &Stride, &Offset);
+	DeviceContext->IASetIndexBuffer(ProxyIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+	DeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	DeviceContext->VSSetConstantBuffers(0, 1, TransformConstantBuffer.GetAddressOf());
+
+	DeviceContext->RSSetState(CullNoneRasterizerState);
+	DeviceContext->OMSetBlendState(OcclusionBlendState, nullptr, 0xffffffff);
+	DeviceContext->OMSetDepthStencilState(OcclusionDepthStencilState, 0);
+	DeviceContext->PSSetShader(nullptr, nullptr, 0);
+	DeviceContext->DrawIndexed(36, 0, 0);
+	
+	return true;
+}
+
+
+void FViewRenderer::RenderOcclusionDepth(const FPrimitiveRenderData& Item, const FMatrix& ViewProjection)
+{
+	if (!Item.WorldMatrix || !Item.VertexBuffer || !Item.IndexBuffer || Item.IndexCount == 0)
+	{
+		return;
+	}
+	if (!BindMaterial(Item.Material))
+	{
+		return;
+	}
+
+	UpdateTransformConstantBuffer(*Item.WorldMatrix, ViewProjection);
+	BindPrimitiveBuffers(Item);
+	DeviceContext->PSSetShader(nullptr, nullptr, 0);
+	DeviceContext->RSSetState(Item.bTwoSided ? CullNoneRasterizerState : DefaultRasterizerState);
+	DeviceContext->OMSetBlendState(OcclusionBlendState, nullptr, 0xffffffff);
+	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
+	DeviceContext->DrawIndexed(Item.IndexCount, Item.IndexStart, 0);
 }

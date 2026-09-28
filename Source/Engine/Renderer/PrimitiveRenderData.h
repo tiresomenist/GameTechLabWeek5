@@ -5,6 +5,7 @@
 #include "Engine/Renderer/Material.h"
 
 struct FMatrix; 
+class UPrimitiveComponent;
 
 // HLSL의 float2 크기와 float2 오프셋에 대응하는 16바이트 상수
 struct FTextureUVTransform
@@ -71,4 +72,7 @@ struct FPrimitiveRenderData
 
 	// 구형 닫힌 메시에는 cull_back, 플립북, 평면, 빌보드에는 cull_none
 	bool bTwoSided = false;
+
+	// RenderData가 어느 Component에 속하는지
+	const UPrimitiveComponent* Owner = nullptr;
 };

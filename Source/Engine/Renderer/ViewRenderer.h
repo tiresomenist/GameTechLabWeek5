@@ -6,6 +6,7 @@
 #include "Engine/Renderer/PrimitiveRenderData.h"
 #include "Engine/Renderer/ViewSettings.h"
 #include "Engine/Renderer/Line/LineBatcher.h"
+#include "Engine/Renderer/Occlusion.h"
 
 class UScene;
 class FEditor;
@@ -59,6 +60,9 @@ private:
 	void UpdateTextVertexBuffer(TArray<FVertexTexture>& Vertices);
 	void RenderText(UINT IndexCount);
 
+	bool RenderOcclusionProxy(const FPrimitiveRenderData& Item, const FMatrix& ViewProjection);
+	void RenderOcclusionDepth(const FPrimitiveRenderData& Item, const FMatrix& ViewProjection);
+
 	// Device와 Context는 비소유 참조.
 	ID3D11Device* D3DDevice = nullptr;
 	ID3D11DeviceContext* DeviceContext = nullptr;
@@ -92,4 +96,10 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> TextIndexBuffer;
 	static const UINT MaxTextVertices = 8192;
 	FLineBatcher LineBatcher;
+
+	FOcclusionCuller OcclusionCuller;
+	ID3D11DepthStencilState* OcclusionDepthStencilState = nullptr;
+	ID3D11BlendState* OcclusionBlendState = nullptr;
+	FMatrix PreviousViewProjection{};
+	bool bHasPreviousViewProjection = false;
 };
