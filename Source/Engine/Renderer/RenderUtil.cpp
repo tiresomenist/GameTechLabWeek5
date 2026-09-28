@@ -27,10 +27,11 @@ namespace
 	}
 }
 
-TArray<FPrimitiveRenderData> RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera)
+void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera, TArray<FPrimitiveRenderData>& RenderList)
 {
-	TArray<FPrimitiveRenderData> RenderList;
-	if (!Editor || !Scene || !Camera) return RenderList;
+	//TArray<FPrimitiveRenderData> RenderList;
+	RenderList.Empty();
+	if (!Editor || !Scene || !Camera) return;
 	Scene->ForEachPrimitive(
 		[&RenderList, Editor, Camera](UPrimitiveComponent* Primitive)
 		{
@@ -79,7 +80,7 @@ TArray<FPrimitiveRenderData> RenderUtil::GetRenderList(FEditor* Editor, UScene* 
 		}
 	);
 
-	return RenderList;
+	return;
 }
 
 TArray<FPrimitiveRenderData> RenderUtil::GetGizmoList(FEditor* Editor,UScene* Scene,const UCameraComponent* Camera,
