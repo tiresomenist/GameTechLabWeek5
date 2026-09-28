@@ -30,6 +30,11 @@ void USpotLightComponent::Initialize()
     {
         throw std::runtime_error("SpotLight icon texture is not available");
     }
+
+    IconMaterial = Resources->CreateTextureMaterial(IconTexture->GetSRV());
+    IconMaterial.bTwoSided = true;
+    IconMaterial.AlphaCutoff = 0.1f;
+    IconMaterial.DiffuseColor = FVector4(LightColor.X, LightColor.Y, LightColor.Z, 1.0f);
 }
 
 void USpotLightComponent::SetLightColor(const FVector& Value)
@@ -39,6 +44,7 @@ void USpotLightComponent::SetLightColor(const FVector& Value)
         return;
     }
     LightColor = FVector(std::clamp(Value.X, 0.0f, 1.0f), std::clamp(Value.Y, 0.0f, 1.0f), std::clamp(Value.Z, 0.0f, 1.0f));
+    IconMaterial.DiffuseColor = FVector4(LightColor, 1.0f);
 }
 
 //최소값 0.01을 내부적으로 적용
@@ -121,34 +127,32 @@ FPrimitiveRenderData USpotLightComponent::BuildIconRenderData(const UCameraCompo
 {
     FPrimitiveRenderData Data{};
 
-    if (!Camera || !IconMesh || !IconTexture || !IconTexture->GetSRV()) { return Data; }
+    if (!Camera || !IconMesh ||
+        !IconTexture || !IconTexture->GetSRV() ||
+        IconMaterial.MaterialId == InvalidRenderId)
+    {
+        return Data;
+    }
 
-    // 공유 아이콘 메시의 GPU 버퍼 연결함
-    Data.VertexBuffer = IconMesh->GetVertexBuffer();
-    Data.IndexBuffer = IconMesh->GetIndexBuffer();
-    Data.Stride = IconMesh->GetStride();
-    Data.IndexCount = IconMesh->GetIndexCount();
-    Data.Topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+    const FMeshAllocation& Allocation = IconMesh->GetAllocation();
 
-    // 공유 텍스처와 컴포넌트 소유 행렬 연결함
-    Data.Material = GResourceManager::GetInstance()->CreateTextureMaterial(
-        IconTexture->GetSRV());
-    Data.WorldMatrix = &GetIconWorldMatrix(Camera);
+    if (Allocation.MeshPageId == InvalidRenderId ||
+        Allocation.IndexCount == 0)
+    {
+        return Data;
+    }
 
-    Data.Min = IconMesh->GetBoundsMin();
-    Data.Max = IconMesh->GetBoundsMax();
+    Data.Geometry = {
+        Allocation.MeshPageId,
+        Allocation.FirstIndex,
+        Allocation.IndexCount,
+        Allocation.BaseVertex
+    };
 
-    Data.bTwoSided = true;
+    Data.Material = &IconMaterial;
 
-    // 흰색 아이콘에 광원 색상을 곱함
-    Data.DiffuseColor = FVector4(LightColor.X, LightColor.Y, LightColor.Z, 1.0f);
-
-    // 투명 배경의 픽셀을 제거함
-    Data.AlphaCutoff = 0.1f;
-
-    // 아이콘 쿼드의 일반 메시 외곽선 출력을 차단함
-    Data.isSelected = bSelected;
-    Data.bAllowOutline = false;
+    // 아이콘은 Outline 대상에서 제외한다.
+    Data.Flags = bSelected ? Primitive_Selected : Primitive_None;
 
     return Data;
 }

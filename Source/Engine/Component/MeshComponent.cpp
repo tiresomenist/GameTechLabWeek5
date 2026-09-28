@@ -5,7 +5,7 @@
 #include "Engine\Resource\TextureResource.h"
 #include "MeshComponent.h"
 #include "Engine/Renderer/Material.h"
-
+#include <utility>
 
 // 컴포넌트 소멸 시 남아 있는 Override 재질을 정리한다.
 UMeshComponent::~UMeshComponent()
@@ -17,11 +17,6 @@ UMeshComponent::~UMeshComponent()
 // 컴포넌트가 소유한 재질 객체를 해제하고 모든 슬롯을 제거한다.
 void UMeshComponent::ClearOverrideMaterials()
 {
-	// 포인터 배열을 비우기 전에 각 포인터가 가리키는 객체부터 삭제한다.
-	for (FMaterial* Material : OverrideMaterials)
-	{
-		delete Material;
-	}
 	OverrideMaterials.Empty();
 }
 
@@ -34,8 +29,9 @@ void UMeshComponent::Serialize(FArchive& Archive)
 void UMeshComponent::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	for (FMaterial* Mat : OverrideMaterials)
+	for (const auto& OwnedMaterial : OverrideMaterials)
 	{
+		FMaterial* Mat = OwnedMaterial.get();
 		if (Mat &&Mat->bEnableUVScroll)
 		{
 			if (Mat->ScrollSpeed.X != 0.0f || Mat->ScrollSpeed.Y != 0.0f)
@@ -51,41 +47,48 @@ void UMeshComponent::Tick(float DeltaTime)
 	}
 }
 
-void UMeshComponent::SetOverrideMaterial(FMaterial* InMaterial, uint32 MaterialSlot)
+void UMeshComponent::SetOverrideMaterial(std::unique_ptr<FMaterial> InMaterial, uint32 MaterialSlot)
 {
 	if (MaterialSlot >= static_cast<uint32>(OverrideMaterials.Num()))
 	{
-		OverrideMaterials.resize(MaterialSlot + 1);
+		OverrideMaterials.SetNum(MaterialSlot + 1);
 	}
-	if (OverrideMaterials[MaterialSlot] != InMaterial)
-	{
-		delete OverrideMaterials[MaterialSlot];
-	}
-	OverrideMaterials[MaterialSlot] = InMaterial;
+	OverrideMaterials[MaterialSlot] = std::move(InMaterial);
 }
 
 void UMeshComponent::SetOverrideMaterial(const FString& InMaterialPath, uint32 MaterialSlot)
 {
 	if (InMaterialPath.empty())
 	{
-		SetOverrideMaterial(nullptr, MaterialSlot);
+		ResetOverrideMaterial(MaterialSlot);
 		return;
 	}
 
 	GResourceManager* RM = GResourceManager::GetInstance();
-	if (FTextureResource* Tex = RM->GetOrLoadTexture(InMaterialPath))
-	{
-		if (Tex->GetSRV())
-		{
-			const FMaterial* CurrentMaterial = GetMaterial(MaterialSlot);
-			FMaterial GPUMaterial = CurrentMaterial ? *CurrentMaterial : RM->CreateStaticMeshMaterial(Tex->GetSRV(), InMaterialPath);
 
-			//FMaterial GPUMaterial = RM->CreateStaticMeshMaterial(Tex->GetSRV(), InMaterialPath);
-			GPUMaterial.SRV = Tex->GetSRV();
-			GPUMaterial.TexturePath = InMaterialPath;
-			SetOverrideMaterial(new FMaterial(GPUMaterial), MaterialSlot);
-		}
+	FTextureResource* Texture = RM->GetOrLoadTexture(InMaterialPath);
+
+	if (!Texture || !Texture->GetSRV()) { return; }
+
+	const FMaterial* CurrentMaterial = GetMaterial(MaterialSlot);
+
+	std::unique_ptr<FMaterial> NewMaterial;
+
+	if (CurrentMaterial)
+	{
+		NewMaterial = std::make_unique<FMaterial>(*CurrentMaterial);
+
+		// 별도 인스턴스로 복제했으므로 새로운 ID.
+		NewMaterial->MaterialId = RM->AllocateMaterialId();
 	}
+	else
+	{
+		NewMaterial = std::make_unique<FMaterial>(RM->CreateStaticMeshMaterial(Texture->GetSRV(), InMaterialPath));
+	}
+	NewMaterial->SRV = Texture->GetSRV();
+	NewMaterial->TexturePath = InMaterialPath;
+
+	SetOverrideMaterial(std::move(NewMaterial), MaterialSlot);
 }
 
 const FString& UMeshComponent::GetMaterialPath(uint32 MaterialSlot) const
@@ -102,7 +105,7 @@ const FMaterial* UMeshComponent::GetMaterial(uint32 MaterialSlot) const
 {
 	if (MaterialSlot < static_cast<uint32>(OverrideMaterials.Num()))
 	{
-		return OverrideMaterials[MaterialSlot];
+		return OverrideMaterials[MaterialSlot].get();
 	}
 	else
 		return nullptr;
@@ -117,23 +120,48 @@ FMaterial* UMeshComponent::GetOrCreateOverrideMaterial(uint32 Slot)
 {
 	if (Slot >= static_cast<uint32>(OverrideMaterials.Num()))
 	{
-		OverrideMaterials.resize(Slot + 1);
+		OverrideMaterials.SetNum(Slot + 1);
 	}
 
-	if (!OverrideMaterials[Slot])
+	if (OverrideMaterials[Slot])
 	{
-		const FMaterial* BaseMat = GetMaterial(Slot);
-		OverrideMaterials[Slot] = BaseMat ? new FMaterial(*BaseMat) : new FMaterial();
+		return OverrideMaterials[Slot].get();
 	}
-	return OverrideMaterials[Slot];
+	GResourceManager* RM = GResourceManager::GetInstance();
+
+	// UStaticMeshComponent에서는 기본 머티리얼 조회까지 수행한다.
+	const FMaterial* BaseMaterial = GetMaterial(Slot);
+
+	std::unique_ptr<FMaterial> NewMaterial;
+
+	if (BaseMaterial)
+	{
+		NewMaterial = std::make_unique<FMaterial>(*BaseMaterial);
+		NewMaterial->MaterialId = RM->AllocateMaterialId();
+	}
+	else
+	{
+		const FString WhitePath = "Assets/Textures/WhiteTexture.png";
+		FTextureResource* White = RM->GetOrLoadTexture(WhitePath);
+
+		if (!White || !White->GetSRV())
+		{
+			return nullptr;
+		}
+
+		NewMaterial = std::make_unique<FMaterial>(
+			RM->CreateStaticMeshMaterial(White->GetSRV(), WhitePath));
+	}
+
+	OverrideMaterials[Slot] = std::move(NewMaterial);
+	return OverrideMaterials[Slot].get();
 }
 
 void UMeshComponent::ResetOverrideMaterial(uint32 Slot)
 {
 	if (Slot < static_cast<uint32>(OverrideMaterials.Num()))
 	{
-		delete OverrideMaterials[Slot];
-		OverrideMaterials[Slot] = nullptr;
+		OverrideMaterials[Slot].reset();
 	}
 }
 

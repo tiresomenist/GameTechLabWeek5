@@ -2,11 +2,10 @@
 
 #include "Core/Container/Array.h"
 #include "Engine/Renderer/Text/WorldTextItem.h"
-#include "Engine/Renderer/Line/LineBatcher.h"
 #include "Engine/Renderer/Line/LineDrawRequest.h"
 #include "Engine/Renderer/ViewSettings.h"
 #include <d3d11.h>
-
+#include "Engine/Renderer/ViewRenderData.h"
 class UScene;
 class FEditor;
 class UCameraComponent;
@@ -16,11 +15,12 @@ enum class EViewportType;
 namespace RenderUtil
 {
 	void GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera, 
-		TArray<FPrimitiveRenderData>& RenderList);
-	TArray<FPrimitiveRenderData> GetGizmoList(FEditor* Editor, UScene* Scene, 
-			const UCameraComponent* Camera,	const D3D11_VIEWPORT& Viewport);
+		TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects);
+	TArray<FPrimitiveRenderData> GetGizmoList(FEditor* Editor, UScene* Scene,
+			const UCameraComponent* Camera,	const D3D11_VIEWPORT& Viewport,
+		TArray<FRenderObjectData>& Objects);
 	TArray<FWorldTextItem> GetTextRenderList(UScene* Scene, const UCameraComponent* Camera,
 		bool bShowUUIDWidgets);
 	void SubmitLineDrawRequests(FEditor* Editor,UScene* Scene, const UCameraComponent* Camera,
-		const FViewSettings& ViewSettings, FLineBatcher& Batcher, EViewportType InViewtype);
+		const FViewSettings& ViewSettings, const FLineRequestConsumer& Submit, EViewportType InViewtype);
 };

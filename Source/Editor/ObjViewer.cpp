@@ -39,28 +39,44 @@ public:
     // 기존 섹션 렌더 데이터를 생성하고 표시할 섹션만 남깁니다.
     void CreateRenderData(TArray<FPrimitiveRenderData>& OutData, bool bSelected) override
     {
-        // 부모 함수가 이번 컴포넌트의 렌더 데이터를 추가한 범위를 구합니다.
+        UStaticMesh* Mesh = GetStaticMesh();
+        if (!Mesh){ return; }
+
         const int32 FirstNewIndex = OutData.Num();
+
         Super::CreateRenderData(OutData, false);
-        const int32 SectionCount = OutData.Num() - FirstNewIndex;
-        const bool bValidSelection = SelectedSectionIndex >= 0
-            && SelectedSectionIndex < SectionCount;
+
+        const int32 EndNewIndex = OutData.Num();
+        if (FirstNewIndex == EndNewIndex){ return; }
+
+        const TArray<FMeshSection>& Sections = Mesh->GetSections();
+
+        const bool bValidSelection = SelectedSectionIndex >= 0 && SelectedSectionIndex < Sections.Num();
+
         const bool bFilterSections = bOnlySelectedSection && bValidSelection;
 
-        // 유지할 데이터를 앞쪽으로 옮기며 선택한 섹션에 강조 표시를 설정합니다.
+        int32 ReadIndex = FirstNewIndex;
         int32 WriteIndex = FirstNewIndex;
-        for (int32 SectionIndex = 0; SectionIndex < SectionCount; ++SectionIndex)
-        {
-            const bool bSectionSelected = bValidSelection && SectionIndex == SelectedSectionIndex;
-            if (bFilterSections && !bSectionSelected) continue;
 
-            FPrimitiveRenderData Data = OutData[FirstNewIndex + SectionIndex];
-            Data.isSelected = bSectionSelected;
-            Data.bAllowOutline = true;
+        for (int32 SectionIndex = 0; SectionIndex < Sections.Num(); ++SectionIndex)
+        {
+            const FMeshSection& Section = Sections[SectionIndex];
+
+            // 부모 함수가 요청을 생성하지 않은 섹션은 소비하지 않는다.
+            if (Section.IndexCount == 0 || !GetMaterial(Section.MaterialIndex)){ continue; }
+
+            FPrimitiveRenderData Data = OutData[ReadIndex++];
+
+            const bool bSectionSelected = bValidSelection && SectionIndex == SelectedSectionIndex;
+
+            if (bFilterSections && !bSectionSelected) { continue; }
+
+            Data.Flags = Primitive_AllowOutline;
+            if (bSectionSelected) { Data.Flags |= Primitive_Selected; }
+
             OutData[WriteIndex++] = Data;
         }
 
-        // 앞에서 유지한 데이터까지만 렌더러에 전달합니다.
         OutData.SetNum(WriteIndex);
     }
 
@@ -483,9 +499,17 @@ void FObjViewer::LoadPreviewMesh(const std::filesystem::path& FilePath)
 
     // 로더가 반환했더라도 실제로 그릴 GPU 데이터가 있는지 확인합니다.
     const FMeshResource* Resource = Mesh->GetMeshResource();
-    if (!Resource || !Resource->GetVertexBuffer() || !Resource->GetIndexBuffer()
-        || Resource->GetIndexCount() == 0 || Mesh->GetSections().IsEmpty() || !Mesh->HasBounds())
+    if (!Resource ||Resource->GetAllocation().MeshPageId == InvalidRenderId || 
+        Resource->GetAllocation().IndexCount == 0 || Mesh->GetSections().IsEmpty() || !Mesh->HasBounds())
+    {
         throw std::runtime_error("OBJ contains no renderable mesh.");
+    }
+
+    const FMeshPageBinding Page = GResourceManager::GetInstance()->GetMeshPageBinding(Resource->GetAllocation().MeshPageId);
+    if (!Page.VertexBuffer || !Page.IndexBuffer)
+    {
+        throw std::runtime_error("OBJ mesh page is not available.");
+    }
 
     // 원본 데이터는 유지하고 미리보기 컴포넌트의 위치와 크기만 정규화합니다.
     const FVector BoundsMin = Mesh->GetBoundsMin();

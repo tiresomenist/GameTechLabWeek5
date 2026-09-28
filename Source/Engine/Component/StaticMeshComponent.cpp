@@ -4,6 +4,7 @@
 #include "Engine/Resource/TextureResource.h"
 #include "Engine/Resource/ResourceManager.h"
 #include <stdexcept>
+#include <cassert>
 
 void UStaticMeshComponent::SetStaticMesh(const FName& InMeshKey)
 {
@@ -109,54 +110,43 @@ void UStaticMeshComponent::Serialize(FArchive& Archive)
 
 void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, bool bSelected)
 {
-	if (MeshKey.IsNone()) return;
-	GResourceManager* RM = GResourceManager::GetInstance();
-	UStaticMesh* Mesh = RM->GetStaticMesh(MeshKey);
-	if (!Mesh) return;
+	UStaticMesh* Mesh = GetStaticMesh();
+	if (!Mesh){	return; }
 
-	FMeshResource* MeshResource = Mesh->GetMeshResource();
-	if (!MeshResource) return;
+	FMeshResource* Resource = Mesh->GetMeshResource();
+	if (!Resource){	return; }
+
+	const FMeshAllocation& Allocation = Resource->GetAllocation();
+
+	//잘못된 메쉬페이지 아이디
+	if (Allocation.MeshPageId == InvalidRenderId){ return; }
 
 	for (const FMeshSection& Section : Mesh->GetSections())
 	{
-		FPrimitiveRenderData OutData{};
-		OutData.VertexBuffer = MeshResource->GetVertexBuffer();
-		OutData.IndexBuffer = MeshResource->GetIndexBuffer();
-		OutData.IndexCount = MeshResource->GetIndexCount();
-		OutData.Stride = MeshResource->GetStride();
+		if (Section.IndexCount == 0){ continue; }
 
-		OutData.IndexStart = Section.FirstIndex;
-		OutData.IndexCount = Section.IndexCount;
-		
-		OutData.WorldMatrix = &GetWorldMatrix();
-		OutData.isSelected = bSelected;
-		OutData.Min = MeshResource->GetBoundsMin();
-		OutData.Max = MeshResource->GetBoundsMax();
+		const FMaterial* SectionMaterial = GetMaterial(Section.MaterialIndex);
 
+		if (!SectionMaterial){ continue; }
 
-		const FMaterial* SectionMaterial = nullptr;
-		if ((Section.MaterialIndex < static_cast<uint32>(OverrideMaterials.Num()) && OverrideMaterials[Section.MaterialIndex]))
-		{
-			// override 머테리얼 가져오기
-			SectionMaterial = OverrideMaterials[Section.MaterialIndex];
-		}
-		else
-		{
-			// 기본 머테리얼 가져오기
-			SectionMaterial = Mesh->GetMaterial(Section.MaterialIndex);
-		}
-		if (SectionMaterial)
-		{
-			OutData.Material = *SectionMaterial;
+		assert(SectionMaterial->MaterialId != InvalidRenderId);
+		assert(Section.FirstIndex <= Allocation.IndexCount);
+		assert(Section.IndexCount <= Allocation.IndexCount - Section.FirstIndex);
 
-			OutData.UVTransform.Scale = OutData.Material.UVScale;
-			OutData.UVTransform.Offset = OutData.Material.UVOffset;
-		}
+		FPrimitiveRenderData Data{};
 
-		ComponentRenderData.Add(OutData);
+		Data.Geometry.MeshPageId = Allocation.MeshPageId;
+		Data.Geometry.FirstIndex = Allocation.FirstIndex + Section.FirstIndex;
+		Data.Geometry.IndexCount = Section.IndexCount;
+		Data.Geometry.BaseVertex = Allocation.BaseVertex;
+
+		Data.Material = SectionMaterial;
+
+		Data.Flags = Primitive_AllowOutline;
+		if (bSelected){	Data.Flags |= Primitive_Selected; }
+
+		ComponentRenderData.Add(Data);
 	}
-
-	return;
 }
 
 FMeshResource* UStaticMeshComponent::GetMeshResource() const 

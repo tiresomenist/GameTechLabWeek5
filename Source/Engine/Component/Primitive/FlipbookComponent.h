@@ -3,7 +3,8 @@
 #include "PrimitiveComponent.h"
 #include "Engine/Resource/ResourceManager.h"
 #include "Engine/Object/ClassType.h"
-
+#include "Engine/Renderer/Material.h"
+#include "Engine/Renderer/RenderConstants.h"
 class UCameraComponent;
 
 class UFlipbookComponent : public UPrimitiveComponent
@@ -49,7 +50,7 @@ private:
     // 리소스 매니저가 소유하는 텍스처를 참조함
     FTextureResource* Texture = nullptr;
     FMeshResource* QuadMesh = nullptr;
-
+    FMaterial RenderMaterial;
     int32 Columns = 6;
     int32 Rows = 6;
     int32 FrameCount = 36;

@@ -7,7 +7,8 @@
 #include "Core/Container/String.h"
 #include "Engine/Object/Object.h"
 #include "Engine/Renderer/Material.h"
-
+#include <memory>
+#include <utility>
 
 class UStaticMesh : public UObject
 {
@@ -25,23 +26,23 @@ public:
 	void SetMeshResource(FMeshResource* InResource) { MeshResource = InResource;}
 
 	// StaticMesh가 가지고 있는것 -> 해당 StaticMesh의 Default FMaterial
-	const TArray<FMaterial*>& GetDefaultMeshMaterials() const { return Materials; }
+	const TArray<std::unique_ptr<FMaterial>>& GetDefaultMeshMaterials() const { return Materials; }
 	const FMaterial* GetMaterial(uint32 SlotIndex) const
 	{
 		if (SlotIndex >= Materials.Num())
 		{
 			return nullptr;
 		}
-		return Materials[SlotIndex];
+		return Materials[SlotIndex].get();
 	}
 
-	void SetMaterial(uint32 SlotIndex, FMaterial* InMaterial)
+	void SetMaterial(uint32 SlotIndex, std::unique_ptr<FMaterial> InMaterial)
 	{
 		if (SlotIndex >= Materials.Num())
 		{
 			Materials.resize(SlotIndex + 1);
 		}
-		Materials[SlotIndex] = InMaterial;
+		Materials[SlotIndex] = std::move(InMaterial);
 	}
 
 	const FVector& GetBoundsMin() const { return MeshResource ? MeshResource->GetBoundsMin() : FVector::Zero; }
@@ -75,7 +76,7 @@ private:
 
 	FMeshResource* MeshResource = nullptr;
 
-	TArray<FMaterial*> Materials;
+	TArray<std::unique_ptr<FMaterial>> Materials;
 	TArray<FMeshSection> Sections;
 
 	TArray<FStaticMeshObjectInfo> Objects;

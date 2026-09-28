@@ -1,6 +1,8 @@
 #pragma once
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
 #include "Core/Name/Name.h"
+#include <memory>
+
 
 class UMeshComponent : public UPrimitiveComponent
 {
@@ -16,7 +18,7 @@ public:
     virtual FMeshResource* GetMeshResource() const override { return nullptr; }
 
     // override material 설정 - 여기서 수정해도 실제 staticmesh의 material은 바뀌지 않음
-    void SetOverrideMaterial(FMaterial* InMaterial, uint32 MaterialSlot);
+    void SetOverrideMaterial(std::unique_ptr<FMaterial> InMaterial, uint32 MaterialSlot);
     void SetOverrideMaterial(const FString& InMaterialPath, uint32 MaterialSlot = 0);
 
     virtual const FString& GetMaterialPath(uint32 MaterialSlot = 0) const;
@@ -51,7 +53,7 @@ public:
 protected:
     void ClearOverrideMaterials();
 
-    TArray<FMaterial*> OverrideMaterials;
+    TArray<std::unique_ptr<FMaterial>> OverrideMaterials;
     bool bEnableUVScroll = true;
     FVector2 UVScale{ 1.0f, 1.0f };
     FVector2 UVOffset{ 0.0f, 0.0f };

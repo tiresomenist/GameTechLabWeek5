@@ -26,6 +26,7 @@
 #include <filesystem>
 #include <cstddef>
 #include <functional>
+#include "Engine/Renderer/RenderDataTypes.h"
 
 class FTextureResource;
 
@@ -97,6 +98,10 @@ public:
 		const std::filesystem::path& Root,
 		const std::function<void(const FStaticMeshPreloadResult&)>& OnProgress = {},
 		const std::function<bool()>& ShouldCancel = {});
+
+	uint32 AllocateMaterialId() const;
+	FMeshPageBinding GetMeshPageBinding(uint32 MeshPageId) const;
+
 private:
 	GResourceManager() = default;
 	~GResourceManager() = default;
@@ -124,5 +129,21 @@ private:
 	// 성공한 요청의 원래 키를 절대 경로 키에 연결하여 반복적인 파일 검사를 피한다.
 	TMap<FName, FName> StaticMeshAliases;
 	FFontAtlas DefaultFont;
+
+	mutable uint32 NextMaterialId = 0;
+
+	// 메가메쉬페이지로 변환전 기존 버텍스/인덱스 버퍼로 바인딩하는 구조를 남겨두기 위함.
+	struct FLegacyMeshPage
+	{
+		Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
+		Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer;
+
+		uint32 Stride = 0;
+		EVertexFormat VertexFormat = EVertexFormat::Simple;
+	};
+
+	TArray<FLegacyMeshPage> LegacyMeshPages;
+
+	void RegisterLegacyMeshPage(FMeshResource& Mesh, EVertexFormat VertexFormat);
 };
 

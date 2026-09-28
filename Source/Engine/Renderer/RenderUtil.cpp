@@ -27,38 +27,61 @@ namespace
 	}
 }
 
-void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera, TArray<FPrimitiveRenderData>& RenderList)
+void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
+	TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects)
 {
-	//TArray<FPrimitiveRenderData> RenderList;
 	RenderList.Empty();
 	if (!Editor || !Scene || !Camera) return;
+
 	Scene->ForEachPrimitive(
-		[&RenderList, Editor, Camera](UPrimitiveComponent* Primitive)
+		[&](UPrimitiveComponent* Primitive)
 		{
 			if (!Primitive->IsVisible())
 			{
 				return;
 			}
-
 			const bool bSelected = IsComponentSelected(Editor, Primitive);
-			TArray<FPrimitiveRenderData> RenderDataList;
-			Primitive->CreateRenderData( RenderDataList, bSelected);
-
-			// 현재 카메라 기준의 렌더링용 행렬 연결함
-			for (FPrimitiveRenderData& Data : RenderDataList)
+			const int32 FirstIndex = RenderList.Num();
+			Primitive->CreateRenderData(RenderList, bSelected);
+			const int32 EndIndex = RenderList.Num();
+			if (FirstIndex == EndIndex)
 			{
-				Data.WorldMatrix = &Primitive->GetRenderWorldMatrix(Camera);
-				RenderList.Add(Data);
+				return;
 			}
-		}
-	);
+
+			FRenderObjectData Object{};
+			Object.World = Primitive->GetRenderWorldMatrix(Camera);
+			Object.SortCenterWS = Object.World.GetOrigin();
+
+			FVector LocalMin{};
+			FVector LocalMax{};
+
+			if (Primitive->GetLocalBounds(LocalMin, LocalMax))
+			{
+				const FVector LocalCenter =	LocalMin * 0.5f + LocalMax * 0.5f;
+
+				Object.SortCenterWS = Object.World.TransformPosition(LocalCenter);
+			}
+
+			const uint32 ObjectIndex = static_cast<uint32>(Objects.Num());
+
+			Objects.Add(Object);
+
+			for (int32 Index = FirstIndex; Index < EndIndex; ++Index)
+			{
+				RenderList[Index].ObjectIndex = ObjectIndex;
+			}
+		});
 
 	//SpotLight를 렌더링하기위한 임시 순회, 차후에 분리 해야함.
 	Scene->ForEachActor([&](AActor* Actor)
 		{
 			for (UActorComponent* Component : Actor->GetComponents())
 			{
-				if (!Component->IsA(USpotLightComponent::GetClass())){continue;}
+				if (!Component->IsA(USpotLightComponent::GetClass()))
+				{
+					continue;
+				}
 
 				const auto* SpotLight = static_cast<const USpotLightComponent*>(Component);
 
@@ -69,40 +92,43 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 
 				const bool bSelected = IsComponentSelected(Editor, SpotLight);
 
-				FPrimitiveRenderData Data =	SpotLight->BuildIconRenderData(Camera, bSelected);
+				FPrimitiveRenderData Data = SpotLight->BuildIconRenderData(Camera, bSelected);
 
-				// 유효한 렌더 데이터만 목록에 추가함
-				if (Data.VertexBuffer && Data.IndexBuffer && Data.Material.SRV && Data.WorldMatrix && Data.IndexCount > 0)
+				if (!Data.Material || Data.Geometry.MeshPageId == InvalidRenderId || Data.Geometry.IndexCount == 0)
 				{
-					RenderList.Add(Data);
+					continue;
 				}
+
+				FRenderObjectData Object{};
+				Object.World = SpotLight->GetIconWorldMatrix(Camera);
+				Object.SortCenterWS = Object.World.GetOrigin();
+
+				Data.ObjectIndex = static_cast<uint32>(Objects.Num());
+
+				Objects.Add(Object);
+				RenderList.Add(Data);
 			}
-		}
-	);
+		});
 
 	return;
 }
 
-TArray<FPrimitiveRenderData> RenderUtil::GetGizmoList(FEditor* Editor,UScene* Scene,const UCameraComponent* Camera,
-	const D3D11_VIEWPORT& Viewport)
+TArray<FPrimitiveRenderData> RenderUtil::GetGizmoList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
+	const D3D11_VIEWPORT& Viewport, TArray<FRenderObjectData>& Objects)
 {
 	TArray<FPrimitiveRenderData> RenderList;
 
-	if (!Editor || !Scene || !Camera)
-	{
-		return RenderList;
-	}
+	if (!Editor || !Scene || !Camera){ return RenderList; }
 
-	for (auto Item : Editor->Gizmos)
+	for (UGizmo* Gizmo : Editor->GetGizmos())
 	{
-		TArray<FPrimitiveRenderData> Array =Item->GetRenderData(Camera, Viewport);
+		TArray<FPrimitiveRenderData> Requests = Gizmo->GetRenderData(Camera, Viewport, Objects);
 
-		for (auto& Data : Array)
+		for (const FPrimitiveRenderData& Data : Requests)
 		{
 			RenderList.Add(Data);
 		}
 	}
-
 	return RenderList;
 }
 
@@ -154,18 +180,9 @@ TArray<FWorldTextItem> RenderUtil::GetTextRenderList(UScene* Scene, const UCamer
 }
 
 void RenderUtil::SubmitLineDrawRequests(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
-	const FViewSettings& ViewSettings, FLineBatcher& Batcher, EViewportType InViewtype)
+	const FViewSettings& ViewSettings, const FLineRequestConsumer& Submit, EViewportType InViewtype)
 {
 	if (!Editor || !Scene|| !Camera) { return; }
-
-	// 요청을 별도로 저장하지 않고 배처의 통합 배열에 즉시 병합함
-	const FLineRequestConsumer Submit =	[&Batcher](const FLineDrawRequest& Request)
-		{
-			if (!Batcher.AddRequest(Request))
-			{
-				UE_LOG("[RenderUtil] 잘못되었거나 용량을 초과한 라인 요청");
-			}
-		};
 
 	FLineDrawContext Context;
 	Context.Camera = Camera;

@@ -53,6 +53,7 @@ private:
 
     FMeshResource* IconMesh = nullptr;
     FTextureResource* IconTexture = nullptr;
+    FMaterial IconMaterial;
 
     // 단위 쿼드에 적용할 기본 아이콘 크기
     float IconSize = 0.5f;
