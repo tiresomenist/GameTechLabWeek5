@@ -22,6 +22,9 @@ public:
     // 파일을 읽어 JSON Reader를 생성한다.
     static std::unique_ptr<FJsonReader> FromFile(const std::filesystem::path& Path);
 
+    // 이미 파싱한 문서의 소유권을 받아 재파싱 없이 읽는다.
+    static std::unique_ptr<FJsonReader> FromDocument(nlohmann::json&& Document);
+
     // 같은 문서를 처음부터 다시 읽도록 위치를 초기화한다.
     void ResetToRoot();
 
@@ -66,6 +69,7 @@ protected:
     bool SerializeValue(const char* Name, FString& Value) override;
 
 private:
+    FJsonReader() = default;
     using FJson = nlohmann::json;
 
     struct FStackFrame

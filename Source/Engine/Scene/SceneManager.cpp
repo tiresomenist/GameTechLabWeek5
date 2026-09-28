@@ -149,7 +149,7 @@ void GSceneManager::InternalLoadScene()
                 { "Data/bitten_apple_mid.obj", "Assets/Models/bitten_apple_mid.obj" }
             };
             // 테스트 씬은 메모리에서 변환하고, 기존 엔진 씬은 그대로 읽는다.
-            Reader = std::make_unique<FJsonReader>(FTestSceneImporter::Load(NextScenePath, MeshPaths));
+            Reader = FTestSceneImporter::Load(NextScenePath, MeshPaths);
         }
         else if (!NextSceneFile.empty())
         {

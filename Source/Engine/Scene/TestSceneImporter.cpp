@@ -1,12 +1,13 @@
 #include "pch.h"
 #include "TestSceneImporter.h"
+#include "Core/Serialization/JsonReader.h"
 #include "nlohmann/json.hpp"
 #include <array>
 #include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <fstream>
-#include <iterator>
+#include <sstream>
 #include <limits>
 #include <stdexcept>
 
@@ -79,17 +80,18 @@ namespace
 }
 
 // 외부 테스트 씬을 엔진 JSON으로 변환하며 파일 쓰기와 객체 생성은 수행하지 않는다.
-std::string FTestSceneImporter::Load(const std::filesystem::path& ScenePath, const FMeshPathMap& MeshPaths)
+std::unique_ptr<FJsonReader> FTestSceneImporter::Load(const std::filesystem::path& ScenePath, const FMeshPathMap& MeshPaths)
 {
     std::ifstream Stream(ScenePath, std::ios::binary);
     if (!Stream) throw std::runtime_error("Cannot open scene file.");
-    const std::string Text{std::istreambuf_iterator<char>(Stream), std::istreambuf_iterator<char>()};
-    if (Stream.bad()) throw std::runtime_error("Failed to read scene file.");
+    std::ostringstream Text;
+    Text << Stream.rdbuf();
+    if (Stream.bad() || Text.bad()) throw std::runtime_error("Failed to read scene file.");
     // 실제 원본 Default.scene도 JSON이다. 확장자가 아닌 문서 구조로 판별한다.
-    const FJson Source = FJson::parse(Text);
+    FJson Source = FJson::parse(Text.str());
     if (!Source.is_object()) throw std::runtime_error("Scene root must be an object.");
     // 기존 엔진 씬은 변환하지 않고 기존 검증기로 전달한다.
-    if (!Source.contains("Primitives")) return Text;
+    if (!Source.contains("Primitives")) return FJsonReader::FromDocument(std::move(Source));
     if (Source.contains("Actors") || Source.contains("Components"))
         throw std::runtime_error("Mixed native and test scene formats.");
     const auto& Primitives = Source.at("Primitives");
@@ -156,5 +158,5 @@ std::string FTestSceneImporter::Load(const std::filesystem::path& ScenePath, con
             {"Rotation", {-Rotation[1] * RadiansToDegrees, Rotation[2] * RadiansToDegrees, Rotation[0] * RadiansToDegrees}},
             {"FOV", FOV / RadiansToDegrees}, {"NearZ", NearZ}, {"FarZ", FarZ}};
     }
-    return Output.dump();
+    return FJsonReader::FromDocument(std::move(Output));
 }

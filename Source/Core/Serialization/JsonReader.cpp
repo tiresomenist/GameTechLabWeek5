@@ -19,6 +19,14 @@ std::unique_ptr<FJsonReader> FJsonReader::FromFile(const std::filesystem::path& 
     return std::make_unique<FJsonReader>(Text);
 }
 
+std::unique_ptr<FJsonReader> FJsonReader::FromDocument(nlohmann::json&& Document)
+{
+    std::unique_ptr<FJsonReader> Reader(new FJsonReader());
+    Reader->Root = std::move(Document);
+    Reader->ResetToRoot();
+    return Reader;
+}
+
 // 같은 JSON 문서를 루트부터 다시 읽도록 설정한다.
 void FJsonReader::ResetToRoot()
 {
