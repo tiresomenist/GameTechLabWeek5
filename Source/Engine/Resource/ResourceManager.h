@@ -114,7 +114,7 @@ private:
 	void RegisterDefaultDepthStencilStates();
 	// 정규화한 절대 OBJ 경로를 기준으로 CPU 데이터를 GPU 메시로 만들고 등록한다.
 	UStaticMesh* BuildAndCacheStaticMesh(const std::filesystem::path& ObjPath, FStaticMeshData& MeshData);
-	Microsoft::WRL::ComPtr<ID3D11Buffer> TextureMaterialConstantBuffer;
+	//Microsoft::WRL::ComPtr<ID3D11Buffer> TextureMaterialConstantBuffer;
 	Microsoft::WRL::ComPtr<ID3D11PixelShader> WireframePixelShader;
 	TMap<FName, Microsoft::WRL::ComPtr<ID3D11RasterizerState>> RasterizerStateCache;
 	TMap<FName, FShaderResource> ShaderCache;

@@ -460,9 +460,12 @@ GResourceManager* GResourceManager::GetInstance()
 void GResourceManager::Initialize(GDevice* InDevice)
 {
     Device = InDevice;
-	if (!Device || !Device->GetDevice() || !DefaultFont.Build(Device->GetDevice(), "Assets/Fonts/Pretendard-Regular.ttf", 24.0f))
-		throw std::runtime_error("Default font atlas build failed");
-    if (!MeshBufferPool.Initialize(Device->GetDevice())) {
+    if (!Device || !Device->GetDevice())
+    {
+        throw std::runtime_error("Invalid graphics device");
+    }
+    if (!MeshBufferPool.Initialize(Device->GetDevice())) 
+    {
         throw std::runtime_error("Mesh Buffer Pool Initialize failed");
     }
     if (!DefaultFont.Build(Device->GetDevice(), "Assets/Fonts/Pretendard-Regular.ttf", 24.0f))
@@ -724,7 +727,7 @@ void GResourceManager::Shutdown()
     PrimitiveCache.Empty();
     MeshBufferPool.Shutdown();
     DefaultFont.Release();
-    TextureMaterialConstantBuffer.Reset();
+    //TextureMaterialConstantBuffer.Reset();
     WireframePixelShader.Reset();
     ShaderCache.Empty();
     SamplerCache.Empty();
@@ -1222,15 +1225,15 @@ void GResourceManager::RegisterDefaultRenderResources()
     PointMirrorDesc.AddressW = D3D11_TEXTURE_ADDRESS_MIRROR;
     RegisterSampler(FName("PointMirror"), PointMirrorDesc);
 
-    D3D11_BUFFER_DESC Desc{};
-    Desc.ByteWidth = sizeof(FTextureDrawConstants);
-    Desc.Usage = D3D11_USAGE_DEFAULT;
-    Desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-
-    CheckRenderResourceHR(
-        Device->GetDevice()->CreateBuffer(
-            &Desc, nullptr, TextureMaterialConstantBuffer.GetAddressOf()),
-        "CreateTextureMaterialConstantBuffer");
+    //D3D11_BUFFER_DESC Desc{};
+    //Desc.ByteWidth = sizeof(FTextureDrawConstants);
+    //Desc.Usage = D3D11_USAGE_DEFAULT;
+    //Desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    //
+    //CheckRenderResourceHR(
+    //    Device->GetDevice()->CreateBuffer(
+    //        &Desc, nullptr, TextureMaterialConstantBuffer.GetAddressOf()),
+    //    "CreateTextureMaterialConstantBuffer");
 }
 
 void GResourceManager::RegisterRasterizerState(const FName& Name, const D3D11_RASTERIZER_DESC& Desc)
