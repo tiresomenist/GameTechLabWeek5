@@ -51,10 +51,20 @@ void FViewRenderer::Create(ID3D11Device* InDevice, ID3D11DeviceContext* InContex
 	CreateAlphaBlendState();
 	CreateDepthStencilStates();
 	CreateTextResources();
+
+
+	PipelineStateCache.Initialize(InDevice);
+	if (D3DDevice) {
+		CBRingBuffer.Initialize(D3DDevice, 32 * 1024 * 1024);
+	}
 }
 
 void FViewRenderer::Shutdown()
 {
+	CBRingBuffer.Shutdown();
+	CBManager.Clear();
+	PipelineStateCache.Shutdown();
+
 	LineBatcher.Clear();
 	LineBatcher.Release();
 	ReleaseConstantBuffer();
@@ -372,18 +382,73 @@ void FViewRenderer::RenderPrimitive(const FPrimitiveRenderData& Data, EViewModeI
 
 void FViewRenderer::RenderView(const FViewRenderData& Data)
 {
+	if (!DeviceContext) return;
+	Microsoft::WRL::ComPtr<ID3D11DeviceContext1> Context1;
+	HRESULT hr = DeviceContext->QueryInterface(IID_PPV_ARGS(&Context1));
+	if (FAILED(hr)) {
+		assert(false && "DeviceContext does not support ID3D11DeviceContext1!");
+		return;
+	}
+/*
 	DeviceContext->RSSetState(DefaultRasterizerState);
 	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
-	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
+	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);*/
 	SetViewportAndScissor(Data.View.Viewport);
 
-	ID3D11ShaderResourceView* NullSRV = nullptr;
-	DeviceContext->PSSetShaderResources(0, 1, &NullSRV);
+/*	ID3D11ShaderResourceView* NullSRV = nullptr;
+	DeviceContext->PSSetShaderResources(0, 1, &NullSRV);*/
 
 	LineBatcher.Clear();
 	LineBatcher.AddRequest(Data.Lines);
 
-	TArray<const FPrimitiveRenderData*> AdditiveRenderList;
+	CBRingBuffer.Reset();
+	CBManager.Clear();
+
+	FPassDrawList PassDraws;
+	PassDrawBuilder.BuildPassDraws(Data, &PipelineStateCache, PassDraws);
+
+	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws);
+
+	CBManager.UploadObjectConstants(Context1.Get(), &CBRingBuffer, Data, PassDrawBuilder.GetObjectCBIndexMap());
+	CBManager.UploadMaterialConstants(Context1.Get(), &CBRingBuffer, PassDrawBuilder.GetReferencedMaterials(), PassDrawBuilder.GetMaterialCBIndexMap());
+
+	ID3D11Buffer* ViewCB = TransformConstantBuffer.Get();
+
+	// Opaque 씬 오브젝트 렌더링
+	PassExecutor.ExecutePass(Context1.Get(), PassDraws.OpaqueDraws, PipelineStateCache, CBManager, ViewCB);
+
+	// 배치 라인 렌더링
+	RenderBatchLine(Data.View.ViewProjection);
+
+	// Additive / Translucent 렌더링
+	PassExecutor.ExecutePass(Context1.Get(), PassDraws.AdditiveDraws, PipelineStateCache, CBManager, ViewCB);
+
+	// 외곽선 렌더링
+	PassExecutor.ExecutePass(Context1.Get(), PassDraws.OutlineDraws, PipelineStateCache, CBManager, ViewCB);
+
+	// Gizmo 렌더링
+	PassExecutor.ExecutePass(Context1.Get(), PassDraws.GizmoDraws, PipelineStateCache, CBManager, ViewCB);
+
+	// Text 렌더링
+	if (Data.TextItems.Num() > 0) {
+		FFontAtlas* FontAtlas = GResourceManager::GetInstance()->GetDefaultFont();
+		if (FontAtlas)
+		{
+			TArray<FVertexTexture> TextVerts = FTextMeshBuilder::Build(Data.TextItems, *FontAtlas);
+
+			UpdateTextVertexBuffer(TextVerts);
+			UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
+
+			const UINT TextVertexCount = (static_cast<UINT>(TextVerts.Num()) < MaxTextVertices) ?
+				static_cast<UINT>(TextVerts.Num()) :
+				MaxTextVertices;
+
+			RenderText(TextVertexCount / 4 * 6);
+		}
+	}
+	
+	
+/*	TArray<const FPrimitiveRenderData*> AdditiveRenderList;
 	TArray<const FPrimitiveRenderData*> OutlineRenderList;
 
 	for (const FPrimitiveRenderData& Item : Data.Primitives)
@@ -481,7 +546,7 @@ void FViewRenderer::RenderView(const FViewRenderData& Data)
 
 			RenderText(TextVertexCount / 4 * 6);
 		}
-	}
+	}*/
 
 	UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
 }

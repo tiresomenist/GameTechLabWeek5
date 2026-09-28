@@ -8,6 +8,13 @@
 #include "Engine/Renderer/Line/LineBatcher.h"
 #include "Engine/Renderer/RenderView.h"
 
+#include "PipelineStateCache.h"
+#include "PassDrawBuilder.h"
+#include "OpaqueDrawSorter.h"
+#include "ConstantBufferRing.h"
+#include "ConstantBufferManager.h"
+#include "PassExecutor.h"
+
 class UScene;
 class FEditor;
 class UCameraComponent;
@@ -86,4 +93,10 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> MaterialConstantBuffer;
 	static const UINT MaxTextVertices = 8192;
 	FLineBatcher LineBatcher;
+
+	FPipelineStateCache PipelineStateCache;
+	FPassDrawBuilder PassDrawBuilder;
+	FConstantBufferRing CBRingBuffer;
+	FConstantBufferManager CBManager;
+	FPassExecutor PassExecutor;
 };
