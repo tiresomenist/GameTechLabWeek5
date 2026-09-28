@@ -949,7 +949,8 @@ FMaterial GResourceManager::CreateTextureMaterial(ID3D11ShaderResourceView* SRV)
     Material.MaterialId = AllocateMaterialId();
     Material.SRV = SRV;
     Material.Shader = GetShader(ShaderName);
-    Material.Sampler = GetSampler(SamplerName);
+    Material.SamplerName = SamplerName;
+    Material.Sampler = GetSampler(Material.SamplerName);
     //Material.ConstantBuffer = TextureMaterialConstantBuffer.Get();
     return Material;
 }
@@ -964,7 +965,8 @@ FMaterial GResourceManager::CreateStaticMeshMaterial(ID3D11ShaderResourceView* S
     Material.MaterialId = AllocateMaterialId();
     Material.SRV = SRV;
     Material.Shader = GetShader(ShaderName);
-    Material.Sampler = GetSampler(bClamp ? ClampSamplerName : WrapSamplerName);
+    Material.SamplerName = bClamp ? ClampSamplerName : WrapSamplerName;
+    Material.Sampler = GetSampler(Material.SamplerName);
     //Material.ConstantBuffer = TextureMaterialConstantBuffer.Get();
     Material.TexturePath = InTexturePath;
     return Material;

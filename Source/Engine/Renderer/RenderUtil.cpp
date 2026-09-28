@@ -33,6 +33,8 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 	RenderList.Empty();
 	if (!Editor || !Scene || !Camera) return;
 
+	const UActorComponent* SelectedComponent = Editor->GetSelectedSceneComponent();
+
 	Scene->ForEachPrimitive(
 		[&](UPrimitiveComponent* Primitive)
 		{
@@ -40,9 +42,9 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			{
 				return;
 			}
-			const bool bSelected = IsComponentSelected(Editor, Primitive);
+			
 			const int32 FirstIndex = RenderList.Num();
-			Primitive->CreateRenderData(RenderList, bSelected);
+			Primitive->CreateRenderData(RenderList, Primitive == SelectedComponent);
 			const int32 EndIndex = RenderList.Num();
 			if (FirstIndex == EndIndex)
 			{
@@ -90,9 +92,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 					continue;
 				}
 
-				const bool bSelected = IsComponentSelected(Editor, SpotLight);
-
-				FPrimitiveRenderData Data = SpotLight->BuildIconRenderData(Camera, bSelected);
+				FPrimitiveRenderData Data = SpotLight->BuildIconRenderData(Camera, SelectedComponent==SpotLight);
 
 				if (!Data.Material || Data.Geometry.MeshPageId == InvalidRenderId || Data.Geometry.IndexCount == 0)
 				{
