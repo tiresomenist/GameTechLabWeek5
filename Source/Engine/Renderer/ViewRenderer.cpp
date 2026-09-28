@@ -4,6 +4,7 @@
 #include "Engine/Renderer/Context.h"
 #include "Engine/Renderer/RenderUtil.h"
 #include "Engine/Renderer/Text/TextMeshBuilder.h"
+#include "Engine/Renderer/ViewRenderData.h"
 #include "Engine/Resource/ResourceManager.h"
 #include "Engine/Log.h"
 
@@ -127,12 +128,21 @@ void FViewRenderer::CreateConstantBuffer()
 	gridconstantbufferdesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 
 	CheckHR(D3DDevice->CreateBuffer(&gridconstantbufferdesc, nullptr, GridConstantBuffer.GetAddressOf()));
+
+	D3D11_BUFFER_DESC materialConstantBufferDesc = {};
+	materialConstantBufferDesc.ByteWidth = (sizeof(FTextureDrawConstants) + 0xf) & 0xfffffff0;
+	materialConstantBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	materialConstantBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	materialConstantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+
+	CheckHR(D3DDevice->CreateBuffer(&materialConstantBufferDesc, nullptr, MaterialConstantBuffer.GetAddressOf()));
 }
 
 void FViewRenderer::ReleaseConstantBuffer()
 {
 	TransformConstantBuffer.Reset();
 	GridConstantBuffer.Reset();
+	MaterialConstantBuffer.Reset();
 }
 
 void FViewRenderer::CreateRasterizerState()
@@ -323,87 +333,45 @@ void FViewRenderer::RenderText(UINT IndexCount)
 	DeviceContext->DrawIndexed(IndexCount, 0, 0);
 }
 
-void FViewRenderer::UpdateMaterialConstants(const FPrimitiveRenderData& Data)
-{
-	if (!Data.Material.ConstantBuffer)
-	{
-		return;
-	}
-
-	// 현재 머티리얼 b1 버퍼는 모두 FTextureDrawConstants 레이아웃을 사용한다.
-	FTextureDrawConstants Constants{};
-	Constants.UV = Data.UVTransform;
-	Constants.DiffuseColor = Data.Material.DiffuseColor;
-	Constants.AlphaCutoff = Data.Material.AlphaCutoff;
-
-	DeviceContext->UpdateSubresource(
-		Data.Material.ConstantBuffer, 0, nullptr, &Constants, 0, 0);
-}
-
 void FViewRenderer::RenderPrimitive(const FPrimitiveRenderData& Data, EViewModeIndex InViewMode, bool bWriteStencil)
 {
-	if (!Data.VertexBuffer || !Data.IndexBuffer || Data.IndexCount == 0)
-	{
-		return;
-	}
-
-	if (!BindMaterial(Data.Material))
-	{
-		return;
-	}
-
+	if (!Data.Material)	return;
+	if (Data.Geometry.MeshPageId == InvalidRenderId || Data.Geometry.IndexCount == 0) return;
+	if (!BindMaterial(*Data.Material)) return;
 	UpdateMaterialConstants(Data);
-
 	BindPrimitiveBuffers(Data);
 
 	const bool bWireframe = InViewMode == EViewModeIndex::VMI_Wireframe;
-	if (bWireframe)
-	{
-		//Wireframe일때 셰이더 연결
+
+	if (bWireframe) {
 		DeviceContext->PSSetShader(WireframePixelShader, nullptr, 0);
 	}
 
-	// 메시별 양면 설정과 View의 와이어프레임 모드를 적용한다.
-	ID3D11RasterizerState* RasterizerState = bWireframe ? WireframeRasterizerState : (Data.bTwoSided ? CullNoneRasterizerState : DefaultRasterizerState);
+	ID3D11RasterizerState* RasterizerState = bWireframe ? WireframeRasterizerState : (Data.Material->bTwoSided ? CullNoneRasterizerState : DefaultRasterizerState);
+
 	DeviceContext->RSSetState(RasterizerState);
 
-	//블렌드 모드에 따라 가산블렌딩으로 변환
-	const bool bAdditive = Data.Material.BlendMode == EPrimitiveBlendMode::Additive;
+	const bool bAdditive = Data.Material->BlendMode == EPrimitiveBlendMode::Additive;
 
-	if (bAdditive)
-	{
+	if (bAdditive) {
+		DeviceContext->OMSetBlendState(AdditiveBlendState, nullptr, 0xffffffff);
 		DeviceContext->OMSetDepthStencilState(TranslucentDepthStencilState, 0);
 	}
-	else if (bWriteStencil)
-	{
-		DeviceContext->OMSetDepthStencilState(StencilWriteDepthStencilState, 1);
+	else {
+		DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
+		if (bWriteStencil) {
+			DeviceContext->OMSetDepthStencilState(StencilWriteDepthStencilState, 1);
+		}
+		else {
+			DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
+		}
 	}
-	else
-	{
-		DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
-	}
 
-	DeviceContext->DrawIndexed(Data.IndexCount,Data.IndexStart,0);
-
-	// 사용한 텍스처 슬롯을 비움
-	ID3D11ShaderResourceView* NullSRV = nullptr;
-	DeviceContext->PSSetShaderResources(0, 1, &NullSRV);
-
-	// 상태 복원
-	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
-	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
+	DeviceContext->DrawIndexed(Data.Geometry.IndexCount, Data.Geometry.FirstIndex, Data.Geometry.BaseVertex);
 }
 
-void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& View)
+void FViewRenderer::RenderView(const FViewRenderData& Data)
 {
-	if (!DeviceContext || !Editor || !Scene || !View.Camera ||	View.Viewport.Width <= 0.0f || View.Viewport.Height <= 0.0f)
-	{ return; }
-
-	UCameraComponent* Camera = View.Camera;
-	const FViewSettings& ViewSettings = View.ViewSettings;
-
-	SetViewportAndScissor(View.Viewport);
-	
 	DeviceContext->RSSetState(DefaultRasterizerState);
 	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
@@ -411,97 +379,105 @@ void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& 
 	ID3D11ShaderResourceView* NullSRV = nullptr;
 	DeviceContext->PSSetShaderResources(0, 1, &NullSRV);
 
-	Camera->SetAspectRatio(View.Viewport.Width / View.Viewport.Height);
-
 	LineBatcher.Clear();
-
-	FMatrix ViewProjMatrix = Camera->GetViewMatrix() * Camera->GetProjectionMatrix();
-
-	TArray<FPrimitiveRenderData> RenderList;
-	RenderUtil::GetRenderList(Editor, Scene, Camera, RenderList);
-
-	const bool bShowPrimitives = ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives);
-
-	const EViewModeIndex ViewMode = ViewSettings.ViewMode;
 
 	TArray<const FPrimitiveRenderData*> AdditiveRenderList;
 	TArray<const FPrimitiveRenderData*> OutlineRenderList;
 
-	for (auto& Item : RenderList)
+	for (const FPrimitiveRenderData& Item : Data.Primitives)
 	{
-		if (!Item.WorldMatrix || !Item.VertexBuffer || !Item.IndexBuffer || Item.IndexCount == 0)
-		{
+		if (Item.Geometry.IndexCount == 0) 
 			continue;
-		}
-		if (bShowPrimitives) 
-		{
-			if (Item.Material.BlendMode == EPrimitiveBlendMode::Additive)
-			{
-				AdditiveRenderList.Add(&Item);
-			}
-			else
-			{
-				//FMatrix MVP = (*Item.WorldMatrix) * ViewProjMatrix;
-				UpdateTransformConstantBuffer(*Item.WorldMatrix, ViewProjMatrix);
 
-				// 선택된 오브젝트는 그리면서 스텐실 마스크를 기록하고, 외곽선은 나중에 그림
-				const bool bOutline = Item.isSelected && Item.bAllowOutline && ViewMode != EViewModeIndex::VMI_Wireframe;
-				RenderPrimitive(Item, ViewMode, bOutline);
-				if (bOutline)
-				{
-					OutlineRenderList.Add(&Item);
-				}
-			}
+		if (!Item.Material) 
+			continue;
+
+		if (Item.Material->BlendMode == EPrimitiveBlendMode::Additive) 
+			AdditiveRenderList.Add(&Item);
+
+		if (Item.ObjectIndex >= static_cast<uint32>(Data.Objects.Num())) 
+			continue;
+
+		UpdateTransformConstantBuffer(Data.Objects[Item.ObjectIndex].World, Data.View.ViewProjection);
+
+		const bool bSelected = (Item.Flags & Primitive_Selected) != 0;
+
+		const bool bAllowOutline = (Item.Flags & Primitive_AllowOutline) != 0;
+
+		const bool bOutline = bSelected && bAllowOutline && Data.View.ViewMode != EViewModeIndex::VMI_Wireframe;
+
+		RenderPrimitive(Item, Data.View.ViewMode, bOutline);
+
+		if (bOutline) {
+			OutlineRenderList.Add(&Item);
 		}
 	}
-	// 모든 라인 요청을 배처의 통합 배열에 즉시 병합함
-	RenderUtil::SubmitLineDrawRequests(Editor, Scene, Camera, ViewSettings, LineBatcher, View.ViewType);
-
+	
 	// 통합 데이터를 GPU에 업로드하고 배치 렌더링함
-	RenderBatchLine(ViewProjMatrix);
+	RenderBatchLine(Data.View.ViewProjection);
 
 	for (const FPrimitiveRenderData* Item : AdditiveRenderList)
 	{
-		//const FMatrix MVP = (*Item->WorldMatrix) * ViewProjMatrix;
-		UpdateTransformConstantBuffer(*Item->WorldMatrix, ViewProjMatrix);
+		if (!Item)	continue;
 
-		RenderPrimitive(*Item, ViewMode);
+		if (Item->ObjectIndex >= static_cast<uint32>(Data.Objects.Num())) continue;
+
+		UpdateTransformConstantBuffer(Data.Objects[Item->ObjectIndex].World, Data.View.ViewProjection);
+
+		RenderPrimitive(*Item, Data.View.ViewMode);
 	}
 
 	// 외곽선: 모든 씬 오브젝트 이후, 기즈모 이전에 그림 (깊이 무시라 뒤에 그려진 물체에 덮이지 않게)
 	for (const FPrimitiveRenderData* Item : OutlineRenderList)
 	{
-		UpdateTransformConstantBuffer(*Item->WorldMatrix, ViewProjMatrix);
+		if (!Item)	continue;
+
+		if (Item->ObjectIndex >= static_cast<uint32>(Data.Objects.Num())) continue;
+
+		UpdateTransformConstantBuffer(Data.Objects[Item->ObjectIndex].World, Data.View.ViewProjection);
 
 		RenderOutline(*Item);
 	}
 
 	// Render Gizmo
-	if (View.bDrawEditorGizmos)
-	{
-		TArray<FPrimitiveRenderData> GizmoRenderList = RenderUtil::GetGizmoList(Editor, Scene, Camera, View.Viewport);
-		for (const auto& Item : GizmoRenderList)
-		{
-			UpdateTransformConstantBuffer(*Item.WorldMatrix, ViewProjMatrix);
+	for (const FPrimitiveRenderData& Item : Data.Gizmos) {
+		if (Item.Geometry.IndexCount == 0)	continue;
 
-			if (Item.isSelected)
-			{ RenderHighlight(Item); }
-			RenderGizmo(Item);
+		if (!Item.Material)	continue;
+
+		if (Item.ObjectIndex >= static_cast<uint32>(Data.Objects.Num()))	continue;
+		
+		UpdateTransformConstantBuffer(Data.Objects[Item.ObjectIndex].World, Data.View.ViewProjection);
+
+		const bool bSelected = (Item.Flags & Primitive_Selected) != 0;
+
+		if (bSelected) {
+			RenderHighlight(Item);
+		}
+
+		RenderGizmo(Item);
+	}
+
+	//Text
+	if (Data.TextItems.Num() > 0) {
+		FFontAtlas* FontAtlas = GResourceManager::GetInstance()->GetDefaultFont();
+
+		if (FontAtlas) {
+			TArray<FVertexTexture> TextVerts = FTextMeshBuilder::Build(Data.TextItems, *FontAtlas);
+
+			UpdateTextVertexBuffer(TextVerts);
+
+			UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
+
+			const UINT TextVertexCount = (static_cast<UINT>(TextVerts.Num()) < MaxTextVertices) ?
+				static_cast<UINT>(TextVerts.Num()) :
+				MaxTextVertices;
+
+			RenderText(TextVertexCount / 4 * 6);
 		}
 	}
 
-	FFontAtlas* FontAtlas = GResourceManager::GetInstance()->GetDefaultFont();
-	if (FontAtlas)
-	{
-		TArray<FWorldTextItem> TextItems = RenderUtil::GetTextRenderList(Scene, Camera, ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::UUID));
-		TArray<FVertexTexture> TextVerts = FTextMeshBuilder::Build(TextItems, *FontAtlas);
-		UpdateTextVertexBuffer(TextVerts);
-		UpdateTransformConstantBuffer(FMatrix::Identity, ViewProjMatrix); // 텍스트는 이미 월드공간이라 World=Identity
-		const UINT TextVertexCount = (static_cast<UINT>(TextVerts.Num()) < MaxTextVertices) ? static_cast<UINT>(TextVerts.Num()) : MaxTextVertices;
-		RenderText(TextVertexCount / 4 * 6);
-	}
-
-	UpdateTransformConstantBuffer( FMatrix::Identity, ViewProjMatrix);
+	UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
 }
 
 void FViewRenderer::UpdateTransformConstantBuffer(const FMatrix& World, const FMatrix& VP)
@@ -529,6 +505,26 @@ void FViewRenderer::UpdateTransformConstantBuffer(const FMatrix& World, const FM
 	}
 }
 
+void FViewRenderer::UpdateMaterialConstants(const FPrimitiveRenderData& Data)
+{
+	if (!DeviceContext || !MaterialConstantBuffer || !Data.Material)	return;
+
+	FTextureDrawConstants Constants{};
+	
+	Constants.DiffuseColor = Data.Material->DiffuseColor;
+	Constants.AlphaCutoff = Data.Material->AlphaCutoff;
+	Constants.UV.Scale = Data.Material->UVScale;
+	Constants.UV.Offset = Data.Material->UVOffset;
+
+	D3D11_MAPPED_SUBRESOURCE Mapped{};
+	HRESULT hr = DeviceContext->Map(MaterialConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &Mapped);
+
+	if (FAILED(hr)) return;
+
+	memcpy(Mapped.pData, &Constants, sizeof(FTextureDrawConstants));
+	DeviceContext->Unmap(MaterialConstantBuffer.Get(), 0);
+}
+
 void FViewRenderer::RenderOutline(const FPrimitiveRenderData& Data)
 {
 	// 두 레이아웃 모두 POSITION(0), COLOR(12) 배치라 VS_Highlight와 호환됨
@@ -541,7 +537,7 @@ void FViewRenderer::RenderOutline(const FPrimitiveRenderData& Data)
 	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 	DeviceContext->OMSetDepthStencilState(OutlineDepthStencilState, 1);
 
-	DeviceContext->DrawIndexed(Data.IndexCount, Data.IndexStart, 0);
+	DeviceContext->DrawIndexed(Data.Geometry.IndexCount, Data.Geometry.FirstIndex, Data.Geometry.BaseVertex);
 
 	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
 }
@@ -555,7 +551,7 @@ void FViewRenderer::RenderHighlight(const FPrimitiveRenderData& Data)
 
 	DeviceContext->OMSetDepthStencilState(HighlightDepthStencilState, 0);
 
-	DeviceContext->DrawIndexed(Data.IndexCount, Data.IndexStart, 0);
+	DeviceContext->DrawIndexed(Data.Geometry.IndexCount, Data.Geometry.FirstIndex, Data.Geometry.BaseVertex);
 }
 
 void FViewRenderer::RenderGizmo(const FPrimitiveRenderData& Data)
@@ -568,7 +564,7 @@ void FViewRenderer::RenderGizmo(const FPrimitiveRenderData& Data)
 	DeviceContext->OMSetDepthStencilState(GizmoDepthStencilState, 0);
 	// BindMaterial(Data.Material); 
 
-	DeviceContext->DrawIndexed(Data.IndexCount, 0, 0);
+	DeviceContext->DrawIndexed(Data.Geometry.IndexCount, Data.Geometry.FirstIndex, Data.Geometry.BaseVertex);
 }
 
 void FViewRenderer::RenderBatchLine(const FMatrix& ViewProj)
@@ -624,9 +620,16 @@ void FViewRenderer::BindShader(const FShaderResource& Shader)
 
 void FViewRenderer::BindPrimitiveBuffers(const FPrimitiveRenderData& Data)
 {
-	const UINT Offset = 0;
-	DeviceContext->IASetVertexBuffers(0, 1, &Data.VertexBuffer, &Data.Stride, &Offset);
-	DeviceContext->IASetIndexBuffer(Data.IndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+	if (Data.Geometry.MeshPageId == InvalidRenderId)	return;
+
+	const FMeshPageBinding PageBinding = GResourceManager::GetInstance()->GetMeshPageBinding(Data.Geometry.MeshPageId);
+
+	if (!PageBinding.VertexBuffer || !PageBinding.IndexBuffer)	return;
+
+	UINT Offset = 0;
+
+	DeviceContext->IASetVertexBuffers(0, 1, &PageBinding.VertexBuffer, &PageBinding.Stride, &Offset);
+	DeviceContext->IASetIndexBuffer(PageBinding.IndexBuffer, PageBinding.IndexFormat, 0);
 	DeviceContext->IASetPrimitiveTopology(Data.Topology);
 	DeviceContext->VSSetConstantBuffers(0, 1, TransformConstantBuffer.GetAddressOf());
 }
@@ -646,13 +649,13 @@ bool FViewRenderer::BindMaterial(const FMaterial& Material)
 
 	DeviceContext->PSSetSamplers(0, 1, &Material.Sampler);
 
-	DeviceContext->VSSetConstantBuffers(1, 1, &Material.ConstantBuffer);
-
-	DeviceContext->PSSetConstantBuffers(1, 1, &Material.ConstantBuffer);
-
 	const bool bAdditive = Material.BlendMode == EPrimitiveBlendMode::Additive;
 
 	DeviceContext->OMSetBlendState(bAdditive ? AdditiveBlendState : nullptr, nullptr, 0xffffffff);
+
+	DeviceContext->VSSetConstantBuffers(1, 1, MaterialConstantBuffer.GetAddressOf());
+
+	DeviceContext->PSSetConstantBuffers(1, 1, MaterialConstantBuffer.GetAddressOf());
 
 	return true;
 }

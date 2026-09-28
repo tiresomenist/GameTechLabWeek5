@@ -518,7 +518,7 @@ void FRenderer::RenderOneView(FEditor* Editor, UScene* Scene, const FRenderView&
 	RenderUtil::SubmitLineDrawRequests(Editor,Scene,Camera,View.ViewSettings,Submit,View.ViewType);
 
 	// TODO:ViewRenderer구현 후 주석 풀어주면 됨.
-	//ViewRenderer.RenderView(ViewData);
+	ViewRenderer.RenderView(ViewData);
 }
 
 // 단일 View -> 이제 더이상 다중 View를 호출하지 않음
@@ -538,7 +538,7 @@ void FRenderer::Render(float DeltaTime,FEditor* Editor,UScene* Scene)
 	for (const FRenderView& View : Views)
 	{
 		//TODO:ViewRenderer구현 후 RenderOneView(Editor, Scene, View); 로 교체해주면 됨.
-		ViewRenderer.RenderView(Editor, Scene, View);
+		RenderOneView(Editor, Scene, View);
 	}
 
 	SetViewportAndScissor(ViewportInfo);
@@ -570,7 +570,7 @@ void FRenderer::Render(float DeltaTime, FEditor* Editor, UScene* Scene, const TA
 	for (const FRenderView& View : Views)
 	{
 		//TODO:ViewRenderer구현 후 RenderOneView(Editor, Scene, View); 로 교체해주면 됨.
-		ViewRenderer.RenderView(Editor, Scene, View);
+		RenderOneView(Editor, Scene, View);
 	}
 
 	// Editor->DrawLayout() 이후에 GetRenderView()를 해야 현재 프레임 기준으로 계산이 됩니다. 지금은 한 프레임 밀리는 상태

@@ -14,6 +14,7 @@ class UCameraComponent;
 struct FShaderResource;
 struct FVertexTexture;
 enum class EViewportType;
+struct FViewRenderData;
 
 // 출력 타깃은 호출자가 준비한다. 각 View는 데이터를 수집한 직후 그린다.
 class FViewRenderer
@@ -21,7 +22,7 @@ class FViewRenderer
 public:
 	void Create(ID3D11Device* InDevice, ID3D11DeviceContext* InContext);
 	void Shutdown();
-	void RenderView(FEditor* Editor, UScene* Scene, const FRenderView& View);
+	void RenderView(const FViewRenderData& Data);
 
 private:
 	bool CreateShaders();
@@ -82,6 +83,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> GridConstantBuffer;
 	Microsoft::WRL::ComPtr<ID3D11Buffer> TextVertexBuffer;
 	Microsoft::WRL::ComPtr<ID3D11Buffer> TextIndexBuffer;
+	Microsoft::WRL::ComPtr<ID3D11Buffer> MaterialConstantBuffer;
 	static const UINT MaxTextVertices = 8192;
 	FLineBatcher LineBatcher;
 };
