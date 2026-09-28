@@ -66,6 +66,11 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 		Draw.MaterialId = Material ? Material->MaterialId : InvalidRenderId;
 		Draw.MeshPageId = Prim.Geometry.MeshPageId;
 		Draw.ObjectIndex = Prim.ObjectIndex;
+		Draw.SortKey =
+			(static_cast<uint64>(Draw.PipelineId) << 48) |
+			(static_cast<uint64>(Draw.MaterialId) << 32) |
+			(static_cast<uint64>(Draw.DepthBucket) << 16) |
+			(static_cast<uint64>(Draw.MeshPageId));
 
 		if (bIsTransparent) {
 			OutPassDraws.AdditiveDraws.push_back(Draw);
@@ -115,6 +120,11 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 		Draw.MaterialId = Material ? Material->MaterialId : InvalidRenderId;
 		Draw.MeshPageId = GizmoPrim.Geometry.MeshPageId;
 		Draw.ObjectIndex = GizmoPrim.ObjectIndex;
+		Draw.SortKey =
+			(static_cast<uint64>(Draw.PipelineId) << 48) |
+			(static_cast<uint64>(Draw.MaterialId) << 32) |
+			(static_cast<uint64>(Draw.DepthBucket) << 16) |
+			(static_cast<uint64>(Draw.MeshPageId));
 
 		OutPassDraws.GizmoDraws.push_back(Draw);
 	}

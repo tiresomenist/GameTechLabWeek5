@@ -44,6 +44,10 @@ void FConstantBufferRing::Reset()
 
 FCBRangeAllocation FConstantBufferRing::AllocateAndUpload(ID3D11DeviceContext* Context, const void* Data, uint32_t DataByteSize)
 {
+    if (m_pMappedData != nullptr) {
+        return AllocateFast(Data, DataByteSize);
+    }
+
     FCBRangeAllocation Alloc{};
     if (!m_Buffer || DataByteSize == 0)  return Alloc;
 
@@ -84,4 +88,62 @@ FCBRangeAllocation FConstantBufferRing::AllocateAndUpload(ID3D11DeviceContext* C
     m_CurrentOffset += AlignedSize;
 
     return Alloc;
+}
+
+bool FConstantBufferRing::BeginFrameMap(ID3D11DeviceContext* Context)
+{
+    if (!m_Buffer || !Context) return false;
+
+    if (m_pMappedData != nullptr) return true;
+
+    D3D11_MAPPED_SUBRESOURCE MappedResource{};
+    HRESULT hr = Context->Map(m_Buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedResource);
+    if (FAILED(hr)) {
+        assert(false && "Failed to Map ConstantBufferRing in BeginFrameMap!");
+        return false;
+    }
+
+    m_pMappedData = static_cast<uint8_t*>(MappedResource.pData);
+    m_CurrentOffset = 0;
+    m_bIsFirstAllocationInFrame = false;
+    return true;
+}
+
+FCBRangeAllocation FConstantBufferRing::AllocateFast(const void* Data, uint32_t DataByteSize)
+{
+    FCBRangeAllocation Alloc{};
+    if (!m_pMappedData || DataByteSize == 0) return Alloc;
+
+    uint32_t AlignedSize = AlignUp(DataByteSize, CB_ALIGNMENT);
+
+    if (m_CurrentOffset + AlignedSize > m_TotalCapacity) {
+        assert(false && "ConstantBufferRing capacity exceeded! Increase ring buffer size.");
+        return Alloc;
+    }
+
+    uint8_t* WritePtr = m_pMappedData + m_CurrentOffset;
+    std::memcpy(WritePtr, Data, DataByteSize);
+
+    if (AlignedSize > DataByteSize) {
+        std::memset(WritePtr + DataByteSize, 0, AlignedSize - DataByteSize);
+    }
+
+    Alloc.Buffer = m_Buffer.Get();
+    Alloc.ByteOffset = m_CurrentOffset;
+    Alloc.ByteSize = AlignedSize;
+
+    Alloc.FirstConstant = m_CurrentOffset / 16;
+    Alloc.NumConstants = AlignedSize / 16;
+
+    m_CurrentOffset += AlignedSize;
+
+    return Alloc;
+}
+
+void FConstantBufferRing::EndFrameMap(ID3D11DeviceContext* Context)
+{
+    if (m_pMappedData && m_Buffer && Context) {
+        Context->Unmap(m_Buffer.Get(), 0);
+        m_pMappedData = nullptr;
+    }
 }

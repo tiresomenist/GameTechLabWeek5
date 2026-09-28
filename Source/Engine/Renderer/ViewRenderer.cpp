@@ -409,8 +409,12 @@ void FViewRenderer::RenderView(const FViewRenderData& Data)
 
 	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws);
 
+	CBRingBuffer.BeginFrameMap(Context1.Get());
+
 	CBManager.UploadObjectConstants(Context1.Get(), &CBRingBuffer, Data, PassDrawBuilder.GetObjectCBIndexMap());
 	CBManager.UploadMaterialConstants(Context1.Get(), &CBRingBuffer, PassDrawBuilder.GetReferencedMaterials(), PassDrawBuilder.GetMaterialCBIndexMap());
+
+	CBRingBuffer.EndFrameMap(Context1.Get());
 
 	ID3D11Buffer* ViewCB = TransformConstantBuffer.Get();
 

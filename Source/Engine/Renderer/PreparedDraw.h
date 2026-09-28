@@ -21,6 +21,8 @@ struct FPreparedDraw {
 	uint32 MaterialId = InvalidRenderId;
 	uint32 MeshPageId = InvalidRenderId;
 	uint32 ObjectIndex = InvalidRenderId;
+
+	uint64 SortKey = 0;
 };
 
 struct FPassDrawList {

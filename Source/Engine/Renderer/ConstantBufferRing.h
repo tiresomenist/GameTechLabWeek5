@@ -33,6 +33,9 @@ public:
 	void Reset();
 
 	FCBRangeAllocation AllocateAndUpload(ID3D11DeviceContext* Context, const void* Data, uint32_t DataByteSize);
+	bool BeginFrameMap(ID3D11DeviceContext* Context);
+	FCBRangeAllocation AllocateFast(const void* Data, uint32_t DataByteSize);
+	void EndFrameMap(ID3D11DeviceContext* Context);
 public:
 	static constexpr uint32_t CB_ALIGNMENT = 256;
 	static uint32_t AlignUp(uint32_t Size, uint32_t Alignment) {
@@ -43,4 +46,5 @@ private:
 	uint32_t m_TotalCapacity = 0;
 	uint32_t m_CurrentOffset = 0;
 	bool m_bIsFirstAllocationInFrame = true;
+	uint8_t* m_pMappedData = nullptr;
 };
