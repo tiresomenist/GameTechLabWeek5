@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <functional>
 #include "Engine/Renderer/RenderDataTypes.h"
+#include "Engine/Resource/MeshBufferPool.h"
 
 class FTextureResource;
 
@@ -132,18 +133,6 @@ private:
 
 	mutable uint32 NextMaterialId = 0;
 
-	// 메가메쉬페이지로 변환전 기존 버텍스/인덱스 버퍼로 바인딩하는 구조를 남겨두기 위함.
-	struct FLegacyMeshPage
-	{
-		Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer;
-		Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer;
-
-		uint32 Stride = 0;
-		EVertexFormat VertexFormat = EVertexFormat::Simple;
-	};
-
-	TArray<FLegacyMeshPage> LegacyMeshPages;
-
-	void RegisterLegacyMeshPage(FMeshResource& Mesh, EVertexFormat VertexFormat);
+	FMeshBufferPool MeshBufferPool;
 };
 

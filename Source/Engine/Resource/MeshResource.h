@@ -16,8 +16,8 @@ public:
     FMeshResource(const FMeshResource&) = delete;
     FMeshResource& operator=(const FMeshResource&) = delete;
     ~FMeshResource() = default;
-    ID3D11Buffer* GetVertexBuffer() const { return VertexBuffer.Get(); }
-    ID3D11Buffer* GetIndexBuffer() const { return IndexBuffer.Get(); }
+    //ID3D11Buffer* GetVertexBuffer() const { return VertexBuffer.Get(); }
+    //ID3D11Buffer* GetIndexBuffer() const { return IndexBuffer.Get(); }
     UINT GetVertexCount() const { return VertexCount; }
     UINT GetIndexCount() const { return IndexCount; }
     UINT GetStride() const { return Stride; }
@@ -36,8 +36,8 @@ public:
 
     //void AddSection(uint32 InMaterialSlot, uint32 InStartIndex, uint32 InIndexCount);
 private:
-    Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer = nullptr;
-    Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer = nullptr;
+    //Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer = nullptr;
+    //Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer = nullptr;
 	UINT VertexCount = 0;
 	UINT IndexCount = 0;
 	UINT Stride = 0;

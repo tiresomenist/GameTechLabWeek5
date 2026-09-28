@@ -462,6 +462,13 @@ void GResourceManager::Initialize(GDevice* InDevice)
     Device = InDevice;
 	if (!Device || !Device->GetDevice() || !DefaultFont.Build(Device->GetDevice(), "Assets/Fonts/Pretendard-Regular.ttf", 24.0f))
 		throw std::runtime_error("Default font atlas build failed");
+    if (!MeshBufferPool.Initialize(Device->GetDevice())) {
+        throw std::runtime_error("Mesh Buffer Pool Initialize failed");
+    }
+    if (!DefaultFont.Build(Device->GetDevice(), "Assets/Fonts/Pretendard-Regular.ttf", 24.0f))
+    {
+        throw std::runtime_error("Default font atlas build failed");
+    }
     RegisterDefaultPrimitives(InDevice);
     RegisterTexturePrimitives(InDevice);
     RegisterDefaultRenderResources();
@@ -495,11 +502,18 @@ FMeshResource* GResourceManager::CreateMesh(const FName& MeshName,
     Mesh->VertexCount = static_cast<UINT>(Vertices.size());
     Mesh->IndexCount = static_cast<UINT>(Indices.size());
     Mesh->Stride = sizeof(FVertexSimple);
+    
     // GPU에는 색상 정보를 포함한 원본 정점을 업로드함
-    Mesh->VertexBuffer = Device->CreateVertexBuffer(Vertices.data(), Mesh->Stride * Mesh->VertexCount);
-    if (!Mesh->VertexBuffer) return nullptr;
-    Mesh->IndexBuffer = Device->CreateIndexBuffer(&Mesh->indexes[0], sizeof(uint32) * Mesh->IndexCount);
-    if (!Mesh->IndexBuffer) return nullptr;
+    //Mesh->VertexBuffer = Device->CreateVertexBuffer(Vertices.data(), Mesh->Stride * Mesh->VertexCount);
+    //if (!Mesh->VertexBuffer) return nullptr;
+    //Mesh->IndexBuffer = Device->CreateIndexBuffer(&Mesh->indexes[0], sizeof(uint32) * Mesh->IndexCount);
+    //if (!Mesh->IndexBuffer) return nullptr;
+    
+    if (!MeshBufferPool.AllocateAndUpload(EVertexFormat::Simple, Vertices.data(), Mesh->VertexCount, Indices, Mesh->Allocation))
+    {
+        return nullptr;
+    }
+    
     Mesh->bHasBounds = false;
     if (Mesh->Positions.Num() > 0)
     {
@@ -521,7 +535,7 @@ FMeshResource* GResourceManager::CreateMesh(const FName& MeshName,
     }
 
     if (PrimitiveCache.Add(MeshName, Mesh.get())){
-        RegisterLegacyMeshPage(*Mesh, EVertexFormat::Simple);
+        //RegisterLegacyMeshPage(*Mesh, EVertexFormat::Simple);
         return Mesh.release();
     }
     // 등록되지 않은 임시 Mesh는 unique_ptr이 해제함
@@ -574,13 +588,18 @@ FMeshResource* GResourceManager::CreateTexturedMesh(const FName& MeshName,
     }
 
     // GPU에는 위치와 UV가 포함된 원본 정점을 업로드함
-    Mesh->VertexBuffer = Device->CreateVertexBuffer(
-        Vertices.data(), static_cast<UINT>(VertexCount * sizeof(FVertexTexture)));
-    if (!Mesh->VertexBuffer) return nullptr;
+   // Mesh->VertexBuffer = Device->CreateVertexBuffer(
+   //     Vertices.data(), static_cast<UINT>(VertexCount * sizeof(FVertexTexture)));
+   // if (!Mesh->VertexBuffer) return nullptr;
+   //
+   // Mesh->IndexBuffer = Device->CreateIndexBuffer(
+   //     &Mesh->indexes[0], static_cast<UINT>(IndexCount * sizeof(uint32)));
+   // if (!Mesh->IndexBuffer) return nullptr;
 
-    Mesh->IndexBuffer = Device->CreateIndexBuffer(
-        &Mesh->indexes[0], static_cast<UINT>(IndexCount * sizeof(uint32)));
-    if (!Mesh->IndexBuffer) return nullptr;
+    if (!MeshBufferPool.AllocateAndUpload(EVertexFormat::Texture, Vertices.data(), Mesh->VertexCount, Indices, Mesh->Allocation))
+    {
+        return nullptr;
+    }
 
     // 로컬 위치의 축별 최솟값과 최댓값으로 바운딩 박스를 계산함
     Mesh->BoundsMin = Mesh->Positions[0];
@@ -598,7 +617,7 @@ FMeshResource* GResourceManager::CreateTexturedMesh(const FName& MeshName,
 
     if (PrimitiveCache.Add(MeshName, Mesh.get()))
     {
-        RegisterLegacyMeshPage(*Mesh, EVertexFormat::Texture);
+        //RegisterLegacyMeshPage(*Mesh, EVertexFormat::Texture);
         return Mesh.release();
     }
 
@@ -651,13 +670,18 @@ FMeshResource* GResourceManager::CreateStaticMeshResource(const FName& MeshName,
     }
 
     // GPU에는 위치와 UV가 포함된 원본 정점을 업로드함
-    Mesh->VertexBuffer = Device->CreateVertexBuffer(
-        Vertices.data(), static_cast<UINT>(VertexCount * sizeof(FVertexPNCT)));
-    if (!Mesh->VertexBuffer) return nullptr;
+    //Mesh->VertexBuffer = Device->CreateVertexBuffer(
+    //    Vertices.data(), static_cast<UINT>(VertexCount * sizeof(FVertexPNCT)));
+    //if (!Mesh->VertexBuffer) return nullptr;
+    //
+    //Mesh->IndexBuffer = Device->CreateIndexBuffer(
+    //    &Mesh->indexes[0], static_cast<UINT>(IndexCount * sizeof(uint32)));
+    //if (!Mesh->IndexBuffer) return nullptr;
 
-    Mesh->IndexBuffer = Device->CreateIndexBuffer(
-        &Mesh->indexes[0], static_cast<UINT>(IndexCount * sizeof(uint32)));
-    if (!Mesh->IndexBuffer) return nullptr;
+    if (!MeshBufferPool.AllocateAndUpload(EVertexFormat::PNCT, Vertices.data(), Mesh->VertexCount, Indices, Mesh->Allocation))
+    {
+        return nullptr;
+    }
 
     // 로컬 위치의 축별 최솟값과 최댓값으로 바운딩 박스를 계산함
     Mesh->BoundsMin = Mesh->Positions[0];
@@ -675,7 +699,7 @@ FMeshResource* GResourceManager::CreateStaticMeshResource(const FName& MeshName,
 
     if (PrimitiveCache.Add(MeshName, Mesh.get()))
     {
-        RegisterLegacyMeshPage(*Mesh, EVertexFormat::PNCT);
+        //RegisterLegacyMeshPage(*Mesh, EVertexFormat::PNCT);
         return Mesh.release();
     }
 
@@ -698,7 +722,7 @@ void GResourceManager::Shutdown()
     StaticMeshCache.Empty();
     TextureCache.Empty();
     PrimitiveCache.Empty();
-    LegacyMeshPages.Empty();
+    MeshBufferPool.Shutdown();
     DefaultFont.Release();
     TextureMaterialConstantBuffer.Reset();
     WireframePixelShader.Reset();
@@ -1447,44 +1471,7 @@ uint32 GResourceManager::AllocateMaterialId() const
     return NextMaterialId++;
 }
 
-void GResourceManager::RegisterLegacyMeshPage(FMeshResource& Mesh, EVertexFormat VertexFormat)
-{
-    assert(Mesh.GetVertexBuffer());
-    assert(Mesh.GetIndexBuffer());
-    assert(Mesh.Allocation.MeshPageId == InvalidRenderId);
-
-    FLegacyMeshPage Page{};
-
-    // ComPtr가 참조를 유지하므로 임시 페이지의 버퍼 수명이 보장된다.
-    Page.VertexBuffer = Mesh.GetVertexBuffer();
-    Page.IndexBuffer = Mesh.GetIndexBuffer();
-
-    Page.Stride = Mesh.GetStride();
-    Page.VertexFormat = VertexFormat;
-
-    const uint32 PageId = static_cast<uint32>(LegacyMeshPages.Num());
-
-    LegacyMeshPages.Add(std::move(Page));
-
-    Mesh.Allocation.MeshPageId = PageId;
-    Mesh.Allocation.FirstIndex = 0;
-    Mesh.Allocation.BaseVertex = 0;
-    Mesh.Allocation.VertexCount = Mesh.GetVertexCount();
-    Mesh.Allocation.IndexCount = Mesh.GetIndexCount();
-}
-
 FMeshPageBinding GResourceManager::GetMeshPageBinding(uint32 MeshPageId) const
 {
-    assert(MeshPageId < static_cast<uint32>(LegacyMeshPages.Num()));
-
-    const FLegacyMeshPage& Page = LegacyMeshPages[MeshPageId];
-
-    FMeshPageBinding Binding{};
-    Binding.VertexBuffer = Page.VertexBuffer.Get();
-    Binding.IndexBuffer = Page.IndexBuffer.Get();
-    Binding.Stride = Page.Stride;
-    Binding.IndexFormat = DXGI_FORMAT_R32_UINT;
-    Binding.VertexFormat = Page.VertexFormat;
-
-    return Binding;
+    return MeshBufferPool.GetPageBinding(MeshPageId);
 }
