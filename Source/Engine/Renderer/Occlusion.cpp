@@ -61,9 +61,9 @@ bool FOcclusionCuller::CreateProxyMesh(ID3D11Device* Device)
 }
 
 
-FOcclusionState& FOcclusionCuller::Create(ID3D11Device* Device, const UPrimitiveComponent* Owner)
+FOcclusionState& FOcclusionCuller::Create(ID3D11Device* Device, uint64 CellKey)
 {
-    FOcclusionState& State = States[Owner];
+    FOcclusionState& State = States[CellKey];
 
     // 이미 이 Primitive의 query가 만들어졌다면 재사용
     if (State.Query)
@@ -118,9 +118,9 @@ void FOcclusionCuller::UpdateQueryResults(ID3D11DeviceContext* Context)
     }
 }
 
-bool FOcclusionCuller::VisibleLastFrame(const UPrimitiveComponent* Owner) const
+bool FOcclusionCuller::VisibleLastFrame(uint64 CellKey) const
 {
-    const FOcclusionState* State = States.Find(Owner);
+    const FOcclusionState* State = States.Find(CellKey);
 
     if (State == nullptr || !State->Query)
     {

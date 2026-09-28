@@ -29,6 +29,57 @@ namespace
 		if (FAILED(Result))
 			throw std::runtime_error(std::format("D3D resource creation failed: {}", Result));
 	}
+
+	uint64 MakeOcclusionCellKey(int32 X, int32 Y, int32 Z)
+	{
+		constexpr uint64 Mask = (1ull << 21) - 1;
+		return ((static_cast<uint64>(X) & Mask) << 42) | ((static_cast<uint64>(Y) & Mask) << 21) 
+			| (static_cast<uint64>(Z) & Mask);
+	}
+
+	TArray<FOcclusionCell> BuildOcclusionCells(const TArray<FPrimitiveRenderData>& RenderList)
+	{
+		constexpr float CellSize = 8.0f;
+		TArray<FOcclusionCell> Cells;
+		TMap<uint64, int32> CellIndices;
+		for (const FPrimitiveRenderData& Item : RenderList)
+		{
+			if (!Item.Owner || !Item.WorldMatrix || !Item.bHasWorldBounds
+				|| Item.Material.BlendMode == EPrimitiveBlendMode::Additive)
+			{
+				continue;
+			}
+			const FBoundingBox& WorldBounds = Item.WorldBounds;
+
+			const FVector Center = (WorldBounds.Min + WorldBounds.Max) * 0.5f;
+			const int32 CellX = static_cast<int32>(std::floor(Center.X / CellSize));
+			const int32 CellY = static_cast<int32>(std::floor(Center.Y / CellSize));
+			const int32 CellZ = static_cast<int32>(std::floor(Center.Z / CellSize));
+			const uint64 CellKey = MakeOcclusionCellKey(CellX, CellY, CellZ);
+			int32* CellIndex = CellIndices.Find(CellKey);
+
+			if (CellIndex == nullptr)
+			{
+				FOcclusionCell NewCell{};
+				NewCell.Key = CellKey;
+				NewCell.Bounds = WorldBounds;
+				Cells.Add(std::move(NewCell));
+				const int32 NewIndex = Cells.Num() - 1;
+				CellIndices.Add(CellKey, NewIndex);
+				CellIndex = CellIndices.Find(CellKey);
+			}
+
+			FOcclusionCell& Cell = Cells[*CellIndex];
+			Cell.Bounds.Min.X = std::min(Cell.Bounds.Min.X, WorldBounds.Min.X);
+			Cell.Bounds.Min.Y = std::min(Cell.Bounds.Min.Y, WorldBounds.Min.Y);
+			Cell.Bounds.Min.Z = std::min(Cell.Bounds.Min.Z, WorldBounds.Min.Z);
+			Cell.Bounds.Max.X = std::max(Cell.Bounds.Max.X, WorldBounds.Max.X);
+			Cell.Bounds.Max.Y = std::max(Cell.Bounds.Max.Y, WorldBounds.Max.Y);
+			Cell.Bounds.Max.Z = std::max(Cell.Bounds.Max.Z, WorldBounds.Max.Z);
+			Cell.Items.Add(&Item);
+		}
+		return Cells;
+	}
 }
 
 void FViewRenderer::Create(ID3D11Device* InDevice, ID3D11DeviceContext* InContext)
@@ -447,6 +498,7 @@ void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& 
 	const FFrustum Frustum = FFrustum::FrustumFromViewProjection(ViewProjMatrix);
 
 	TArray<FPrimitiveRenderData> RenderList = RenderUtil::GetRenderList(Editor, Scene, Camera, &Frustum);
+	TArray<FOcclusionCell> OcclusionCells = BuildOcclusionCells(RenderList);
 
 	OcclusionCuller.UpdateQueryResults(DeviceContext);
 	const bool bShowPrimitives = ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives);
@@ -461,21 +513,19 @@ void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& 
 		RenderOcclusionDepth(Item, ViewProjMatrix);
 	}
 
-	for (const FPrimitiveRenderData& Item : RenderList)
+	for (const FOcclusionCell& Cell : OcclusionCells)
 	{
-		if (!Item.Owner || Item.Material.BlendMode == EPrimitiveBlendMode::Additive)
-		{
-			continue;
-		}
-		FOcclusionState& State = OcclusionCuller.Create(D3DDevice, Item.Owner);
+		FOcclusionState& State = OcclusionCuller.Create(D3DDevice, Cell.Key);
 		if (!State.Query || State.bQueryPending)
 		{
 			continue;
 		}
+
 		DeviceContext->Begin(State.Query.Get());
-		const bool bProwyDrawn = RenderOcclusionProxy(Item, ViewProjMatrix);
+		const bool bProxyDrawn = RenderOcclusionProxy(Cell.Bounds, ViewProjMatrix);
 		DeviceContext->End(State.Query.Get());
-		if (bProwyDrawn)
+
+		if (bProxyDrawn)
 		{
 			State.bQueryPending = true;
 		}
@@ -485,26 +535,31 @@ void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& 
 	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
 
+	TMap<const FPrimitiveRenderData*, bool> VisibleItems;
+	for (const FPrimitiveRenderData& Item : RenderList)
+	{
+		if (!Item.Owner || Item.Material.BlendMode == EPrimitiveBlendMode::Additive 
+			|| Item.isSelected || !Item.bHasWorldBounds)
+		{
+			VisibleItems.Add(&Item, true);
+		}
+	}
+	for (const FOcclusionCell& Cell : OcclusionCells)
+	{
+		if (bCameraMoved || OcclusionCuller.VisibleLastFrame(Cell.Key))
+		{
+			for (const FPrimitiveRenderData* Item : Cell.Items)
+			{
+				VisibleItems.Add(Item, true);
+			}
+		}
+	}
+
 	TArray<FPrimitiveRenderData> OcclusionVisibleList;
 	OcclusionVisibleList.Reserve(RenderList.Num());
 	for (const FPrimitiveRenderData& Item : RenderList)
 	{
-		if (!Item.Owner)
-		{
-			OcclusionVisibleList.Add(Item);
-			continue;
-		}
-		if (Item.Material.BlendMode == EPrimitiveBlendMode::Additive)
-		{
-			OcclusionVisibleList.Add(Item);
-			continue;
-		}
-		if (Item.isSelected)
-		{
-			OcclusionVisibleList.Add(Item);
-			continue;
-		}
-		if (bCameraMoved || OcclusionCuller.VisibleLastFrame(Item.Owner))
+		if (VisibleItems.Contains(&Item))
 		{
 			OcclusionVisibleList.Add(Item);
 		}
@@ -515,6 +570,7 @@ void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& 
 
 	const TArray<FPrimitiveRenderData>& VisibleList = bCameraMoved ? RenderList : OcclusionVisibleList;
 
+	//for(auto& Item : RenderList)
 	for (auto& Item : VisibleList)
 	{
 		if (!Item.WorldMatrix || !Item.VertexBuffer || !Item.IndexBuffer || Item.IndexCount == 0)
@@ -751,28 +807,25 @@ void FViewRenderer::SetViewportAndScissor(const D3D11_VIEWPORT& Viewport)
 	GContext::GetInstance()->SetViewportAndScissor(Viewport);
 }
 
-bool FViewRenderer::RenderOcclusionProxy(const FPrimitiveRenderData& Item, const FMatrix& ViewProjection)
+bool FViewRenderer::RenderOcclusionProxy(const FBoundingBox& WorldBounds, const FMatrix& ViewProjection)
 {
 	ID3D11Buffer* ProxyVertexBuffer = OcclusionCuller.GetProxyVertexBuffer();
 	ID3D11Buffer* ProxyIndexBuffer = OcclusionCuller.GetProxyIndexBuffer();
 
-	if (!Item.WorldMatrix || !ProxyVertexBuffer || !ProxyIndexBuffer)
+	if (!ProxyVertexBuffer || !ProxyIndexBuffer)
 	{
 		return false;
 	}
 
-	const FVector LocalCenter = (Item.Min + Item.Max) * 0.5f;
-	const FVector LocalExtent = (Item.Max - Item.Min) * 0.5f;
-
-	if (LocalExtent.X <= EPSILON || LocalExtent.Y <= EPSILON || LocalExtent.Z <= EPSILON)
+	const FVector WorldCenter = (WorldBounds.Min + WorldBounds.Max) * 0.5f;
+	const FVector WorldExtent = (WorldBounds.Max - WorldBounds.Min) * 0.5f;
+	if (WorldExtent.X <= EPSILON || WorldExtent.Y <= EPSILON || WorldExtent.Z <= EPSILON)
 	{
 		return false;
 	}
 
-	const FMatrix ProxyWorld =
-		FMatrix::MakeScaleMatrix(LocalExtent)
-		* FMatrix::MakeTranslationMatrix(LocalCenter)
-		* (*Item.WorldMatrix);
+	const FMatrix ProxyWorld = FMatrix::MakeScaleMatrix(WorldExtent) 
+		* FMatrix::MakeTranslationMatrix(WorldCenter);
 
 	UpdateTransformConstantBuffer(ProxyWorld, ViewProjection);
 	BindShader(*SimpleShader);

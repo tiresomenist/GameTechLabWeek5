@@ -60,7 +60,7 @@ private:
 	void UpdateTextVertexBuffer(TArray<FVertexTexture>& Vertices);
 	void RenderText(UINT IndexCount);
 
-	bool RenderOcclusionProxy(const FPrimitiveRenderData& Item, const FMatrix& ViewProjection);
+	bool RenderOcclusionProxy(const FBoundingBox& WorldBounds, const FMatrix& ViewProjection);
 	void RenderOcclusionDepth(const FPrimitiveRenderData& Item, const FMatrix& ViewProjection);
 
 	// Device와 Context는 비소유 참조.

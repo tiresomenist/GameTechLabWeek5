@@ -2,6 +2,7 @@
 
 #include <d3d11.h>
 #include "Core/Math/Vector.h"
+#include "Core/Math/Box.h"
 #include "Engine/Renderer/Material.h"
 
 struct FMatrix; 
@@ -58,6 +59,9 @@ struct FPrimitiveRenderData
 
 	FVector Min;
 	FVector Max;
+	FBoundingBox WorldBounds;
+	bool bHasWorldBounds = false;
+
     // 기본값은 텍스처 전체를 사용함
     FTextureUVTransform UVTransform;
 

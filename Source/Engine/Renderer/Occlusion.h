@@ -4,8 +4,9 @@
 #include <wrl/client.h>
 
 #include "Core/Container/Map.h"
-
-class UPrimitiveComponent;
+#include "Core/Container/Array.h"
+#include "Core/Math/Box.h"
+#include "Engine/Renderer/PrimitiveRenderData.h"
 
 struct FOcclusionState
 {
@@ -14,22 +15,28 @@ struct FOcclusionState
 	bool bQueryPending = false;  // GPU에서 결과 계산중인지
 };
 
+struct FOcclusionCell
+{
+	uint64 Key = 0;
+	FBoundingBox Bounds;
+	TArray<const FPrimitiveRenderData*> Items;
+};
+
 class FOcclusionCuller
 {
 public:
 	bool CreateProxyMesh(ID3D11Device* Device);
-	FOcclusionState& Create(ID3D11Device* Device, const UPrimitiveComponent* Owner);
+	FOcclusionState& Create(ID3D11Device* Device, uint64 CellKey);
 
 	void UpdateQueryResults(ID3D11DeviceContext* Context);
-	bool VisibleLastFrame(const UPrimitiveComponent* Owner) const;
+	bool VisibleLastFrame(uint64 CellKey) const;
 	void Clear();
 
 	ID3D11Buffer* GetProxyVertexBuffer() const { return ProxyVertexBuffer.Get(); }
 	ID3D11Buffer* GetProxyIndexBuffer() const { return ProxyIndexBuffer.Get(); }
 
 private:
-	// Owner를 Key로 하여 지난 프레임 결과를 저장
-	TMap<const UPrimitiveComponent*, FOcclusionState> States;
+	TMap<uint64, FOcclusionState> States;
 
 	Microsoft::WRL::ComPtr<ID3D11Buffer> ProxyVertexBuffer;
 	Microsoft::WRL::ComPtr<ID3D11Buffer> ProxyIndexBuffer;

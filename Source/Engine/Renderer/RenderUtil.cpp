@@ -41,11 +41,13 @@ TArray<FPrimitiveRenderData> RenderUtil::GetRenderList(FEditor* Editor, UScene* 
 			}
 
 			FVector LocalMin, LocalMax;
+			FBoundingBox WorldBounds;
+			bool bHasWorldBounds = false;
 			if (Primitive->GetLocalBounds(LocalMin, LocalMax))
 			{
 				const FBoundingBox LocalBounds(LocalMin, LocalMax);
-				const FBoundingBox WorldBounds = LocalBounds.TransformBounds(Primitive->GetRenderWorldMatrix(Camera));
-
+				WorldBounds = LocalBounds.TransformBounds(Primitive->GetRenderWorldMatrix(Camera));
+				bHasWorldBounds = true;
 				if (!Frustum->Intersects(WorldBounds))
 					return;
 			}
@@ -59,6 +61,8 @@ TArray<FPrimitiveRenderData> RenderUtil::GetRenderList(FEditor* Editor, UScene* 
 			{
 				Data.WorldMatrix = &Primitive->GetRenderWorldMatrix(Camera);
 				Data.Owner = Primitive;
+				Data.WorldBounds = WorldBounds;
+				Data.bHasWorldBounds = bHasWorldBounds;
 				RenderList.Add(Data);
 			}
 		}
