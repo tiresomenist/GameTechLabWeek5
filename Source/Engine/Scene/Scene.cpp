@@ -19,6 +19,9 @@
 #include "Engine/Object/ClassRegistry.h"
 #include "Engine/Log.h"
 
+// Todo: BVH
+#include "SceneBVHNode.h"
+
 namespace
 {
 	struct FPendingActorInfo
@@ -356,6 +359,9 @@ void UScene::Serialize(FArchive& Archive)
     }
 
     EnsureUUIDWidgets();
+
+    // Todo: BVH
+    RebuildBVH();
 }
 
 
@@ -436,8 +442,21 @@ void UScene::DestroyActor(AActor* Actor)
         if (Actors[Index] == Actor)
         {
             Actor->EndPlay();
+            
+            // Todo: BVH
+            for (UActorComponent* Component : Actor->GetComponents())
+            {
+                if (Component->IsA(UStaticMeshComponent::GetClass()))
+                {
+                    RemoveFromBVH(static_cast<UStaticMeshComponent*>(Component));
+                }
+            }
+            
+            //
+            
             delete Actor;
             Actors.RemoveAt(Index);
+
             break;
         }
     }
@@ -445,10 +464,83 @@ void UScene::DestroyActor(AActor* Actor)
 
 UScene::~UScene()
 {
+    // Todo: BVH
+    FSceneBVHNode::Clear(BVHRoot);
+    BVHLeaves.Empty();
+
     for (AActor* Actor : Actors)
     {
         delete Actor;
     }
 
     Actors.Empty();
+}
+
+// Todo: BVH
+void UScene::UpdateBVH(UStaticMeshComponent* Component)
+{
+    if (!Component) return;
+
+    FSceneBVHNode** Found = BVHLeaves.Find(Component);
+    FSceneBVHNode* OldLeaf = Found ? *Found : nullptr;
+
+    FSceneBVHNode* NewLeaf = FSceneBVHNode::Update(BVHRoot, OldLeaf, Component);
+
+    if (!OldLeaf && NewLeaf)
+        BVHLeaves.Add(Component, NewLeaf);
+    else if (OldLeaf && !NewLeaf)
+        BVHLeaves.Remove(Component);
+}
+
+void UScene::UpdateBVHForActor(AActor* Actor)
+{
+    if (!Actor) return;
+
+    // 부모 컴포넌트 이동으로 함께 움직인 자식 메시도 갱신한다.
+    for (UActorComponent* Component : Actor->GetComponents())
+    {
+        if (Component->IsA(UStaticMeshComponent::GetClass()))
+            UpdateBVH(static_cast<UStaticMeshComponent*>(Component));
+    }
+}
+
+void UScene::RemoveFromBVH(UStaticMeshComponent* Component)
+{
+    FSceneBVHNode** Found = BVHLeaves.Find(Component);
+    if (!Found) return;
+
+    FSceneBVHNode::Remove(BVHRoot, *Found);
+    BVHLeaves.Remove(Component);
+}
+
+void UScene::RebuildBVH()
+{
+    FSceneBVHNode::Clear(BVHRoot);
+    BVHLeaves.Empty();
+
+    ForEachPrimitive([this](UPrimitiveComponent* Primitive)
+        {
+            if (Primitive->IsA(UStaticMeshComponent::GetClass()))
+                UpdateBVH(static_cast<UStaticMeshComponent*>(Primitive));
+        });
+}
+
+bool UScene::RemoveComponent(
+    AActor* Actor, UActorComponent* Component)
+{
+    if (!Actor || !Component)
+        return false;
+
+    // 일단 메모리는 유지한다.
+    if (!Actor->RemoveComponent(Component, false))
+        return false;
+
+    if (Component->IsA(UStaticMeshComponent::GetClass()))
+        RemoveFromBVH(static_cast<UStaticMeshComponent*>(Component));
+
+    delete Component;
+
+    // 부모 컴포넌트 삭제로 자식의 월드 행렬이 바뀔 수 있다.
+    UpdateBVHForActor(Actor);
+    return true;
 }

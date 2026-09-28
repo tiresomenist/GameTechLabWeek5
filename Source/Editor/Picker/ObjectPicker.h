@@ -13,6 +13,10 @@ struct FRay {
 	FVector Direction;
 };
 
+
+// Todo: BVH
+class FSceneBVHNode;
+
 class FObjectPicker
 {
 public:
@@ -32,6 +36,9 @@ private:
 	void PickPrimitives(UScene* Scene, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
 	void PickIcon(UScene* Scene, const UCameraComponent* Camera, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
 
+	// Todo: BVH
+	void PickBVHNode(const FSceneBVHNode* Node, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
+	void TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
 };
 
 

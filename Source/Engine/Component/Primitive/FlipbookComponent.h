@@ -8,7 +8,6 @@ class UCameraComponent;
 
 class UFlipbookComponent : public UPrimitiveComponent
 {
-
 	UCLASS(UFlipbookComponent, "Flame", UPrimitiveComponent)
 
 public:

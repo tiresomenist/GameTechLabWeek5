@@ -14,6 +14,9 @@
 #include "Engine/Component/Light/SpotLightComponent.h"
 #include "Editor/Util/ScopeCycleCounter.h"
 
+// Todo: BVH
+#include "Engine/Scene/SceneBVHNode.h"
+
 FObjectPicker::FObjectPicker(FEditor* InEditor)
 	: Editor{ InEditor }
 {
@@ -158,8 +161,139 @@ USceneComponent* FObjectPicker::Pick()
 	return SelectedObject;
 }
 
+void FObjectPicker::PickPrimitives(
+	UScene* Scene, const FRay& Ray,
+	float& ClosestDistance,
+	USceneComponent*& SelectedObject)
+{
+	// 정적 메시
+	PickBVHNode(
+		Scene->GetBVHRoot(),
+		Ray,
+		ClosestDistance,
+		SelectedObject);
 
+	// 이번 단계에서 BVH에 없는 텍스트·플립북
+	Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
+		{
+			if (Primitive->IsA(UStaticMeshComponent::GetClass()))
+				return;
+
+			TestPrimitive(
+				Primitive, Ray,
+				ClosestDistance, SelectedObject);
+		});
+}
+
+void FObjectPicker::PickBVHNode(
+	const FSceneBVHNode* Node,
+	const FRay& Ray,
+	float& ClosestDistance,
+	USceneComponent*& SelectedObject)
+{
+	if (!Node) return;
+
+	float Distance = 0.0f;
+	if (!RayAABBIntersect(
+		Ray, Node->GetMin(), Node->GetMax(),
+		ClosestDistance, Distance))
+	{
+		return;
+	}
+
+	if (Node->GetComponent())
+	{
+		TestPrimitive(
+			Node->GetComponent(),
+			Ray,
+			ClosestDistance,
+			SelectedObject);
+		return;
+	}
+
+	PickBVHNode(Node->GetLeft(), Ray, ClosestDistance, SelectedObject);
+	PickBVHNode(Node->GetRight(), Ray, ClosestDistance, SelectedObject);
+}
+
+void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
+{
+	if (!Primitive || !Primitive->IsVisible())
+		return;
+
+	FVector BoundsMin;
+	FVector BoundsMax;
+	if (!Primitive->GetLocalBounds(BoundsMin, BoundsMax))
+		return;
+
+	FMatrix InverseWorld;
+	const FMatrix& RenderWorld =
+		Primitive->GetRenderWorldMatrix(Editor->GetEditorCamera());
+
+	if (!RenderWorld.TryInverse(InverseWorld))
+		return;
+
+	FRay LocalRay;
+	LocalRay.Origin =
+		FVector(FVector4(Ray.Origin, 1.0f) * InverseWorld);
+	LocalRay.Direction =
+		FVector(FVector4(Ray.Direction, 0.0f) * InverseWorld);
+
+	float AABBDistance = 0.0f;
+	if (!RayAABBIntersect(
+		LocalRay, BoundsMin, BoundsMax,
+		ClosestDistance, AABBDistance))
+	{
+		return;
+	}
+
+	if (Primitive->IsAABBOnlyPickable())
+	{
+		ClosestDistance = AABBDistance;
+		SelectedObject = Primitive;
+		return;
+	}
+
+	FMeshResource* Mesh = Primitive->GetMeshResource();
+	if (!Mesh)
+		return;
+
+	const size_t Count = Mesh->GetIndices().Num();
+	const size_t VertexCount = Mesh->GetPositions().Num();
+
+	if (Count != Mesh->GetIndexCount() || Count % 3 != 0)
+		return;
+
+	for (size_t Index = 0; Index < Count; Index += 3)
+	{
+		const uint32 I0 = Mesh->GetIndices()[Index];
+		const uint32 I1 = Mesh->GetIndices()[Index + 1];
+		const uint32 I2 = Mesh->GetIndices()[Index + 2];
+
+		if (I0 >= VertexCount ||
+			I1 >= VertexCount ||
+			I2 >= VertexCount)
+		{
+			continue;
+		}
+
+		const FVector& A = Mesh->GetPositions()[I0];
+		const FVector& B = Mesh->GetPositions()[I1];
+		const FVector& C = Mesh->GetPositions()[I2];
+
+		float HitDistance = 0.0f;
+		if (RayTriangleIntersect(
+			LocalRay, A, B, C, HitDistance) &&
+			HitDistance < ClosestDistance)
+		{
+			ClosestDistance = HitDistance;
+			SelectedObject = Primitive;
+		}
+	}
+}
+
+// Todo: BVH
 // 프리미티브 피킹 부분, 추가적으로 최적화해야함.
+/*
 void FObjectPicker::PickPrimitives(UScene* Scene, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
 {
 	Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
@@ -177,6 +311,7 @@ void FObjectPicker::PickPrimitives(UScene* Scene, const FRay& Ray, float& Closes
 			FRay LocalRay;
 			LocalRay.Origin = FVector(FVector4(Ray.Origin, 1.0f) * InverseWorld);
 			LocalRay.Direction = FVector(FVector4(Ray.Direction, 0.0f) * InverseWorld);
+
 
 			//AABB로 후보 선택.
 			float AABBDistance = 0.0f;
@@ -215,6 +350,8 @@ void FObjectPicker::PickPrimitives(UScene* Scene, const FRay& Ray, float& Closes
 			}
 		});
 }
+
+*/
 
 // 현재는 Spotlight Icon만 검사중. 장기적으로 구조를 바꿔서 모든 메쉬없는 아이콘에 대해 피킹되도록 해야함
 // UBillboardComponent를 하나 파서, 해당 아이콘이 광원/카메라 등의 메쉬없는 컴포넌트에 연결되도록 하는 형태로 바꾸면 될듯함.

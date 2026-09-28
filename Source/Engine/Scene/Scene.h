@@ -13,6 +13,11 @@ class UCameraComponent;
 class FRenderer;
 class FArchive;
 
+
+// Todo: BVH
+class FSceneBVHNode;
+class UStaticMeshComponent;
+
 struct FCameraSaveData
 {
 	FVector Location = FVector(-15.0f, -15.0f, 10.0f);
@@ -118,6 +123,20 @@ public:
 	}
 
 	virtual ~UScene();
+
+
+	// Todo: BVH
+	void UpdateBVH(UStaticMeshComponent* Component);
+	void UpdateBVHForActor(AActor* Actor);
+	void RemoveFromBVH(UStaticMeshComponent* Component);
+	bool RemoveComponent(AActor* Actor, UActorComponent* Component);
+	void RebuildBVH();
+
+	const FSceneBVHNode* GetBVHRoot() const { return BVHRoot; }
+
+private:
+	FSceneBVHNode* BVHRoot = nullptr;
+	TMap<UStaticMeshComponent*, FSceneBVHNode*> BVHLeaves;
 
 protected:
 	void EnsureUUIDWidgets();

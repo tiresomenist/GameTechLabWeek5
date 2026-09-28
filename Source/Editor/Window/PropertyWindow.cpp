@@ -23,6 +23,9 @@
 #include <filesystem>
 #include "Engine/Log.h"
 
+// Todo: BVH
+#include "Engine/Scene/Scene.h"
+
 namespace
 {
 	UStaticMeshComponent* FindStaticMeshComponent(AActor* Actor)
@@ -81,6 +84,10 @@ bool UPropertyWindow::TryApplyStaticMesh(UStaticMeshComponent& MeshComp, const F
 	{
 		// 성공 시에만 메시 연결이 확정되는 기존 함수를 호출한다.
 		MeshComp.SetStaticMesh(MeshKey);
+
+		// Todo: BVH
+		Editor->GetCurrentScene()->UpdateBVH(&MeshComp);
+
 		return true;
 	}
 	catch (const std::exception& Error)
@@ -133,6 +140,7 @@ void UPropertyWindow::GetSelectedValue()
 	}
 }
 
+/*
 void UPropertyWindow::SetSelectedValue(bool bSetRotation)
 {
 	if (!TransformTarget) return;
@@ -142,6 +150,49 @@ void UPropertyWindow::SetSelectedValue(bool bSetRotation)
 		TransformTarget->SetRelativeRotation(RotationDegree);
 	}
 	TransformTarget->SetRelativeScale3D(OScale);
+}
+*/
+
+// Todo: BVH
+void UPropertyWindow::SetSelectedValue(bool bSetRotation)
+{
+	if (!TransformTarget) return;
+
+	const FVector& OldLocation = TransformTarget->GetRelativeLocation();
+	const FVector& OldScale = TransformTarget->GetRelativeScale3D();
+
+	const bool bLocationChanged =
+		OldLocation.X != Translation.X ||
+		OldLocation.Y != Translation.Y ||
+		OldLocation.Z != Translation.Z;
+
+	const bool bScaleChanged =
+		OldScale.X != OScale.X ||
+		OldScale.Y != OScale.Y ||
+		OldScale.Z != OScale.Z;
+
+	if (bLocationChanged)
+	{
+		TransformTarget->SetRelativeLocation(Translation);
+	}
+
+	if (bSetRotation)
+	{
+		TransformTarget->SetRelativeRotation(RotationDegree);
+	}
+
+	if (bScaleChanged)
+	{
+		TransformTarget->SetRelativeScale3D(OScale);
+	}
+
+	if (bLocationChanged || bSetRotation || bScaleChanged)
+	{
+		UScene* Scene = this->Editor->GetCurrentScene();
+		assert(Scene != nullptr);
+
+		Scene->UpdateBVHForActor(TransformTarget->GetOwner());
+	}
 }
 
 bool UPropertyWindow::DrawRotationField(const char* ID, float& Degree, bool& bRotationActive)
@@ -400,8 +451,12 @@ void UPropertyWindow::RenderAddComponentSection(AActor* Actor)
 				auto* StaticMesh = static_cast<UStaticMeshComponent*>(AddedComponent);
 				if (!TryApplyStaticMesh(*StaticMesh, SelectedMeshKey))
 				{
+					// Todo: BVH
 					// 이번 조작에서 만든 컴포넌트만 Actor의 제거 경로로 정리한다.
-					Actor->RemoveComponent(AddedComponent);
+					//Actor->RemoveComponent(AddedComponent);
+
+					this->Editor->GetCurrentScene()->RemoveComponent(Actor, AddedComponent);
+
 					return;
 				}
 			}
@@ -799,7 +854,18 @@ void UPropertyWindow::Render(float DeltaTime)
 
 	if (PendingReparentSource && PendingReparentTarget)
 	{
-		PendingReparentSource->AttachTo(PendingReparentTarget);
+		// Todo: BVH
+		//PendingReparentSource->AttachTo(PendingReparentTarget);
+
+		if (PendingReparentSource->AttachTo(PendingReparentTarget))
+		{
+			UScene* Scene = this->Editor->GetCurrentScene();
+
+			assert(Scene != nullptr);
+			Scene->UpdateBVHForActor(PendingReparentSource->GetOwner());
+		}
+
+
 		PendingReparentSource = nullptr;
 		PendingReparentTarget = nullptr;
 	}
