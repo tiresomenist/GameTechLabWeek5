@@ -7,14 +7,8 @@
 #include <stdexcept>
 
 
-UStaticMesh::~UStaticMesh()
-{
-	for (FMaterial* Mat : Materials)
-	{
-		delete Mat;
-	}
-	Materials.Empty();
-}
+UStaticMesh::~UStaticMesh() = default;
+
 void UStaticMesh::BuildFromMeshData(const FStaticMeshData& MeshData)
 {
 	GResourceManager* RM = GResourceManager::GetInstance();
@@ -47,7 +41,7 @@ void UStaticMesh::BuildFromMeshData(const FStaticMeshData& MeshData)
                 SRV = WhiteTex->GetSRV();
         }
         FMaterial GPUMaterial = RM->CreateStaticMeshMaterial(SRV, TexturePath, CPUMaterial.DiffuseTextureOptions.bClamp);
-        Materials.Add(new FMaterial(GPUMaterial));
+        Materials.Add(std::make_unique<FMaterial>(std::move(GPUMaterial)));
     }
 	BoundsMin = MeshData.BoundsMin;
 	BoundsMax = MeshData.BoundsMax;

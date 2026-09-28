@@ -3,14 +3,8 @@
 #include "Engine/Component/CameraComponent.h"
 #include "ViewRenderer.h"
 #include "ViewSettings.h"
+#include "Engine/Renderer/RenderView.h"
 
-enum class EViewportType
-{
-	Perspective,
-	Top,
-	Front,
-	Right
-};
 
 class FViewportClient
 {

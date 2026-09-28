@@ -15,8 +15,99 @@
 #include <cstdlib>
 #include <chrono>
 #include <dxgi1_5.h>
+#include "Engine/Renderer/RenderUtil.h"
+#include "Engine/Component/CameraComponent.h"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <new>
 
 using Microsoft::WRL::ComPtr;
+namespace
+{
+	bool AppendLineRequest(FLineDrawRequest& Destination, const FLineDrawRequest& Request)
+	{
+		const size_t AddedVertices = static_cast<size_t>(Request.Vertices.Num());
+		const size_t AddedIndices = static_cast<size_t>(Request.Indices.Num());
+
+		if (AddedVertices == 0 && AddedIndices == 0)
+		{
+			return true;
+		}
+
+		if (AddedVertices == 0 || AddedIndices == 0 || AddedIndices % 2 != 0)
+		{
+			return false;
+		}
+
+		const size_t MaxVertices = (std::min)(
+			static_cast<size_t>((std::numeric_limits<int>::max)()),
+			static_cast<size_t>((std::numeric_limits<UINT>::max)()) /
+			sizeof(FVertexSimple));
+
+		const size_t MaxIndices = (std::min)(
+			static_cast<size_t>((std::numeric_limits<int>::max)()),
+			static_cast<size_t>((std::numeric_limits<UINT>::max)()) /
+			sizeof(uint32));
+
+		const size_t CurrentVertices = static_cast<size_t>(Destination.Vertices.Num());
+		const size_t CurrentIndices = static_cast<size_t>(Destination.Indices.Num());
+
+		if (CurrentVertices > MaxVertices || AddedVertices > MaxVertices - CurrentVertices ||
+			CurrentIndices > MaxIndices || AddedIndices > MaxIndices - CurrentIndices)
+		{
+			return false;
+		}
+
+		for (uint32 Index : Request.Indices)
+		{
+			if (Index >= AddedVertices)
+			{
+				return false;
+			}
+		}
+
+		for (const FVertexSimple& Vertex : Request.Vertices)
+		{
+			if (!std::isfinite(Vertex.x) ||
+				!std::isfinite(Vertex.y) ||
+				!std::isfinite(Vertex.z) ||
+				!std::isfinite(Vertex.r) ||
+				!std::isfinite(Vertex.g) ||
+				!std::isfinite(Vertex.b) ||
+				!std::isfinite(Vertex.a))
+			{
+				return false;
+			}
+		}
+
+		try
+		{
+			Destination.Vertices.Reserve(CurrentVertices + AddedVertices);
+			Destination.Indices.Reserve(CurrentIndices + AddedIndices);
+		}
+		catch (const std::bad_alloc&)
+		{
+			return false;
+		}
+
+		const uint32 VertexBase = static_cast<uint32>(CurrentVertices);
+
+		for (const FVertexSimple& Vertex : Request.Vertices)
+		{
+			Destination.Vertices.Add(Vertex);
+		}
+
+		for (uint32 Index : Request.Indices)
+		{
+			Destination.Indices.Add(VertexBase + Index);
+		}
+
+		return true;
+	}
+}
+
 
 void FRenderer::Create(HWND HWnd, GDevice* InDevice, uint32 Width, uint32 Height)
 {
@@ -385,6 +476,51 @@ void FRenderer::OnResize(uint32 Width, uint32 Height)
 	bRenderReady = true;
 }
 
+void FRenderer::RenderOneView(FEditor* Editor, UScene* Scene, const FRenderView& View)
+{
+	ViewData.Reset();
+
+	if (!Editor || !Scene || !View.Camera ||View.Viewport.Width <= 0.0f || View.Viewport.Height <= 0.0f)
+	{
+		return;
+	}
+
+	UCameraComponent* Camera = View.Camera;
+
+	Camera->SetAspectRatio(View.Viewport.Width / View.Viewport.Height);
+
+	ViewData.View.ViewMatrix = Camera->GetViewMatrix();
+	ViewData.View.ViewProjection = ViewData.View.ViewMatrix * Camera->GetProjectionMatrix();
+
+	ViewData.View.Viewport = View.Viewport;
+	ViewData.View.ViewMode = View.ViewSettings.ViewMode;
+
+	if (View.ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives))
+	{
+		RenderUtil::GetRenderList(Editor,Scene,Camera,ViewData.Primitives,ViewData.Objects);
+	}
+
+	if (View.bDrawEditorGizmos)
+	{
+		ViewData.Gizmos = RenderUtil::GetGizmoList(Editor,Scene,Camera,View.Viewport,ViewData.Objects);
+	}
+
+	ViewData.TextItems = RenderUtil::GetTextRenderList(Scene,Camera,View.ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::UUID));
+
+	const FLineRequestConsumer Submit = [&](const FLineDrawRequest& Request)
+		{
+			if (!AppendLineRequest(ViewData.Lines, Request))
+			{
+				UE_LOG("[RenderUtil] 잘못되었거나 용량을 초과한 라인 요청");
+			}
+		};
+
+	RenderUtil::SubmitLineDrawRequests(Editor,Scene,Camera,View.ViewSettings,Submit,View.ViewType);
+
+	// TODO:ViewRenderer구현 후 주석 풀어주면 됨.
+	//ViewRenderer.RenderView(ViewData);
+}
+
 // 단일 View -> 이제 더이상 다중 View를 호출하지 않음
 void FRenderer::Render(float DeltaTime,FEditor* Editor,UScene* Scene)
 {
@@ -401,6 +537,7 @@ void FRenderer::Render(float DeltaTime,FEditor* Editor,UScene* Scene)
 	const TArray<FRenderView> Views = Editor->BuildRenderViews(ViewportInfo);
 	for (const FRenderView& View : Views)
 	{
+		//TODO:ViewRenderer구현 후 RenderOneView(Editor, Scene, View); 로 교체해주면 됨.
 		ViewRenderer.RenderView(Editor, Scene, View);
 	}
 
@@ -432,6 +569,7 @@ void FRenderer::Render(float DeltaTime, FEditor* Editor, UScene* Scene, const TA
 
 	for (const FRenderView& View : Views)
 	{
+		//TODO:ViewRenderer구현 후 RenderOneView(Editor, Scene, View); 로 교체해주면 됨.
 		ViewRenderer.RenderView(Editor, Scene, View);
 	}
 

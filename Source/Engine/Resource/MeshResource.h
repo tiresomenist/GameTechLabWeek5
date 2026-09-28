@@ -6,6 +6,7 @@
 #include "Engine/Renderer/VertexSimple.h"
 #include "Core/Core.h"
 #include "Core/Math/Vector.h"
+#include "Engine/Renderer/RenderDataTypes.h"
 
 struct FMeshResource
 {
@@ -27,6 +28,12 @@ public:
     const FVector& GetBoundsMax() const { return BoundsMax; }
     bool HasBounds() const { return bHasBounds; }
 
+    const FMeshAllocation& GetAllocation() const
+    {
+        return Allocation;
+    }
+
+
     //void AddSection(uint32 InMaterialSlot, uint32 InStartIndex, uint32 InIndexCount);
 private:
     Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer = nullptr;
@@ -41,5 +48,6 @@ private:
     FVector BoundsMin{};
     FVector BoundsMax{};
     bool bHasBounds;
+    FMeshAllocation Allocation{};
 
 };

@@ -14,10 +14,10 @@ public:
 	bool UpdateTransform(const UCameraComponent* Camera, const D3D11_VIEWPORT& Viewport);
 	UObjectAxisGizmo();
 	TArray<FPrimitiveRenderData> GetRenderData(const UCameraComponent* Camera,
-		const D3D11_VIEWPORT& Viewport) override;
-	TArray<FPrimitiveRenderData> GetTranslateRenderData();
-	TArray<FPrimitiveRenderData> GetRotateRenderData();
-	TArray<FPrimitiveRenderData> GetScaleRenderData();
+		const D3D11_VIEWPORT& Viewport, TArray<FRenderObjectData>& Objects) override;
+	TArray<FPrimitiveRenderData> GetTranslateRenderData(TArray<FRenderObjectData>& Objects);
+	TArray<FPrimitiveRenderData> GetRotateRenderData(TArray<FRenderObjectData>& Objects);
+	TArray<FPrimitiveRenderData> GetScaleRenderData(TArray<FRenderObjectData>& Objects);
 	FMatrix GetXAxisWorldMatirx()const;
 	FMatrix GetYAxisWorldMatirx()const;
 	FMatrix GetZAxisWorldMatirx()const;
@@ -32,5 +32,9 @@ private:
 	float GizmoScreenHeightRatio = 0.3f;
 	// X,Y,Z 핸들
 	FVector GizmoScale = FVector(0.2f,0.2f,0.2f);
+
+	FMaterial ColorMaterial;
+	void AppendHandleRenderData(const FGizmoHandle& Handle, D3D11_PRIMITIVE_TOPOLOGY Topology,
+		TArray<FRenderObjectData>& Objects, TArray<FPrimitiveRenderData>& Result);
 };
 

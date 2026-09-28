@@ -5,6 +5,8 @@
 #include "Core/Container/Array.h"
 #include "Engine/Renderer/ViewRenderer.h"
 #include "Engine/Renderer/GPUTimer.h"
+#include "Engine/Renderer/RenderView.h"
+#include "Engine/Renderer/ViewRenderData.h"
 
 class GDevice;
 class FEditor;
@@ -48,6 +50,9 @@ private:
 	void SwapBuffer();
 
 	FViewRenderer ViewRenderer;
+	FViewRenderData ViewData;
+
+	void RenderOneView(FEditor* Editor, UScene* Scene, const FRenderView& View);
 	Microsoft::WRL::ComPtr<IDXGISwapChain> SwapChain;
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> FrameBuffer;
 	Microsoft::WRL::ComPtr<ID3D11RenderTargetView> FrameBufferRTV;

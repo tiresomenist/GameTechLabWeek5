@@ -109,190 +109,112 @@ bool UObjectAxisGizmo::UpdateTransform(const UCameraComponent* Camera, const D3D
 }
 
 TArray<FPrimitiveRenderData> UObjectAxisGizmo::GetRenderData(const UCameraComponent* Camera,
-	const D3D11_VIEWPORT& Viewport)
+	const D3D11_VIEWPORT& Viewport, TArray<FRenderObjectData>& Objects)
 {
 	if (!UpdateTransform(Camera, Viewport))
 	{
 		return {};
 	}
+	if (ColorMaterial.MaterialId == InvalidRenderId)
+	{
+		ColorMaterial = GResourceManager::GetInstance()->CreateColorMaterial();
+	}
 
 	switch (Mode)
 	{
 	case EGizmoMode::Translate:
-		return GetTranslateRenderData();
+		return GetTranslateRenderData(Objects);
 
 	case EGizmoMode::Rotate:
-		return GetRotateRenderData();
+		return GetRotateRenderData(Objects);
 
 	case EGizmoMode::Scale:
-		return GetScaleRenderData();
+		return GetScaleRenderData(Objects);
 	}
 
 	return {};
 }
 
-TArray<FPrimitiveRenderData> UObjectAxisGizmo::GetTranslateRenderData()
+void UObjectAxisGizmo::AppendHandleRenderData(const FGizmoHandle& Handle, D3D11_PRIMITIVE_TOPOLOGY Topology,
+	TArray<FRenderObjectData>& Objects, TArray<FPrimitiveRenderData>& Result)
+{
+	const FMeshResource* Mesh = Handle.Mesh;
+	if (!Mesh) { return; }
+
+	const FMeshAllocation& Allocation = Mesh->GetAllocation();
+	if (Allocation.MeshPageId == InvalidRenderId ||	Allocation.IndexCount == 0){ return; }
+
+	// 이 뷰에서 사용할 월드 행렬을 값으로 복사한다.
+	FRenderObjectData Object;
+	Object.World = Handle.WorldMatrix;
+	Object.SortCenterWS = Object.World.GetOrigin();
+
+	if (Mesh->HasBounds())
+	{
+		const FVector LocalCenter =	(Mesh->GetBoundsMin() + Mesh->GetBoundsMax()) * 0.5f;
+
+		Object.SortCenterWS = Object.World.TransformPosition(LocalCenter);
+	}
+
+	const uint32 ObjectIndex = static_cast<uint32>(Objects.Num());
+
+	Objects.Add(Object);
+
+	FPrimitiveRenderData Data;
+
+	// 기즈모 핸들은 해당 메시 전체를 그린다.
+	Data.Geometry.MeshPageId = Allocation.MeshPageId;
+	Data.Geometry.FirstIndex = Allocation.FirstIndex;
+	Data.Geometry.IndexCount = Allocation.IndexCount;
+	Data.Geometry.BaseVertex = Allocation.BaseVertex;
+
+	Data.Material = &ColorMaterial;
+	Data.ObjectIndex = ObjectIndex;
+	Data.Topology = Topology;
+
+	// 기즈모 선택 표시용. 일반 메시의 외곽선 플래그는 넣지 않는다.
+	Data.Flags =(Editor->GetActiveGizmoAxis() == Handle.Axis)? Primitive_Selected : Primitive_None;
+
+	Result.Add(Data);
+}
+
+TArray<FPrimitiveRenderData> UObjectAxisGizmo::GetTranslateRenderData(TArray<FRenderObjectData>& Objects)
 {
 	TArray<FPrimitiveRenderData> Result;
 
-	FMeshResource* Mesh;
-	Mesh = Handles[0].Mesh;
-	if (Mesh != nullptr)
-	{
-		FPrimitiveRenderData Data;
-		Data.VertexBuffer = Mesh->GetVertexBuffer();
-		Data.IndexBuffer = Mesh->GetIndexBuffer();
-		Data.Stride = Mesh->GetStride();
-		Data.IndexCount = Mesh->GetIndexCount();
-		Data.Topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		// UObjectAxisGizmo의 멤버 행렬
-		Data.WorldMatrix = &Handles[0].WorldMatrix;
-		Data.isSelected = (Editor->GetActiveGizmoAxis() == Handles[0].Axis);
+	AppendHandleRenderData(Handles[0], D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, Objects, Result);
 
-		Result.Add(Data);
-	}
-	Mesh = Handles[1].Mesh;
-	if (Mesh != nullptr)
-	{
-		FPrimitiveRenderData Data;
-		Data.VertexBuffer = Mesh->GetVertexBuffer();
-		Data.IndexBuffer = Mesh->GetIndexBuffer();
-		Data.Stride = Mesh->GetStride();
-		Data.IndexCount = Mesh->GetIndexCount();
-		Data.Topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		// UObjectAxisGizmo의 멤버 행렬
-		Data.WorldMatrix = &Handles[1].WorldMatrix;
-		Data.isSelected = (Editor->GetActiveGizmoAxis() == Handles[1].Axis);
+	AppendHandleRenderData(Handles[1], D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, Objects, Result);
 
-		Result.Add(Data);
-	}
-	Mesh = Handles[2].Mesh;
-	if (Mesh != nullptr)
-	{
-		FPrimitiveRenderData Data;
-		Data.VertexBuffer = Mesh->GetVertexBuffer();
-		Data.IndexBuffer = Mesh->GetIndexBuffer();
-		Data.Stride = Mesh->GetStride();
-		Data.IndexCount = Mesh->GetIndexCount();
-		Data.Topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	AppendHandleRenderData(Handles[2], D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,Objects,Result);
 
-		// UObjectAxisGizmo의 멤버 행렬
-		Data.WorldMatrix = &Handles[2].WorldMatrix;
-		Data.isSelected = (Editor->GetActiveGizmoAxis() == Handles[2].Axis);
-
-		Result.Add(Data);
-	}
 	return Result;
 }
 
-TArray<FPrimitiveRenderData> UObjectAxisGizmo::GetRotateRenderData()
+TArray<FPrimitiveRenderData> UObjectAxisGizmo::GetRotateRenderData(TArray<FRenderObjectData>& Objects)
 {
 	TArray<FPrimitiveRenderData> Result;
 
-	FMeshResource* Mesh;
-	Mesh = Handles[0].Mesh;
-	if (Mesh != nullptr)
-	{
-		FPrimitiveRenderData Data;
-		Data.VertexBuffer = Mesh->GetVertexBuffer();
-		Data.IndexBuffer = Mesh->GetIndexBuffer();
-		Data.Stride = Mesh->GetStride();
-		Data.IndexCount = Mesh->GetIndexCount();
-		Data.Topology = D3D11_PRIMITIVE_TOPOLOGY_LINELIST;
-		// UObjectAxisGizmo의 멤버 행렬
-		Data.WorldMatrix = &Handles[0].WorldMatrix;
-		Data.isSelected = (Editor->GetActiveGizmoAxis() == Handles[0].Axis);
+	AppendHandleRenderData(Handles[0],D3D11_PRIMITIVE_TOPOLOGY_LINELIST,Objects,Result);
 
-		Result.Add(Data);
-	}
-	Mesh = Handles[1].Mesh;
-	if (Mesh != nullptr)
-	{
-		FPrimitiveRenderData Data;
-		Data.VertexBuffer = Mesh->GetVertexBuffer();
-		Data.IndexBuffer = Mesh->GetIndexBuffer();
-		Data.Stride = Mesh->GetStride();
-		Data.IndexCount = Mesh->GetIndexCount();
-		Data.Topology = D3D11_PRIMITIVE_TOPOLOGY_LINELIST;
-		// UObjectAxisGizmo의 멤버 행렬
-		Data.WorldMatrix = &Handles[1].WorldMatrix;
-		Data.isSelected = (Editor->GetActiveGizmoAxis() == Handles[1].Axis);
+	AppendHandleRenderData(Handles[1],D3D11_PRIMITIVE_TOPOLOGY_LINELIST,Objects,Result);
 
-		Result.Add(Data);
-	}
-	Mesh = Handles[2].Mesh;
-	if (Mesh != nullptr)
-	{
-		FPrimitiveRenderData Data;
-		Data.VertexBuffer = Mesh->GetVertexBuffer();
-		Data.IndexBuffer = Mesh->GetIndexBuffer();
-		Data.Stride = Mesh->GetStride();
-		Data.IndexCount = Mesh->GetIndexCount();
-		Data.Topology = D3D11_PRIMITIVE_TOPOLOGY_LINELIST;
+	AppendHandleRenderData(Handles[2],D3D11_PRIMITIVE_TOPOLOGY_LINELIST,Objects,Result);
 
-		// UObjectAxisGizmo의 멤버 행렬
-		Data.WorldMatrix = &Handles[2].WorldMatrix;
-		Data.isSelected = (Editor->GetActiveGizmoAxis() == Handles[2].Axis);
-
-		Result.Add(Data);
-	}
 	return Result;
-
 }
 
-TArray<FPrimitiveRenderData> UObjectAxisGizmo::GetScaleRenderData()
+TArray<FPrimitiveRenderData> UObjectAxisGizmo::GetScaleRenderData(TArray<FRenderObjectData>& Objects)
 {
 	TArray<FPrimitiveRenderData> Result;
 
-	FMeshResource* Mesh;
-	Mesh = Handles[0].Mesh;
-	if (Mesh != nullptr)
-	{
-		FPrimitiveRenderData Data;
-		Data.VertexBuffer = Mesh->GetVertexBuffer();
-		Data.IndexBuffer = Mesh->GetIndexBuffer();
-		Data.Stride = Mesh->GetStride();
-		Data.IndexCount = Mesh->GetIndexCount();
-		Data.Topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		// UObjectAxisGizmo의 멤버 행렬
-		Data.WorldMatrix = &Handles[0].WorldMatrix;
-		Data.isSelected = (Editor->GetActiveGizmoAxis() == Handles[0].Axis);
+	AppendHandleRenderData(Handles[0], D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, Objects, Result);
 
-		Result.Add(Data);
-	}
-	Mesh = Handles[1].Mesh;
-	if (Mesh != nullptr)
-	{
-		FPrimitiveRenderData Data;
-		Data.VertexBuffer = Mesh->GetVertexBuffer();
-		Data.IndexBuffer = Mesh->GetIndexBuffer();
-		Data.Stride = Mesh->GetStride();
-		Data.IndexCount = Mesh->GetIndexCount();
-		Data.Topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		// UObjectAxisGizmo의 멤버 행렬
-		Data.WorldMatrix = &Handles[1].WorldMatrix;
-		Data.isSelected = (Editor->GetActiveGizmoAxis() == Handles[1].Axis);
+	AppendHandleRenderData(Handles[1], D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, Objects, Result);
 
-		Result.Add(Data);
-	}
-	Mesh = Handles[2].Mesh;
-	if (Mesh != nullptr)
-	{
-		FPrimitiveRenderData Data;
-		Data.VertexBuffer = Mesh->GetVertexBuffer();
-		Data.IndexBuffer = Mesh->GetIndexBuffer();
-		Data.Stride = Mesh->GetStride();
-		Data.IndexCount = Mesh->GetIndexCount();
-		Data.Topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	AppendHandleRenderData(Handles[2], D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, Objects, Result);
 
-		// UObjectAxisGizmo의 멤버 행렬
-		Data.WorldMatrix = &Handles[2].WorldMatrix;
-		Data.isSelected = (Editor->GetActiveGizmoAxis() == Handles[2].Axis);
-
-		Result.Add(Data);
-	}
 	return Result;
-
 }
 
 FMatrix UObjectAxisGizmo::GetXAxisWorldMatirx() const

@@ -3,7 +3,7 @@
 #include "WorldAxisGizmo.h"
 
 TArray<FPrimitiveRenderData> UWorldAxisGizmo::GetRenderData(const UCameraComponent* Camera,
-    const D3D11_VIEWPORT& Viewport)
+    const D3D11_VIEWPORT& Viewport, TArray<FRenderObjectData>& Objects)
 {
 	return TArray<FPrimitiveRenderData>();
 }

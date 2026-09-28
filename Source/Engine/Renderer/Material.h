@@ -5,6 +5,7 @@
 #include "Core/Container/String.h"
 #include "Core/Math/Vector.h"
 #include "Core/Name/Name.h"
+#include "Engine/Renderer/RenderDataTypes.h"
 
 struct FShaderResource;
 class FArchive;
@@ -20,12 +21,15 @@ struct FMaterial
 	// 모든 포인터는 비소유 참조.
 	// 참조 대상은 이 Material을 사용하는 Draw가 끝날 때까지 유효해야 한다.
 
+	uint32 MaterialId = InvalidRenderId;
+
 	ID3D11ShaderResourceView* SRV = nullptr; //SRV
 	FString TexturePath;
 
 	const FShaderResource* Shader = nullptr;	//VS,PS,InputLayout을 묶은 구조체
 	ID3D11SamplerState* Sampler = nullptr;	//Sampler
 	FName SamplerName = FName("LinearWrap");
+	bool bTwoSided = false;
 
 	EPrimitiveBlendMode BlendMode = EPrimitiveBlendMode::Opaque;	//Blend mode
 	
@@ -36,8 +40,6 @@ struct FMaterial
 	FVector2 UVScale{ 1.0f, 1.0f };
 	FVector2 UVOffset{ 0.0f, 0.0f };
 	FVector2 ScrollSpeed{ 0.0f, 0.0f };
-	
-	ID3D11Buffer* ConstantBuffer = nullptr;	//UV·Tint·AlphaCutoff등을 담을 constantBuffer
 
 	void SetTexture(const FString& InPath);
 	void SetSampler(const FName& InName);

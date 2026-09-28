@@ -17,6 +17,12 @@ void UFlipbookComponent::Initialize()
     QuadMesh = RM->GetPrimitive(GetMeshNames().Flame);
     SetAtlasGrid(Columns, Rows, FrameCount);
     Restart();
+    if (Texture && Texture->GetSRV())
+    {
+        RenderMaterial = RM->CreateTextureMaterial(Texture->GetSRV());
+        RenderMaterial.BlendMode = EPrimitiveBlendMode::Additive;
+        RenderMaterial.bTwoSided = true;
+    }
 }
 
 void UFlipbookComponent::Tick(float DeltaTime)
@@ -130,27 +136,33 @@ FTextureUVTransform UFlipbookComponent::GetUVTransform() const
 
 void UFlipbookComponent::CreateRenderData (TArray<FPrimitiveRenderData>& ComponentRenderData, bool bSelected)
 {
+    if (!Texture || !Texture->GetSRV()||!QuadMesh){ return; }
 
-    if (!Texture || !Texture->GetSRV())
+    const FMeshAllocation& Allocation = QuadMesh->GetAllocation();
+
+    if (Allocation.MeshPageId == InvalidRenderId ||
+        Allocation.IndexCount == 0 ||
+        RenderMaterial.MaterialId == InvalidRenderId)
     {
         return;
     }
 
+    const FTextureUVTransform UV = GetUVTransform();
+
+    RenderMaterial.SRV = Texture->GetSRV();
+    RenderMaterial.UVScale = UV.Scale;
+    RenderMaterial.UVOffset = UV.Offset;
+
     FPrimitiveRenderData Data{};
-    Data.VertexBuffer = QuadMesh->GetVertexBuffer();
-    Data.IndexBuffer = QuadMesh->GetIndexBuffer();
-    Data.Stride = QuadMesh->GetStride();
-    Data.IndexStart = 0;
-    Data.IndexCount = QuadMesh->GetIndexCount();
-    Data.Topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
-    Data.isSelected = bSelected;
+    Data.Geometry = {Allocation.MeshPageId, Allocation.FirstIndex,
+        Allocation.IndexCount, Allocation.BaseVertex};
 
-    Data.bTwoSided = true;
-    Data.Material = GResourceManager::GetInstance()->CreateTextureMaterial(
-        Texture->GetSRV());
-    Data.UVTransform = GetUVTransform();
-    Data.Material.BlendMode = EPrimitiveBlendMode::Additive;
+    Data.Material = &RenderMaterial;
+
+    Data.Flags = Primitive_AllowOutline;
+    if (bSelected) { Data.Flags |= Primitive_Selected; }
+
     ComponentRenderData.Add(Data);
 }
 

@@ -46,6 +46,8 @@
 #include <system_error>
 #include <utility>
 #include <cwchar>
+#include <cassert>
+
 
 namespace
 {
@@ -519,6 +521,7 @@ FMeshResource* GResourceManager::CreateMesh(const FName& MeshName,
     }
 
     if (PrimitiveCache.Add(MeshName, Mesh.get())){
+        RegisterLegacyMeshPage(*Mesh, EVertexFormat::Simple);
         return Mesh.release();
     }
     // 등록되지 않은 임시 Mesh는 unique_ptr이 해제함
@@ -595,6 +598,7 @@ FMeshResource* GResourceManager::CreateTexturedMesh(const FName& MeshName,
 
     if (PrimitiveCache.Add(MeshName, Mesh.get()))
     {
+        RegisterLegacyMeshPage(*Mesh, EVertexFormat::Texture);
         return Mesh.release();
     }
 
@@ -671,6 +675,7 @@ FMeshResource* GResourceManager::CreateStaticMeshResource(const FName& MeshName,
 
     if (PrimitiveCache.Add(MeshName, Mesh.get()))
     {
+        RegisterLegacyMeshPage(*Mesh, EVertexFormat::PNCT);
         return Mesh.release();
     }
 
@@ -693,6 +698,7 @@ void GResourceManager::Shutdown()
     StaticMeshCache.Empty();
     TextureCache.Empty();
     PrimitiveCache.Empty();
+    LegacyMeshPages.Empty();
     DefaultFont.Release();
     TextureMaterialConstantBuffer.Reset();
     WireframePixelShader.Reset();
@@ -929,6 +935,7 @@ FMaterial GResourceManager::CreateColorMaterial() const
     static const FName ShaderName("Mesh.Color");
 
     FMaterial Material{};
+    Material.MaterialId = AllocateMaterialId();
     Material.Shader = GetShader(ShaderName);
     return Material;
 }
@@ -939,10 +946,11 @@ FMaterial GResourceManager::CreateTextureMaterial(ID3D11ShaderResourceView* SRV)
     static const FName SamplerName("LinearClamp");
 
     FMaterial Material{};
+    Material.MaterialId = AllocateMaterialId();
     Material.SRV = SRV;
     Material.Shader = GetShader(ShaderName);
     Material.Sampler = GetSampler(SamplerName);
-    Material.ConstantBuffer = TextureMaterialConstantBuffer.Get();
+    //Material.ConstantBuffer = TextureMaterialConstantBuffer.Get();
     return Material;
 }
 
@@ -953,10 +961,11 @@ FMaterial GResourceManager::CreateStaticMeshMaterial(ID3D11ShaderResourceView* S
     static const FName WrapSamplerName("LinearWrap");
 
     FMaterial Material{};
+    Material.MaterialId = AllocateMaterialId();
     Material.SRV = SRV;
     Material.Shader = GetShader(ShaderName);
     Material.Sampler = GetSampler(bClamp ? ClampSamplerName : WrapSamplerName);
-    Material.ConstantBuffer = TextureMaterialConstantBuffer.Get();
+    //Material.ConstantBuffer = TextureMaterialConstantBuffer.Get();
     Material.TexturePath = InTexturePath;
     return Material;
 }
@@ -1428,4 +1437,52 @@ void GResourceManager::RegisterDefaultDepthStencilStates()
     OutlineDesc.BackFace = OutlineDesc.FrontFace;
 
     RegisterDepthStencilState(FName("Depth.Outline"), OutlineDesc);
+}
+
+uint32 GResourceManager::AllocateMaterialId() const
+{
+    assert(NextMaterialId != InvalidRenderId);
+    return NextMaterialId++;
+}
+
+void GResourceManager::RegisterLegacyMeshPage(FMeshResource& Mesh, EVertexFormat VertexFormat)
+{
+    assert(Mesh.GetVertexBuffer());
+    assert(Mesh.GetIndexBuffer());
+    assert(Mesh.Allocation.MeshPageId == InvalidRenderId);
+
+    FLegacyMeshPage Page{};
+
+    // ComPtr가 참조를 유지하므로 임시 페이지의 버퍼 수명이 보장된다.
+    Page.VertexBuffer = Mesh.GetVertexBuffer();
+    Page.IndexBuffer = Mesh.GetIndexBuffer();
+
+    Page.Stride = Mesh.GetStride();
+    Page.VertexFormat = VertexFormat;
+
+    const uint32 PageId = static_cast<uint32>(LegacyMeshPages.Num());
+
+    LegacyMeshPages.Add(std::move(Page));
+
+    Mesh.Allocation.MeshPageId = PageId;
+    Mesh.Allocation.FirstIndex = 0;
+    Mesh.Allocation.BaseVertex = 0;
+    Mesh.Allocation.VertexCount = Mesh.GetVertexCount();
+    Mesh.Allocation.IndexCount = Mesh.GetIndexCount();
+}
+
+FMeshPageBinding GResourceManager::GetMeshPageBinding(uint32 MeshPageId) const
+{
+    assert(MeshPageId < static_cast<uint32>(LegacyMeshPages.Num()));
+
+    const FLegacyMeshPage& Page = LegacyMeshPages[MeshPageId];
+
+    FMeshPageBinding Binding{};
+    Binding.VertexBuffer = Page.VertexBuffer.Get();
+    Binding.IndexBuffer = Page.IndexBuffer.Get();
+    Binding.Stride = Page.Stride;
+    Binding.IndexFormat = DXGI_FORMAT_R32_UINT;
+    Binding.VertexFormat = Page.VertexFormat;
+
+    return Binding;
 }

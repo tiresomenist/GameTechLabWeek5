@@ -6,6 +6,7 @@
 #include "Engine/Renderer/PrimitiveRenderData.h"
 #include "Engine/Renderer/ViewSettings.h"
 #include "Engine/Renderer/Line/LineBatcher.h"
+#include "Engine/Renderer/RenderView.h"
 
 class UScene;
 class FEditor;
@@ -13,15 +14,6 @@ class UCameraComponent;
 struct FShaderResource;
 struct FVertexTexture;
 enum class EViewportType;
-
-struct FRenderView
-{
-	UCameraComponent* Camera = nullptr;
-	D3D11_VIEWPORT Viewport{};
-	FViewSettings ViewSettings{};
-	bool bDrawEditorGizmos = false;
-	EViewportType ViewType;
-};
 
 // 출력 타깃은 호출자가 준비한다. 각 View는 데이터를 수집한 직후 그린다.
 class FViewRenderer
