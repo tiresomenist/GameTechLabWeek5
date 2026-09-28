@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "RenderUtil.h"
 #include "Core/Container/Array.h"
+#include "Core/Math/Box.h"
 #include "Engine/Renderer/PrimitiveRenderData.h"
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
 #include "Engine/Component/Primitive/TextComponent.h"
@@ -27,16 +28,26 @@ namespace
 	}
 }
 
-TArray<FPrimitiveRenderData> RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera)
+TArray<FPrimitiveRenderData> RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera, const FFrustum* Frustum)
 {
 	TArray<FPrimitiveRenderData> RenderList;
-	if (!Editor || !Scene || !Camera) return RenderList;
+	if (!Editor || !Scene || !Camera || !Frustum) return RenderList;
 	Scene->ForEachPrimitive(
-		[&RenderList, Editor, Camera](UPrimitiveComponent* Primitive)
+		[&RenderList, Editor, Camera, Frustum](UPrimitiveComponent* Primitive)
 		{
 			if (!Primitive->IsVisible())
 			{
 				return;
+			}
+
+			FVector LocalMin, LocalMax;
+			if (Primitive->GetLocalBounds(LocalMin, LocalMax))
+			{
+				const FBoundingBox LocalBounds(LocalMin, LocalMax);
+				const FBoundingBox WorldBounds = LocalBounds.TransformBounds(Primitive->GetRenderWorldMatrix(Camera));
+
+				if (!Frustum->Intersects(WorldBounds))
+					return;
 			}
 
 			const bool bSelected = IsComponentSelected(Editor, Primitive);

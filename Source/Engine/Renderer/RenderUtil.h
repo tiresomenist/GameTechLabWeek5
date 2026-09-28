@@ -5,6 +5,7 @@
 #include "Engine/Renderer/Line/LineBatcher.h"
 #include "Engine/Renderer/Line/LineDrawRequest.h"
 #include "Engine/Renderer/ViewSettings.h"
+#include "Engine/Renderer/Frustum.h"
 #include <d3d11.h>
 
 class UScene;
@@ -15,7 +16,7 @@ enum class EViewportType;
 
 namespace RenderUtil
 {
-	TArray<FPrimitiveRenderData> GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera);
+	TArray<FPrimitiveRenderData> GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera, const FFrustum* Frustum);
 	TArray<FPrimitiveRenderData> GetGizmoList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
 		const D3D11_VIEWPORT& Viewport);
 	TArray<FWorldTextItem> GetTextRenderList(UScene* Scene, const UCameraComponent* Camera,
