@@ -599,6 +599,5 @@ void FRenderer::Render(float DeltaTime, FEditor* Editor, UScene* Scene, const TA
 // Viewport,Scissor 설정
 void FRenderer::SetViewportAndScissor(const D3D11_VIEWPORT& Viewport)
 {
-
 	GContext::GetInstance()->SetViewportAndScissor(Viewport);
 }

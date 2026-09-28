@@ -375,11 +375,13 @@ void FViewRenderer::RenderView(const FViewRenderData& Data)
 	DeviceContext->RSSetState(DefaultRasterizerState);
 	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
+	SetViewportAndScissor(Data.View.Viewport);
 
 	ID3D11ShaderResourceView* NullSRV = nullptr;
 	DeviceContext->PSSetShaderResources(0, 1, &NullSRV);
 
 	LineBatcher.Clear();
+	LineBatcher.AddRequest(Data.Lines);
 
 	TArray<const FPrimitiveRenderData*> AdditiveRenderList;
 	TArray<const FPrimitiveRenderData*> OutlineRenderList;
@@ -393,7 +395,10 @@ void FViewRenderer::RenderView(const FViewRenderData& Data)
 			continue;
 
 		if (Item.Material->BlendMode == EPrimitiveBlendMode::Additive) 
+		{
 			AdditiveRenderList.Add(&Item);
+			continue;
+		}
 
 		if (Item.ObjectIndex >= static_cast<uint32>(Data.Objects.Num())) 
 			continue;
@@ -439,6 +444,7 @@ void FViewRenderer::RenderView(const FViewRenderData& Data)
 		RenderOutline(*Item);
 	}
 
+	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 	// Render Gizmo
 	for (const FPrimitiveRenderData& Item : Data.Gizmos) {
 		if (Item.Geometry.IndexCount == 0)	continue;
