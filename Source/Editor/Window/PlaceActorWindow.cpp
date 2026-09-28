@@ -23,7 +23,6 @@
 #include "Engine/Scene/SceneManager.h"
 #include "Core/Util/File.h"
 #include "Editor/Util/MeshSelection.h"
-#include "SolarSystem.h"
 
 void UPlaceActorWindow::SpawnStaticMesh()
 {

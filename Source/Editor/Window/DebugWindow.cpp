@@ -1,7 +1,6 @@
 #include "pch.h"
 #include "DebugWindow.h"
 
-#include "SolarSystem.h"
 #include "Editor/Editor.h"
 #include "Engine/Memory/Allocator.h"
 
@@ -70,15 +69,6 @@ void UDebugWindow::Render(float DeltaTime)
 			}
 			CommandBuffer[0] = '\0';
 			bReclaimFocus = true;
-		}
-
-		if (ImGui::Button("SpawnSolarSystem"))
-		{
-			SpawnSolarSystem(Editor->GetCurrentScene());
-		}
-		if (ImGui::Button("발사"))
-		{
-			LaunchRocket(Editor->GetCurrentScene());
 		}
 	}
 	ImGui::End();

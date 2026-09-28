@@ -70,29 +70,6 @@ bool GEngine::Initialize(HWND InHwnd, EApplicationMode Mode, const std::function
             Destroy();
             return false;
         }
-
-        /*
-        * 태양계 스폰 시 사용할 텍스처 미리 불러오기
-        */
-        if (ApplicationMode == EApplicationMode::Editor)
-        {
-            ResourceManager.GetOrLoadStaticMesh("Assets/Models/Sphere.obj");
-
-            ResourceManager.GetOrLoadTexture("Assets/Textures/sun.png");
-            ResourceManager.GetOrLoadTexture("Assets/Textures/mercury.png");
-            ResourceManager.GetOrLoadTexture("Assets/Textures/venus.png");
-            ResourceManager.GetOrLoadTexture("Assets/Textures/earth.png");
-            ResourceManager.GetOrLoadTexture("Assets/Textures/moon.png");
-            ResourceManager.GetOrLoadTexture("Assets/Textures/mars.png");
-            ResourceManager.GetOrLoadTexture("Assets/Textures/jupiter.png");
-            ResourceManager.GetOrLoadTexture("Assets/Textures/makemake.png");
-            ResourceManager.GetOrLoadTexture("Assets/Textures/ceres.png");
-            ResourceManager.GetOrLoadTexture("Assets/Textures/saturn.png");
-            ResourceManager.GetOrLoadTexture("Assets/Textures/uranus.png");
-            ResourceManager.GetOrLoadTexture("Assets/Textures/neptune.png");
-        }
-        
-
         // 렌더러 초기화
         Renderer.Create(InHwnd, &Device, ClientWidth, ClientHeight);
         if (ApplicationMode == EApplicationMode::Editor)

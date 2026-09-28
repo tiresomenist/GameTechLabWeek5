@@ -400,58 +400,16 @@ void FEditor::Tick(float DeltaTime)
 		const float x = bLFirstPressed ? Input.GetLeftCursorPixelX() : Input.GetRightCursorPixelX();
 		const float y = bLFirstPressed ? Input.GetLeftCursorPixelY() : Input.GetRightCursorPixelY();
 		
-		for (uint32 i = 0; i < Viewports.Num(); ++i)
-		{
-			if (Viewports[i].IsMouseInside(x, y) && CurrEditedViewportIndex != i)
-			{
-				EditorCamera = Viewports[i].GetCamera();
-				CameraController.SetCamera(EditorCamera);
-				CameraController.SetViewportClient(&Viewports[i]);
-				CurrEditedViewportIndex = i;	// 현재 인덱스 저장
-				break;
-			}
-		}
+		SelectViewportAt(x, y);
 	}
 
 	if (bIsLeftClick &&!bWasDragging &&!bWantToCaptureMouse &&!Input.GetKey(GInputManager::EI_RMOUSE))
 	{
-		D3D11_VIEWPORT currViewport = Viewports[CurrEditedViewportIndex].GetRenderView().Viewport;
-		int32 SelectedGizmo = GizmoPicker->Pick(ObjectAxisGizmo, currViewport);
-		//기즈모가 선택되면 드래그 시작
-		if (SelectedGizmo != -1) {
-			if (Input.GetKey(GInputManager::EI_LMOUSE))
-				GizmoController->BeginDrag(SelectedGizmo);
-		}
-		//기즈모가 선택 안되면 오브젝트 선택
-		else
-		{
-			USceneComponent* Selected = ObjectPicker->Pick();
-
-			SetSelectedComponent(Selected);
-			if (Selected != nullptr) {
-				UE_LOG("[{}] : [{}번째 오브젝트 선택]", Time, Selected->GetUUID());
-			}
-		}
+		HandleSelectionClick(Time);
 	}
 
-	const bool bGizmoOwnsInput = bWasDragging || GizmoController->IsDragging();
+	UpdateGizmoAndCamera(DeltaTime, bWasDragging, bWantToCaptureMouse, bWantToCaptureKeyboard);
 
-	GizmoController->Tick();
-	if (bGizmoOwnsInput|| bWantToCaptureMouse)
-	{
-		// 카메라를 막는 동안 쌓인 회전 입력 폐기
-		int32 DX, DY;
-		Input.ConsumeRightDragDelta(DX, DY);
-	}
-
-	bool bRightClickDragging = Input.GetKey(GInputManager::EI_RMOUSE);
-	bool bAllowCameraMouse = !bWantToCaptureMouse;
-	bool bAllowCameraKeyboard = !bWantToCaptureKeyboard || (bAllowCameraMouse && bRightClickDragging);
-
-	if (!bGizmoOwnsInput && bAllowCameraKeyboard && bAllowCameraMouse)
-	{
-		CameraController.Tick(DeltaTime);
-	}
 	const bool bSpacePressed = Input.ConsumeSpacePress();
 	if (bSpacePressed && !IO.WantCaptureKeyboard)
 	{
@@ -536,7 +494,9 @@ void FEditor::SpawnStaticMesh(const FName& MeshKey, int Count)
 {
 	UScene* CurrentScene = GetCurrentScene();
 	if (!CurrentScene || MeshKey.IsNone() || Count <= 0) return;
-
+	
+	NotifyOutlinerRowsChanged();
+	
 	for (int i = 0; i < Count; ++i)
 	{
 		AActor* Actor = nullptr;
@@ -583,6 +543,8 @@ void FEditor::SpawnComponent(FClassType* ComponentClass, int Count)
 
 	UScene* CurrentScene = GetCurrentScene();
 
+	NotifyOutlinerRowsChanged();
+
 	for (int i = 0; i < Count; ++i)
 	{
 		AActor* Actor = CurrentScene->SpawnActor<AActor*>(AActor::GetClass());
@@ -601,6 +563,8 @@ void FEditor::CreateEmptyActor()
 {
 	AActor* Actor = GetCurrentScene()->SpawnActor<AActor*>(AActor::GetClass());
 	SetSelectedActor(Actor);
+	NotifyOutlinerRowsChanged();
+
 }
 
 void FEditor::NewScene()
@@ -636,30 +600,14 @@ void FEditor::LoadSceneFromPath(const std::filesystem::path& ScenePath)
 void FEditor::SaveScene(FStringView SceneName)
 {
 	GSceneManager* SceneManager = GSceneManager::GetInstance();
-
-	for (const auto& Viewport : Viewports)
-	{
-		if (Viewport.GetViewportType() == EViewportType::Perspective)
-		{
-			GetCurrentScene()->SetMainCameraSaveData(Viewport.GetCamera());
-			break;
-		}
-	}
-
+	PrepareSceneCameraForSave();
 	SceneManager->SaveScene(SceneName);
 }
 
 void FEditor::SaveSceneToPath(const std::filesystem::path& ScenePath)
 {
 	GSceneManager* SceneManager = GSceneManager::GetInstance();
-	for (const auto& Viewport : Viewports)
-	{
-		if (Viewport.GetViewportType() == EViewportType::Perspective)
-		{
-			GetCurrentScene()->SetMainCameraSaveData(Viewport.GetCamera());
-			break;
-		}
-	}
+	PrepareSceneCameraForSave();
 	SceneManager->SaveSceneToPath(ScenePath);
 }
 
@@ -715,11 +663,17 @@ void FEditor::RemoveSelectedComponent()
 	{
 		return;
 	}
-	CancelWindowRenames();
 	AActor* Actor = SelectedActor;
-	if (Actor->RemoveComponent(SelectedComponent))
+	UActorComponent* ComponentToDelete = SelectedComponent;
+	CancelWindowRenames();
+	SetSelectedActor(nullptr);
+	if (Actor->RemoveComponent(ComponentToDelete))
 	{
 		SetSelectedActor(Actor);
+	}
+	else
+	{
+		SetSelectedComponent(ComponentToDelete);
 	}
 }
 
@@ -727,11 +681,12 @@ void FEditor::DeleteSelectedActor()
 {
 	if (SelectedActor == nullptr) { return; }
 
-	CancelWindowRenames();
+	AActor* ActorToDelete = SelectedActor;
 	UScene* CurrentScene = GetCurrentScene();
-	CurrentScene->DestroyActor(SelectedActor);
-
+	CancelWindowRenames();
+	NotifyOutlinerActorDeleting(ActorToDelete);
 	SetSelectedActor(nullptr);
+	CurrentScene->DestroyActor(ActorToDelete);
 }
 
 void FEditor::RegisterGizmo(FClassType* Type)
@@ -1229,7 +1184,105 @@ void FEditor::CancelWindowRenames()
 		}
 		else if (Window->IsA(UOutlinerWindow::GetClass()))
 		{
-			static_cast<UOutlinerWindow*>(Window)->FinishRename(false);
+			static_cast<UOutlinerWindow*>(Window)->CancelPendingEdits();
 		}
+	}
+}
+
+void FEditor::NotifyOutlinerRowsChanged()
+{
+	for (UEditorWindow* Window : Windows)
+	{
+		if (Window->IsA(UOutlinerWindow::GetClass()))
+		{
+			static_cast<UOutlinerWindow*>(Window)->InvalidateRows();
+		}
+	}
+}
+
+void FEditor::NotifyOutlinerActorDeleting(AActor* Actor)
+{
+	for (UEditorWindow* Window : Windows)
+	{
+		if (Window->IsA(UOutlinerWindow::GetClass()))
+		{
+			static_cast<UOutlinerWindow*>(Window)
+				->OnActorDeleting(Actor);
+		}
+	}
+}
+
+void FEditor::PrepareSceneCameraForSave()
+{
+	UScene* Scene = GetCurrentScene();
+	if (!Scene) { return; }
+	for (const auto& Viewport : Viewports)
+	{
+		if (Viewport.GetViewportType() == EViewportType::Perspective)
+		{
+			Scene->SetMainCameraSaveData(Viewport.GetCamera());
+			break;
+		}
+	}
+}
+
+void FEditor::HandleSelectionClick(float Time)
+{
+	GInputManager& Input = *GInputManager::GetInstance();
+	// 현재 편집 뷰포트에서 기즈모를 먼저 검사한다.
+	D3D11_VIEWPORT CurrentViewport = Viewports[CurrEditedViewportIndex].GetRenderView().Viewport;
+	int32 SelectedGizmo = GizmoPicker->Pick(ObjectAxisGizmo, CurrentViewport);
+	if (SelectedGizmo != -1)
+	{
+		// 기즈모 적중 시 기존 조건에 따라 드래그를 시작한다.
+		if (Input.GetKey(GInputManager::EI_LMOUSE))
+		{
+			GizmoController->BeginDrag(SelectedGizmo);
+		}
+	}
+	else
+	{
+		// 기즈모에 맞지 않았을 때만 오브젝트 선택을 갱신한다.
+		USceneComponent* Selected = ObjectPicker->Pick();
+		SetSelectedComponent(Selected);
+		if (Selected != nullptr)
+		{
+			//UE_LOG("[{}] : [{}번째 오브젝트 선택]", Time, Selected->GetUUID());
+		}
+	}
+}
+
+void FEditor::SelectViewportAt(float PixelX, float PixelY)
+{
+	for (uint32 i = 0; i < Viewports.Num(); ++i)
+	{
+		if (Viewports[i].IsMouseInside(PixelX, PixelY) && CurrEditedViewportIndex != i)
+		{
+			EditorCamera = Viewports[i].GetCamera();
+			CameraController.SetCamera(EditorCamera);
+			CameraController.SetViewportClient(&Viewports[i]);
+			CurrEditedViewportIndex = i;
+			break;
+		}
+	}
+}
+
+void FEditor::UpdateGizmoAndCamera(float DeltaTime, bool bWasDragging, bool bWantToCaptureMouse, bool bWantToCaptureKeyboard)
+{
+	GInputManager& Input = *GInputManager::GetInstance();
+	const bool bGizmoOwnsInput = bWasDragging || GizmoController->IsDragging();
+	GizmoController->Tick();
+	if (bGizmoOwnsInput || bWantToCaptureMouse)
+	{
+		// 카메라를 막는 동안 쌓인 회전 입력 폐기
+		int32 DX, DY;
+		Input.ConsumeRightDragDelta(DX, DY);
+	}
+	const bool bRightClickDragging = Input.GetKey(GInputManager::EI_RMOUSE);
+	const bool bAllowCameraMouse = !bWantToCaptureMouse;
+	const bool bAllowCameraKeyboard = !bWantToCaptureKeyboard || (bAllowCameraMouse && bRightClickDragging);
+	if (!bGizmoOwnsInput && bAllowCameraKeyboard && bAllowCameraMouse)
+	{
+		CameraController.Tick(DeltaTime);
 	}
 }

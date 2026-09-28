@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <memory>
+#include "Engine/Scene/TestSceneImporter.h"
 
 namespace
 {
@@ -31,6 +32,19 @@ namespace
         if (Base == "CON" || Base == "PRN" || Base == "AUX" || Base == "NUL" || Numbered)
             throw std::runtime_error("Reserved scene name");
         return (std::filesystem::path(SceneDirectory) / (Name + ".json")).generic_string();
+    }
+
+    void WriteValidatedScene(UScene& Scene, FJsonWriter& Writer) {
+        // 파일 전체에 대한 버전과 다음 UUID를 루트에 기록한다.
+        int32 Version = 1;
+        uint32 NextUUID = GObjectStatics::GetNextUUID(EObjectDomain::EOT_Scene);
+        Writer.Field("Version", Version);
+        Writer.Field("NextUUID", NextUUID);
+        Scene.Serialize(Writer);
+
+        // 완성된 메모리상의 문서를 검사한 뒤 실제 파일에 저장한다.
+        FJsonReader ValidationReader(Writer.ToString());
+        ValidateSceneArchive(ValidationReader);
     }
 }
 
@@ -125,7 +139,17 @@ void GSceneManager::InternalLoadScene()
         // 파일 경로가 있으면 파일에서 생성하고, 없으면 빈 씬 Reader를 생성한다.
         if (!NextScenePath.empty())
         {
-            Reader = FJsonReader::FromFile(NextScenePath);
+            //Reader = FJsonReader::FromFile(NextScenePath);
+            
+            //
+            // 원본 테스트 씬의 모델 경로를 프로젝트 리소스에 연결한다.
+            const FTestSceneImporter::FMeshPathMap MeshPaths
+            {
+                { "Data/apple_mid.obj", "Assets/Models/apple_mid.obj" },
+                { "Data/bitten_apple_mid.obj", "Assets/Models/bitten_apple_mid.obj" }
+            };
+            // 테스트 씬은 메모리에서 변환하고, 기존 엔진 씬은 그대로 읽는다.
+            Reader = std::make_unique<FJsonReader>(FTestSceneImporter::Load(NextScenePath, MeshPaths));
         }
         else if (!NextSceneFile.empty())
         {
@@ -191,18 +215,8 @@ void GSceneManager::SaveScene(FStringView SerializedName)
     {
         const FString FileName = GetScenePath(SerializedName);
         FJsonWriter Writer;
-
-        // 파일 전체에 대한 버전과 다음 UUID를 루트에 기록한다.
-        int32 Version = 1;
-        uint32 NextUUID = GObjectStatics::GetNextUUID(EObjectDomain::EOT_Scene);
-        Writer.Field("Version", Version);
-        Writer.Field("NextUUID", NextUUID);
-        CurrentScene->Serialize(Writer);
-
-        // 완성된 메모리상의 문서를 검사한 뒤 실제 파일에 저장한다.
-        FJsonReader ValidationReader(Writer.ToString());
-        ValidateSceneArchive(ValidationReader);
-
+        WriteValidatedScene(*CurrentScene,Writer);
+        
         std::filesystem::create_directories(SceneDirectory);
         Writer.SaveToFile(FileName);
     }
@@ -219,17 +233,7 @@ void GSceneManager::SaveSceneToPath(const std::filesystem::path& ScenePath)
     try
     {
         FJsonWriter Writer;
-
-        // 파일 전체에 대한 버전과 다음 UUID를 루트에 기록한다.
-        int32 Version = 1;
-        uint32 NextUUID = GObjectStatics::GetNextUUID(EObjectDomain::EOT_Scene);
-        Writer.Field("Version", Version);
-        Writer.Field("NextUUID", NextUUID);
-        CurrentScene->Serialize(Writer);
-
-        // 완성된 메모리상의 문서를 검사한 뒤 실제 파일에 저장한다.
-        FJsonReader ValidationReader(Writer.ToString());
-        ValidateSceneArchive(ValidationReader);
+        WriteValidatedScene(*CurrentScene, Writer);
 
         std::filesystem::create_directories(SceneDirectory);
         Writer.SaveToFilePath(ScenePath);
@@ -239,3 +243,4 @@ void GSceneManager::SaveSceneToPath(const std::filesystem::path& ScenePath)
         UE_LOG("[SceneManager] Save {} failed: {}", ScenePath.string(), Error.what());
     }
 }
+

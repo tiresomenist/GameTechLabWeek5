@@ -65,6 +65,21 @@ void GContext::SetViewport(const D3D11_VIEWPORT& Viewport) {
     Context->RSSetViewports(1, &Viewport);
 }
 
+void GContext::SetViewportAndScissor(const D3D11_VIEWPORT& Viewport)
+{
+    SetViewport(Viewport);
+    
+    const D3D11_RECT ScissorRect
+    {
+        static_cast<LONG>(Viewport.TopLeftX),
+        static_cast<LONG>(Viewport.TopLeftY),
+        static_cast<LONG>(Viewport.TopLeftX + Viewport.Width),
+        static_cast<LONG>(Viewport.TopLeftY + Viewport.Height)
+    };
+    Context->RSSetScissorRects(1, &ScissorRect);
+
+}
+
 void GContext::DrawIndexed(UINT IndexCount, UINT StartIndexLocation, INT BaseVertexLocation) {
     assert(IsInitialized());
 

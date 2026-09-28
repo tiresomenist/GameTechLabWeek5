@@ -26,6 +26,7 @@ public:
         ID3D11DepthStencilView* DSV);
 
     void SetViewport(const D3D11_VIEWPORT& Viewport);
+    void SetViewportAndScissor(const D3D11_VIEWPORT& Viewport);
 
     void DrawIndexed(UINT IndexCount,UINT StartIndexLocation,INT BaseVertexLocation = 0);
 

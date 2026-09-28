@@ -134,8 +134,8 @@ USceneComponent* FObjectPicker::Pick()
 	if (!Editor->IsShowingPrimitives()) { return nullptr; }
 
 	FRay Ray;
-
 	if (!MakeWorldRay(Ray, CurrViewport)) { return nullptr; }
+
 	// 피킹 횟수 계산 시작
 	FScopeCycleCounter PickCounter;
 	TotalPickCount++;
@@ -143,131 +143,10 @@ USceneComponent* FObjectPicker::Pick()
 	// 프리미티브와 광원을 같은 선택 결과로 취급함
 	USceneComponent* SelectedObject = nullptr;
 	float ClosestDistance = 100000.0f;
-	// 19번 최적화해야됨
-	Scene->ForEachPrimitive(
-		[&](UPrimitiveComponent* Primitive)
-		{
-			if (!Primitive) return;
-
-			// Visible 끈 오브젝트는 피킹되지 않음
-			if (!Primitive->IsVisible())
-			{
-				return;
-			}
-
-			FVector BoundsMin;
-			FVector BoundsMax;
-			if (!Primitive->GetLocalBounds(BoundsMin, BoundsMax)) return;
-
-			FMatrix InverseWorld;
-			const FMatrix& RenderWorldMatrix = Primitive->GetRenderWorldMatrix(Editor->GetEditorCamera());
-			if (!RenderWorldMatrix.TryInverse(InverseWorld)) {
-				return;
-			}
-
-			FRay LocalRay;
-			LocalRay.Origin = FVector(FVector4(Ray.Origin, 1.0f) * InverseWorld);
-			LocalRay.Direction = FVector(FVector4(Ray.Direction, 0.0f) * InverseWorld);
-
-			float AABBDistance = 0.0f;
-			if (!RayAABBIntersect(LocalRay, BoundsMin, BoundsMax, ClosestDistance, AABBDistance)) return;
-
-			if (Primitive->IsAABBOnlyPickable())
-			{
-				ClosestDistance = AABBDistance;
-				SelectedObject = Primitive;
-				return;
-			}
-
-			FMeshResource* Mesh = Primitive->GetMeshResource();
-			if (!Mesh) return;
-
-			const size_t Count = Mesh->GetIndices().Num();
-            const size_t VertexCount = Mesh->GetPositions().Num();
-            if (Count != Mesh->GetIndexCount() || Count % 3 != 0) return;
-            for (size_t Index = 0; Index < Count; Index += 3)
-			{
-				const uint32 I0 = Mesh->GetIndices()[Index];
-				const uint32 I1 = Mesh->GetIndices()[Index + 1];
-				const uint32 I2 = Mesh->GetIndices()[Index + 2];
-                if (I0 >= VertexCount || I1 >= VertexCount || I2 >= VertexCount) continue;
-
-				const FVector& A = Mesh->GetPositions()[I0];
-				const FVector& B = Mesh->GetPositions()[I1];
-				const FVector& C = Mesh->GetPositions()[I2];
-
-				float T;
-				
-				if (RayTriangleIntersect(LocalRay, A, B, C, T))
-				{
-					if (T < ClosestDistance)
-					{
-						ClosestDistance = T;
-						SelectedObject = Primitive;
-					}
-				}
-			}
-		}
-	);
-	//SpotLight용 임시코드. continue 조건 바꿈으로써 차후에 확장가능
-	Scene->ForEachActor(
-		[&](AActor* Actor)
-		{
-			for (UActorComponent* Component : Actor->GetComponents())
-			{
-				if (!Component->IsA(USpotLightComponent::GetClass()))
-				{
-					continue;
-				}
-
-				auto* SpotLight = static_cast<USpotLightComponent*>(Component);
-				if (!SpotLight->IsVisible())
-				{
-					continue;
-				}
-
-				// 실제 렌더링과 동일한 행렬 및 로컬 범위를 조회함
-				const FPrimitiveRenderData IconData = SpotLight->BuildIconRenderData(Camera, false);
-
-				if (!IconData.VertexBuffer || !IconData.IndexBuffer || !IconData.Material.SRV || !IconData.WorldMatrix || IconData.IndexCount == 0)
-				{
-					continue;
-				}
-
-				FMatrix InverseWorld;
-
-				// 크기가 0인 경우 등 역변환이 불가능한 아이콘을 제외함
-				if (!IconData.WorldMatrix->TryInverse(InverseWorld))
-				{
-					continue;
-				}
-
-				// 월드 광선을 아이콘의 로컬 공간으로 변환함
-				FRay LocalRay;
-
-				LocalRay.Origin = FVector(FVector4(Ray.Origin, 1.0f) * InverseWorld);
-
-				// 거리 비교 기준을 유지하기 위해 정규화하지 않음
-				LocalRay.Direction = FVector(FVector4(Ray.Direction, 0.0f) * InverseWorld);
-
-				float HitDistance = 0.0f;
-
-				// 로컬 XY 평면의 아이콘 사각형과 교차 검사함
-				if (!RayAABBIntersect(LocalRay,IconData.Min,IconData.Max,ClosestDistance,HitDistance))
-				{
-					continue;
-				}
-
-				// 기존 메시와 아이콘 중 광선 시작점에 가까운 대상을 선택함
-				if (HitDistance > EPSILON &&HitDistance < ClosestDistance)
-				{
-					ClosestDistance = HitDistance;
-					SelectedObject = SpotLight;
-				}
-			}
-		}
-	);
-
+	
+	PickPrimitives(Scene, Ray, ClosestDistance, SelectedObject);
+	PickIcon(Scene,Camera, Ray, ClosestDistance, SelectedObject);
+	
 	LastPickTimeMs = PickCounter.Finish();
 	TotalPickTimeMs += LastPickTimeMs;
 
@@ -277,4 +156,108 @@ USceneComponent* FObjectPicker::Pick()
 		TotalPickTimeMs / static_cast<double>(TotalPickCount));
 
 	return SelectedObject;
+}
+
+
+// 프리미티브 피킹 부분, 추가적으로 최적화해야함.
+void FObjectPicker::PickPrimitives(UScene* Scene, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
+{
+	Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
+		{
+			// Visible 끈 오브젝트는 피킹되지 않음
+			if (!Primitive) return;
+			if (!Primitive->IsVisible()) return;
+			FVector BoundsMin;
+			FVector BoundsMax;
+			if (!Primitive->GetLocalBounds(BoundsMin, BoundsMax)) return;
+
+			FMatrix InverseWorld;
+			const FMatrix& RenderWorldMatrix = Primitive->GetRenderWorldMatrix(Editor->GetEditorCamera());
+			if (!RenderWorldMatrix.TryInverse(InverseWorld)) return;
+			FRay LocalRay;
+			LocalRay.Origin = FVector(FVector4(Ray.Origin, 1.0f) * InverseWorld);
+			LocalRay.Direction = FVector(FVector4(Ray.Direction, 0.0f) * InverseWorld);
+
+			//AABB로 후보 선택.
+			float AABBDistance = 0.0f;
+			if (!RayAABBIntersect(LocalRay, BoundsMin, BoundsMax, ClosestDistance, AABBDistance)) return;
+			if (Primitive->IsAABBOnlyPickable())
+			{
+				ClosestDistance = AABBDistance;
+				SelectedObject = Primitive;
+				return;
+			}
+
+			//뮐러-트럼보어로 실제 피킹 처리
+			FMeshResource* Mesh = Primitive->GetMeshResource();
+			if (!Mesh) return;
+			const size_t Count = Mesh->GetIndices().Num();
+			const size_t VertexCount = Mesh->GetPositions().Num();
+			if (Count != Mesh->GetIndexCount() || Count % 3 != 0) return;
+			for (size_t Index = 0; Index < Count; Index += 3)
+			{
+				const uint32 I0 = Mesh->GetIndices()[Index];
+				const uint32 I1 = Mesh->GetIndices()[Index + 1];
+				const uint32 I2 = Mesh->GetIndices()[Index + 2];
+				if (I0 >= VertexCount || I1 >= VertexCount || I2 >= VertexCount) continue;
+				const FVector& A = Mesh->GetPositions()[I0];
+				const FVector& B = Mesh->GetPositions()[I1];
+				const FVector& C = Mesh->GetPositions()[I2];
+				float T;
+				if (RayTriangleIntersect(LocalRay, A, B, C, T))
+				{
+					if (T < ClosestDistance)
+					{
+						ClosestDistance = T;
+						SelectedObject = Primitive;
+					}
+				}
+			}
+		});
+}
+
+// 현재는 Spotlight Icon만 검사중. 장기적으로 구조를 바꿔서 모든 메쉬없는 아이콘에 대해 피킹되도록 해야함
+// UBillboardComponent를 하나 파서, 해당 아이콘이 광원/카메라 등의 메쉬없는 컴포넌트에 연결되도록 하는 형태로 바꾸면 될듯함.
+void FObjectPicker::PickIcon(UScene* Scene, const UCameraComponent* Camera, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
+{
+	Scene->ForEachActor([&](AActor* Actor)
+		{
+			for (UActorComponent* Component : Actor->GetComponents())
+			{
+				if (!Component->IsA(USpotLightComponent::GetClass())) continue;
+				auto* SpotLight = static_cast<USpotLightComponent*>(Component);
+				if (!SpotLight->IsVisible()) continue;
+
+				// 실제 렌더링과 동일한 행렬 및 로컬 범위를 조회함
+				const FPrimitiveRenderData IconData = SpotLight->BuildIconRenderData(Camera, false);
+				if (!IconData.VertexBuffer || !IconData.IndexBuffer || !IconData.Material.SRV ||
+					!IconData.WorldMatrix || IconData.IndexCount == 0)
+				{
+					continue;
+				}
+				// 크기가 0인 경우 등 역변환이 불가능한 아이콘을 제외함
+				FMatrix InverseWorld;
+				if (!IconData.WorldMatrix->TryInverse(InverseWorld)) continue;
+
+				// 월드 광선을 아이콘의 로컬 공간으로 변환함
+				FRay LocalRay;
+				LocalRay.Origin = FVector(FVector4(Ray.Origin, 1.0f) * InverseWorld);
+
+				// 거리 비교 기준을 유지하기 위해 정규화하지 않음
+				LocalRay.Direction = FVector(FVector4(Ray.Direction, 0.0f) * InverseWorld);
+				// 로컬 XY 평면의 아이콘 사각형과 교차 검사함
+				float HitDistance = 0.0f;
+				if (!RayAABBIntersect(LocalRay, IconData.Min, IconData.Max, ClosestDistance, HitDistance))
+				{
+					continue;
+				}
+
+				// 기존 프리미티브 결과보다 가까운 아이콘만 선택함
+				if (HitDistance > EPSILON && HitDistance < ClosestDistance)
+				{
+					ClosestDistance = HitDistance;
+					SelectedObject = SpotLight;
+				}
+			}
+		});
 }
