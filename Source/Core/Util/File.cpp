@@ -101,7 +101,7 @@ std::optional<std::filesystem::path> File::OpenFileDialog(HWND Owner, EFileDialo
 	{
 		COMDLG_FILTERSPEC Filters[] =
 		{
-			{ L"JSON Scene Files (*.json)", L"*.json" },
+			{ L"Scene Files (*.scene;*.json)", L"*.scene;*.json" },
 			{ L"Image Files (*.png;*.jpg;*.dds;*.tga)", L"*.png;*.jpg;*.jpeg;*.dds;*.tga" },
 			{ L"All Files (*.*)",           L"*.*" },
 			{ L"Wavefront OBJ Files (*.obj)", L"*.obj" }

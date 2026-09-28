@@ -92,6 +92,13 @@ private:
 
 	// 등록된 Property·Outliner 창에서 진행 중인 이름 편집을 취소한다.
 	void CancelWindowRenames();
+	
+	void PrepareSceneCameraForSave();
+
+	// Tick 분리용 함수들
+	void HandleSelectionClick(float Time);
+	void SelectViewportAt(float PixelX, float PixelY);
+	void UpdateGizmoAndCamera(float DeltaTime, bool bWasDragging, bool bWantToCaptureMouse, bool bWantToCaptureKeyboard);
 public:
 	virtual ~FEditor() = default;
 
@@ -226,9 +233,12 @@ public:
 	// 이번 프레임에 렌더링할 카메라와 뷰포트 목록을 구성합니다.
 	virtual TArray<FRenderView> BuildRenderViews(const D3D11_VIEWPORT& FullViewport) const;
 
+	void NotifyOutlinerRowsChanged();
+	void NotifyOutlinerActorDeleting(AActor* Actor);
+
 
 public:
-	friend TArray<FPrimitiveRenderData> RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera);
+	friend void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera, TArray<FPrimitiveRenderData>& RenderList);
 	friend TArray<FPrimitiveRenderData> RenderUtil::GetGizmoList(FEditor* Editor, UScene* Scene,const UCameraComponent* Camera,
 		const D3D11_VIEWPORT& Viewport);
 };

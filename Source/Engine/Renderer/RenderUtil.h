@@ -15,9 +15,10 @@ enum class EViewportType;
 
 namespace RenderUtil
 {
-	TArray<FPrimitiveRenderData> GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera);
-	TArray<FPrimitiveRenderData> GetGizmoList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
-		const D3D11_VIEWPORT& Viewport);
+	void GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera, 
+		TArray<FPrimitiveRenderData>& RenderList);
+	TArray<FPrimitiveRenderData> GetGizmoList(FEditor* Editor, UScene* Scene, 
+			const UCameraComponent* Camera,	const D3D11_VIEWPORT& Viewport);
 	TArray<FWorldTextItem> GetTextRenderList(UScene* Scene, const UCameraComponent* Camera,
 		bool bShowUUIDWidgets);
 	void SubmitLineDrawRequests(FEditor* Editor,UScene* Scene, const UCameraComponent* Camera,

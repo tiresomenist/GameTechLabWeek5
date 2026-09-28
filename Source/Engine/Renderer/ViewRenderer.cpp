@@ -417,7 +417,8 @@ void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& 
 
 	FMatrix ViewProjMatrix = Camera->GetViewMatrix() * Camera->GetProjectionMatrix();
 
-	TArray<FPrimitiveRenderData> RenderList = RenderUtil::GetRenderList(Editor, Scene, Camera);
+	TArray<FPrimitiveRenderData> RenderList;
+	RenderUtil::GetRenderList(Editor, Scene, Camera, RenderList);
 
 	const bool bShowPrimitives = ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives);
 
@@ -658,16 +659,5 @@ bool FViewRenderer::BindMaterial(const FMaterial& Material)
 
 void FViewRenderer::SetViewportAndScissor(const D3D11_VIEWPORT& Viewport)
 {
-	GContext::GetInstance()->SetViewport(Viewport);
-
-	// Viewport는 정수 픽셀 경계로 구성한다.
-	const D3D11_RECT ScissorRect
-	{
-		static_cast<LONG>(Viewport.TopLeftX),
-		static_cast<LONG>(Viewport.TopLeftY),
-		static_cast<LONG>(Viewport.TopLeftX + Viewport.Width),
-		static_cast<LONG>(Viewport.TopLeftY + Viewport.Height)
-	};
-
-	DeviceContext->RSSetScissorRects(1, &ScissorRect);
+	GContext::GetInstance()->SetViewportAndScissor(Viewport);
 }
