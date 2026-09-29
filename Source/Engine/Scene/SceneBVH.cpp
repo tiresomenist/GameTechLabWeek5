@@ -29,7 +29,7 @@ void FSceneBVH::Update(UStaticMeshComponent* Component)
         return;
     }
 
-    FSceneBVHNode** FoundNodeOrNull = Leaves.Find(Component);
+    FSceneBVHNode** FoundNodeOrNull = LeafNodeMap.Find(Component);
     FSceneBVHNode* LeafOrNull = (FoundNodeOrNull != nullptr) ? *FoundNodeOrNull : nullptr;
 
     if (LeafOrNull)
@@ -55,28 +55,28 @@ void FSceneBVH::Update(UStaticMeshComponent* Component)
 
     if (FoundNodeOrNull == nullptr)
     {
-        Leaves.Add(Component, LeafOrNull);
+        LeafNodeMap.Add(Component, LeafOrNull);
     }
 }
 
 void FSceneBVH::Remove(UStaticMeshComponent* Component)
 {
-    FSceneBVHNode** FoundNodeOrNull = Leaves.Find(Component);
+    FSceneBVHNode** FoundNodeOrNull = LeafNodeMap.Find(Component);
     assert(FoundNodeOrNull != nullptr);
     
     FSceneBVHNode* Leaf = *FoundNodeOrNull;
     Detach(Leaf);
-    Leaves.Remove(Component);
+    LeafNodeMap.Remove(Component);
 
     delete Leaf;
 }
 
 void FSceneBVH::Clear()
 {
-    DeleteSubtree(RootOrNull);
-
+    DeleteNodesRecursive(RootOrNull);
     RootOrNull = nullptr;
-    Leaves.Empty();
+
+    LeafNodeMap.Empty();
 }
 
 bool FSceneBVH::CalculateWorldBounds(UStaticMeshComponent* Component, FVector& OutMin, FVector& OutMax)
@@ -127,17 +127,17 @@ bool FSceneBVH::Contains(const FSceneBVHNode* Node, const FVector& WorldMin, con
         && WorldMin.Z >= Node->WorldMin.Z && WorldMax.Z <= Node->WorldMax.Z;
 }
 
-float FSceneBVH::GetJoinedBoundingBoxSurfaceArea(const FSceneBVHNode* A, const FSceneBVHNode* B)
+float FSceneBVH::GetJoinedBoundingBoxSurfaceArea(const FSceneBVHNode* First, const FSceneBVHNode* Second)
 {
     const FVector Min(
-        std::min(A->WorldMin.X, B->WorldMin.X),
-        std::min(A->WorldMin.Y, B->WorldMin.Y),
-        std::min(A->WorldMin.Z, B->WorldMin.Z));
+        std::min(First->WorldMin.X, Second->WorldMin.X),
+        std::min(First->WorldMin.Y, Second->WorldMin.Y),
+        std::min(First->WorldMin.Z, Second->WorldMin.Z));
 
     const FVector Max(
-        std::max(A->WorldMax.X, B->WorldMax.X),
-        std::max(A->WorldMax.Y, B->WorldMax.Y),
-        std::max(A->WorldMax.Z, B->WorldMax.Z));
+        std::max(First->WorldMax.X, Second->WorldMax.X),
+        std::max(First->WorldMax.Y, Second->WorldMax.Y),
+        std::max(First->WorldMax.Z, Second->WorldMax.Z));
 
     // Return bounding box surface area
     const FVector BoundingBoxLength = Max - Min;
@@ -197,7 +197,6 @@ void FSceneBVH::Insert(FSceneBVHNode* NewLeaf)
     LessAreaCandidate->Parent = NewParent;
     NewLeaf->Parent = NewParent;
 
-
     // Todo: Check
     if (OldParent)
     {
@@ -218,28 +217,32 @@ void FSceneBVH::Insert(FSceneBVHNode* NewLeaf)
     RefitParents(NewParent);
 }
 
-void FSceneBVH::Detach(FSceneBVHNode* Leaf)
+void FSceneBVH::Detach(FSceneBVHNode* DetachLeaf)
 {
-    if (Leaf == RootOrNull)
+    if (DetachLeaf == RootOrNull)
     {
         RootOrNull = nullptr;
-        Leaf->Parent = nullptr;
+        DetachLeaf->Parent = nullptr;
+
         return;
     }
 
-    FSceneBVHNode* Parent = Leaf->Parent;
-    FSceneBVHNode* Sibling =
-        (Parent->LeftChild == Leaf) ? Parent->RightChild : Parent->LeftChild;
-    FSceneBVHNode* Grandparent = Parent->Parent;
+    FSceneBVHNode* Parent = DetachLeaf->Parent;
+    FSceneBVHNode* Sibling = (Parent->LeftChild == DetachLeaf) ? Parent->RightChild : Parent->LeftChild;
+    FSceneBVHNode* GrandparentOrNull = Parent->Parent;
 
-    if (Grandparent)
+    if (GrandparentOrNull != nullptr)
     {
-        if (Grandparent->LeftChild == Parent)
-            Grandparent->LeftChild = Sibling;
+        if (GrandparentOrNull->LeftChild == Parent)
+        {
+            GrandparentOrNull->LeftChild = Sibling;
+        }
         else
-            Grandparent->RightChild = Sibling;
+        {
+            GrandparentOrNull->RightChild = Sibling;
+        }
 
-        Sibling->Parent = Grandparent;
+        Sibling->Parent = GrandparentOrNull;
     }
     else
     {
@@ -247,21 +250,21 @@ void FSceneBVH::Detach(FSceneBVHNode* Leaf)
         Sibling->Parent = nullptr;
     }
 
-    Leaf->Parent = nullptr;
+    DetachLeaf->Parent = nullptr;
     delete Parent;
 
-    RefitParents(Grandparent);
+    RefitParents(GrandparentOrNull);
 }
 
-void FSceneBVH::DeleteSubtree(FSceneBVHNode* Node)
+void FSceneBVH::DeleteNodesRecursive(FSceneBVHNode* NodeOrNull)
 {
-    if (!Node)
+    if (NodeOrNull == nullptr)
     {
         return;
     }
 
-    DeleteSubtree(Node->LeftChild);
-    DeleteSubtree(Node->RightChild);
+    DeleteNodesRecursive(NodeOrNull->LeftChild);
+    DeleteNodesRecursive(NodeOrNull->RightChild);
 
-    delete Node;
+    delete NodeOrNull;
 }
