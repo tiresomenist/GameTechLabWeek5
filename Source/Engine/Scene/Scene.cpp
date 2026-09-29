@@ -486,6 +486,7 @@ void UScene::ClearActors()
     StaticUniformGridFallbackPrimitives.Empty();
     InvalidateStaticUniformGrid();
     PrimitiveComponents.Empty();
+    NonStaticMeshComponents.Empty();
     TextComponents.Empty();
     WidgetComponents.Empty();
     BillboardIcons.Empty();
@@ -715,23 +716,29 @@ void UScene::RegisterComponent(UActorComponent* Component)
     AActor* Owner = Component->GetOwner();
     if (!Owner || Owner->GetScene() != this) return;
 
-    // 파생 타입은 여러 목록에 속할 수 있으므로 독립적으로 검사합니다.
+    const bool bStaticMesh = Component->IsA(UStaticMeshComponent::GetClass());
     if (Component->IsA(UPrimitiveComponent::GetClass()))
-        PrimitiveComponents.Add(static_cast<UPrimitiveComponent*>(Component));
+    {
+        UPrimitiveComponent* Primitive = static_cast<UPrimitiveComponent*>(Component);
+        PrimitiveComponents.Add(Primitive);
 
+        // 전체 목록은 유지하고, StaticMesh가 아닌 대상만 추가 분류합니다.
+        if (!bStaticMesh)
+            NonStaticMeshComponents.Add(Primitive);
+    }
+
+    // 하나의 컴포넌트가 여러 전용 목록에 들어갈 수 있습니다.
     if (Component->IsA(UTextComponent::GetClass()))
         TextComponents.Add(static_cast<UTextComponent*>(Component));
-
     if (Component->IsA(UWidgetComponent::GetClass()))
         WidgetComponents.Add(static_cast<UWidgetComponent*>(Component));
-
     if (Component->IsA(USpotLightComponent::GetClass()))
         BillboardIcons.Add(static_cast<USpotLightComponent*>(Component));
 
     Component->bRegisteredWithScene = true;
 
-    // 메시가 준비되지 않았다면 BVH에는 등록되지 않아도 됩니다.
-    if (Component->IsA(UStaticMeshComponent::GetClass()))
+    // StaticMesh의 기존 BVH 등록 경로를 유지합니다.
+    if (bStaticMesh)
         UpdateBVH(static_cast<UStaticMeshComponent*>(Component));
 }
 
@@ -743,25 +750,31 @@ void UScene::UnregisterComponent(UActorComponent* Component)
     AActor* Owner = Component->GetOwner();
     if (!Owner || Owner->GetScene() != this) return;
 
-    // 이후 Transform 변경 통지가 발생해도 BVH에 다시 들어가지 않게 합니다.
+    // 해제 도중 Transform 통지가 발생해도 다시 등록되지 않게 합니다.
     Component->bRegisteredWithScene = false;
 
-    if (Component->IsA(UStaticMeshComponent::GetClass()))
+    const bool bStaticMesh = Component->IsA(UStaticMeshComponent::GetClass());
+    if (bStaticMesh)
         RemoveFromBVH(static_cast<UStaticMeshComponent*>(Component));
 
     if (Component->IsA(UPrimitiveComponent::GetClass()))
-        PrimitiveComponents.Remove(static_cast<UPrimitiveComponent*>(Component));
+    {
+        UPrimitiveComponent* Primitive = static_cast<UPrimitiveComponent*>(Component);
+        PrimitiveComponents.Remove(Primitive);
+
+        // 이 목록에 등록했던 타입만 제거합니다.
+        if (!bStaticMesh)
+            NonStaticMeshComponents.Remove(Primitive);
+    }
 
     if (Component->IsA(UTextComponent::GetClass()))
         TextComponents.Remove(static_cast<UTextComponent*>(Component));
-
     if (Component->IsA(UWidgetComponent::GetClass()))
         WidgetComponents.Remove(static_cast<UWidgetComponent*>(Component));
-
     if (Component->IsA(USpotLightComponent::GetClass()))
         BillboardIcons.Remove(static_cast<USpotLightComponent*>(Component));
 
-    // Scene 내부의 별도 참조도 함께 해제합니다.
-    if (MainCamera == Component) MainCamera = nullptr;
+    if (MainCamera == Component)
+        MainCamera = nullptr;
 }
 

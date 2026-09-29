@@ -167,11 +167,8 @@ void FObjectPicker::PickPrimitives(UScene* Scene, const FRay& Ray, float& Closes
 	PickBVHNodeRecursive(Scene->GetBVHRoot(), Ray, ClosestDistance, SelectedObject);
 
 	// 이번 단계에서 BVH에 없는 텍스트·플립북
-	Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
+	Scene->ForEachNonStaticMesh([&](UPrimitiveComponent* Primitive)
 		{
-			if (Primitive->IsA(UStaticMeshComponent::GetClass()))
-				return;
-
 			TestPrimitive(Primitive, Ray, ClosestDistance, SelectedObject);
 		});
 }
