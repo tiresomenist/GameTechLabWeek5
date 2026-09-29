@@ -6,10 +6,9 @@ struct FRenderSubmissionCounts
 {
     uint32 DrawCalls = 0;
     uint32 Triangles = 0;
-    uint32 HZBInputPrimitives = 0;
-    uint32 HZBCells = 0;
+    uint32 HZBCandidateCells = 0;
+    uint32 HZBRenderCells = 0;
     uint32 HZBOccludedCells = 0;
-    uint32 HZBOccludedPrimitives = 0;
     bool bHZBEnabled = true;
     bool bHZBDispatched = false;
 };
@@ -34,13 +33,13 @@ public:
             Counts.Triangles += static_cast<uint32>(IndexCount) / 3;
     }
 
-    void SetHZBCounts(uint32 InputPrimitives, uint32 Cells, uint32 OccludedCells,
-        uint32 OccludedPrimitives, bool bEnabled, bool bDispatched)
+    void SetHZBCounts(uint32 CandidateCells, uint32 RenderCells,
+        bool bEnabled, bool bDispatched)
     {
-        Counts.HZBInputPrimitives = InputPrimitives;
-        Counts.HZBCells = Cells;
-        Counts.HZBOccludedCells = OccludedCells;
-        Counts.HZBOccludedPrimitives = OccludedPrimitives;
+        Counts.HZBCandidateCells = CandidateCells;
+        Counts.HZBRenderCells = RenderCells;
+        Counts.HZBOccludedCells = CandidateCells >= RenderCells
+            ? CandidateCells - RenderCells : 0;
         Counts.bHZBEnabled = bEnabled;
         Counts.bHZBDispatched = bDispatched;
     }

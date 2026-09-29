@@ -1067,12 +1067,11 @@ float FEditor::DrawStatUnit(ImDrawList* DrawList, float X, float Y)
 	DrawShadowedText(DrawList, ImVec2(X, Y), IM_COL32(50, 255, 50, 255), Buffer);
 	Y += LineHeight;
 
-	sprintf_s(Buffer, "HZB Input/Cells: %u / %u", Submission.HZBInputPrimitives, Submission.HZBCells);
+	sprintf_s(Buffer, "HZB Candidate / Render: %u / %u", Submission.HZBCandidateCells, Submission.HZBRenderCells);
 	DrawShadowedText(DrawList, ImVec2(X, Y), IM_COL32(50, 255, 50, 255), Buffer);
 	Y += LineHeight;
 
-	sprintf_s(Buffer, "HZB Culled: %u cells, %u primitives", Submission.HZBOccludedCells,
-		Submission.HZBOccludedPrimitives);
+	sprintf_s(Buffer, "HZB Culled: %u cells", Submission.HZBOccludedCells);
 	DrawShadowedText(DrawList, ImVec2(X, Y), IM_COL32(50, 255, 50, 255), Buffer);
 	Y += LineHeight;
 	return Y + 6.0f;

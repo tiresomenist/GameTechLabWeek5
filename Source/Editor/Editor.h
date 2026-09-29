@@ -240,7 +240,7 @@ public:
 public:
 	friend void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera, 
 		TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects,
-		TArray<FVisibleGridCell>& VisibleGridCells, const FFrustum* Frustum);
+		const TArray<FGridCellCandidate>& RenderGridCells, const FFrustum* Frustum);
 	friend TArray<FPrimitiveRenderData> RenderUtil::GetGizmoList(FEditor* Editor, UScene* Scene,const UCameraComponent* Camera,
 		const D3D11_VIEWPORT& Viewport, TArray<FRenderObjectData>& Objects);
 };

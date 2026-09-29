@@ -31,15 +31,14 @@ namespace
 // 현재 View의 Bounds와 Frustum을 검사하고 객체별 렌더 요청을 수집한다.
 void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
 	TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects,
-	TArray<FVisibleGridCell>& VisibleGridCells, const FFrustum* Frustum)
+	const TArray<FGridCellCandidate>& RenderGridCells, const FFrustum* Frustum)
 {
 	RenderList.Empty();
-	VisibleGridCells.Empty();
 	if (!Editor || !Scene || !Camera) return;
 
 	const UActorComponent* SelectedComponent = Editor->GetSelectedSceneComponent();
 
-	auto AddPrimitive = [&](UPrimitiveComponent* Primitive, TArray<uint32>* GridPrimitiveIndices = nullptr)
+	auto AddPrimitive = [&](UPrimitiveComponent* Primitive)
 		{
 			if (!Primitive->IsVisible())
 			{
@@ -76,32 +75,22 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 
 			const uint32 ObjectIndex = static_cast<uint32>(Objects.Num());
 			Objects.Add(Object);
+
 			for (int32 Index = FirstIndex; Index < EndIndex; ++Index)
 			{
 				RenderList[Index].ObjectIndex = ObjectIndex;
-				const FPrimitiveRenderData& Data = RenderList[Index];
-				if (GridPrimitiveIndices && Data.Material &&
-					Data.Material->BlendMode != EPrimitiveBlendMode::Additive &&
-					(Data.Flags & Primitive_Selected) == 0)
-				{
-					GridPrimitiveIndices->Add(static_cast<uint32>(Index));
-				}
 			}
 		};
 
-	// 정적 메시를 고정 크기 셀에 한 번만 배치하고, 매 프레임에는 셀 AABB만 먼저 Frustum과 비교
-	for (const FStaticUniformGridCell& Cell : Scene->GetStaticUniformGrid())
+	for (const FGridCellCandidate& Candidate : RenderGridCells)
 	{
-		if (Frustum && !Frustum->Intersects(Cell.ContentBounds)) continue;
-		FVisibleGridCell VisibleCell{};
-		VisibleCell.Key = Cell.Key;
-		VisibleCell.SpatialBounds = Cell.SpatialBounds;
-		VisibleCell.OcclusionBounds = Cell.ContentBounds;
-		for (UPrimitiveComponent* Primitive : Cell.Primitives)
+		const FStaticUniformGridCell* Cell = Candidate.SourceCell;
+		if (!Cell) { continue; }
+
+		for (UPrimitiveComponent* Primitive : Cell->Primitives)
 		{
-			AddPrimitive(Primitive, &VisibleCell.PrimitiveIndices);
+			AddPrimitive(Primitive);
 		}
-		if (!VisibleCell.PrimitiveIndices.IsEmpty()) VisibleGridCells.Add(std::move(VisibleCell));
 	}
 
 	for (UPrimitiveComponent* Primitive : Scene->GetStaticUniformGridFallbackPrimitives())
@@ -284,5 +273,26 @@ void RenderUtil::SubmitLineDrawRequests(FEditor* Editor, UScene* Scene, const UC
 		{
 			Submit(Gizmo->BuildLineDrawRequest(GridSettings, CameraPosition));
 		}
+	}
+}
+
+void RenderUtil::GatherGridCellCandidates(UScene* Scene, const FFrustum* Frustum,
+	TArray<FGridCellCandidate>& OutCandidates)
+{
+	OutCandidates.Empty();
+
+	for (const FStaticUniformGridCell& Cell : Scene->GetStaticUniformGrid())
+	{
+		if (Frustum && !Frustum->Intersects(Cell.ContentBounds))
+		{
+			continue;
+		}
+
+		FGridCellCandidate Candidate{};
+		Candidate.Key = Cell.Key;
+		Candidate.OcclusionBounds = Cell.ContentBounds;
+		Candidate.SourceCell = &Cell;
+
+		OutCandidates.Add(Candidate);
 	}
 }
