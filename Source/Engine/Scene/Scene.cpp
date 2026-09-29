@@ -501,7 +501,9 @@ void UScene::RebuildBVH()
 void UScene::UpdateBVHForActor(AActor* Actor)
 {
     if (!Actor)
+    {
         return;
+    }
 
     // 부모 컴포넌트의 이동으로 위치가 바뀐 자식 메시도 갱신한다.
     for (UActorComponent* Component : Actor->GetComponents())

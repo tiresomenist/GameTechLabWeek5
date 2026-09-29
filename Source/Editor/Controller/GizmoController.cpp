@@ -406,8 +406,7 @@ void FGizmoController::Tick()
     // Todo: BVH
     if (bTransformChanged && Editor->GetCurrentScene())
     {
-        Editor->GetCurrentScene()->UpdateBVHForActor(
-            SelectedObject->GetOwner());
+        Editor->GetCurrentScene()->UpdateBVHForActor(SelectedObject->GetOwner());
     }
 
 	if (!Input.GetKey(GInputManager::EI_LMOUSE)) EndDrag();
