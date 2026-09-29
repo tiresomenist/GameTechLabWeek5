@@ -16,7 +16,8 @@ enum class EViewportType;
 namespace RenderUtil
 {
 	void GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
-		TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects, const FFrustum* Frustum = nullptr);
+		TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects,
+		TArray<FVisibleGridCell>& VisibleGridCells, const FFrustum* Frustum = nullptr);
 	TArray<FPrimitiveRenderData> GetGizmoList(FEditor* Editor, UScene* Scene,
 			const UCameraComponent* Camera,	const D3D11_VIEWPORT& Viewport,
 		TArray<FRenderObjectData>& Objects);

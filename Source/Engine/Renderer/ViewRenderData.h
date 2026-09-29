@@ -33,11 +33,20 @@ struct FRenderObjectData
     const UPrimitiveComponent* SourcePrimitive = nullptr;
 };
 
+struct FVisibleGridCell
+{
+    uint64 Key = 0;
+    FBoundingBox SpatialBounds;
+    FBoundingBox OcclusionBounds;
+    TArray<uint32> PrimitiveIndices;
+};
+
 struct FViewRenderData
 {
     FRenderViewSnapshot View;
     TArray<FRenderObjectData> Objects;
     TArray<FPrimitiveRenderData> Primitives;
+    TArray<FVisibleGridCell> VisibleGridCells;
     TArray<FPrimitiveRenderData> Gizmos;
     FLineDrawRequest Lines;
     const UCameraComponent* TextCamera = nullptr;
@@ -47,6 +56,7 @@ struct FViewRenderData
         View = FRenderViewSnapshot{};
         Objects.Empty();
         Primitives.Empty();
+        VisibleGridCells.Empty();
         Gizmos.Empty();
         Lines.Vertices.Empty();
         Lines.Indices.Empty();

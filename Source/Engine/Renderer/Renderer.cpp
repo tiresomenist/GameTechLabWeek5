@@ -536,7 +536,8 @@ void FRenderer::RenderOneView(FEditor* Editor, UScene* Scene, const FRenderView&
 
 	if (View.ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives))
 	{
-		RenderUtil::GetRenderList(Editor, Scene, Camera,ViewData.Primitives, ViewData.Objects, &Frustum);
+		RenderUtil::GetRenderList(Editor, Scene, Camera, ViewData.Primitives, ViewData.Objects,
+			ViewData.VisibleGridCells, &Frustum);
 	}
 	if (View.bDrawEditorGizmos)
 	{
@@ -593,7 +594,6 @@ void FRenderer::Render(float DeltaTime,FEditor* Editor,UScene* Scene)
 	FinishHZBFrame();
 	GContext& Context = *GContext::GetInstance();
 	Context.UnbindRenderTargets();
-	//BuildHZBMip0();
 	Context.SetRenderTargets(FrameBufferRTV.Get(), DepthStencilView.Get());
 
 	SetViewportAndScissor(ViewportInfo);

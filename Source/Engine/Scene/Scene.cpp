@@ -15,6 +15,8 @@
 #include "Engine/Component/WidgetComponent.h"
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
 
+#include "Core/Container/Map.h"
+
 #include "Core/Serialization/Archive.h"
 #include "Engine/Object/ClassRegistry.h"
 #include "Engine/Log.h"
@@ -24,6 +26,24 @@
 
 namespace
 {
+	constexpr float StaticUniformGridCellSize = 4.0f;
+
+	uint64 MakeStaticUniformGridKey(int32 X, int32 Y, int32 Z)
+	{
+		constexpr uint64 Mask = (1ull << 21) - 1;
+		return ((static_cast<uint64>(X) & Mask) << 42) |
+			((static_cast<uint64>(Y) & Mask) << 21) |
+			(static_cast<uint64>(Z) & Mask);
+	}
+
+	FBoundingBox MakeStaticUniformGridBounds(int32 X, int32 Y, int32 Z)
+	{
+		const FVector Min(X * StaticUniformGridCellSize, Y * StaticUniformGridCellSize,
+			Z * StaticUniformGridCellSize);
+		return FBoundingBox(Min, Min + FVector(StaticUniformGridCellSize, StaticUniformGridCellSize,
+			StaticUniformGridCellSize));
+	}
+
 	struct FPendingActorInfo
 	{
 		AActor* Actor;
@@ -390,6 +410,7 @@ void UScene::Serialize(FArchive& Archive)
     // Todo: BVH
     BVHPause.Restore();
     RebuildBVH();
+    InvalidateStaticUniformGrid();
 }
 
 
@@ -460,6 +481,10 @@ void UScene::ClearActors()
 
     // 전체 삭제에서는 컴포넌트마다 배열을 검색하여 제거하지 않습니다.
     BVH.Clear();
+    // 그리드가 보관한 컴포넌트 참조도 객체 삭제 전에 해제합니다.
+    StaticUniformGrid.Empty();
+    StaticUniformGridFallbackPrimitives.Empty();
+    InvalidateStaticUniformGrid();
     PrimitiveComponents.Empty();
     TextComponents.Empty();
     WidgetComponents.Empty();
@@ -481,6 +506,100 @@ void UScene::ClearActors()
     Actors.Empty();
 }
 
+void UScene::InvalidateStaticUniformGrid()
+{
+	bStaticUniformGridDirty = true;
+}
+
+const TArray<FStaticUniformGridCell>& UScene::GetStaticUniformGrid() const
+{
+	BuildStaticUniformGrid();
+	return StaticUniformGrid;
+}
+
+const TArray<UPrimitiveComponent*>& UScene::GetStaticUniformGridFallbackPrimitives() const
+{
+	BuildStaticUniformGrid();
+	return StaticUniformGridFallbackPrimitives;
+}
+
+void UScene::BuildStaticUniformGrid() const
+{
+	if (!bStaticUniformGridDirty) return;
+
+	StaticUniformGrid.Empty();
+	StaticUniformGridFallbackPrimitives.Empty();
+	TMap<uint64, int32> CellIndices;
+	ForEachPrimitive([&](UPrimitiveComponent* Primitive)
+		{
+			if (!Primitive->IsA(UStaticMeshComponent::GetClass())) return;
+
+			FVector LocalMin{};
+			FVector LocalMax{};
+			if (!Primitive->GetLocalBounds(LocalMin, LocalMax))
+			{
+				StaticUniformGridFallbackPrimitives.Add(Primitive);
+				return;
+			}
+
+			const FBoundingBox WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Primitive->GetWorldMatrix());
+			const FVector Center = (WorldBounds.Min + WorldBounds.Max) * 0.5f;
+			const int32 CellX = static_cast<int32>(std::floor(Center.X / StaticUniformGridCellSize));
+			const int32 CellY = static_cast<int32>(std::floor(Center.Y / StaticUniformGridCellSize));
+			const int32 CellZ = static_cast<int32>(std::floor(Center.Z / StaticUniformGridCellSize));
+			const int32 MinCellX = static_cast<int32>(std::floor(WorldBounds.Min.X / StaticUniformGridCellSize));
+			const int32 MinCellY = static_cast<int32>(std::floor(WorldBounds.Min.Y / StaticUniformGridCellSize));
+			const int32 MinCellZ = static_cast<int32>(std::floor(WorldBounds.Min.Z / StaticUniformGridCellSize));
+			const int32 MaxCellX = static_cast<int32>(std::floor(WorldBounds.Max.X / StaticUniformGridCellSize));
+			const int32 MaxCellY = static_cast<int32>(std::floor(WorldBounds.Max.Y / StaticUniformGridCellSize));
+			const int32 MaxCellZ = static_cast<int32>(std::floor(WorldBounds.Max.Z / StaticUniformGridCellSize));
+
+            const int32 SpanX = MaxCellX - MinCellX + 1;
+            const int32 SpanY = MaxCellY - MinCellY + 1;
+            const int32 SpanZ = MaxCellZ - MinCellZ + 1;
+
+            const bool bTooLargeForGrid = SpanX > 2 || SpanY > 2 || SpanZ > 2;
+			if (bTooLargeForGrid)
+			{
+				StaticUniformGridFallbackPrimitives.Add(Primitive);
+				return;
+			}
+
+			const uint64 Key = MakeStaticUniformGridKey(CellX, CellY, CellZ);
+			int32* CellIndex = CellIndices.Find(Key);
+
+			if (CellIndex == nullptr)
+			{
+				FStaticUniformGridCell NewCell{};
+				NewCell.Key = Key;
+				NewCell.SpatialBounds = MakeStaticUniformGridBounds(CellX, CellY, CellZ);
+				StaticUniformGrid.Add(std::move(NewCell));
+				const int32 NewIndex = StaticUniformGrid.Num() - 1;
+				CellIndices.Add(Key, NewIndex);
+				CellIndex = CellIndices.Find(Key);
+			}
+            FStaticUniformGridCell& Cell = StaticUniformGrid[*CellIndex];
+
+            if (Cell.Primitives.IsEmpty())
+            {
+                Cell.ContentBounds = WorldBounds;
+            }
+            else
+            {
+                // 이미 들어 있다면 실제 점유 영역을 확장
+                Cell.ContentBounds.Min.X = std::min(Cell.ContentBounds.Min.X, WorldBounds.Min.X);
+                Cell.ContentBounds.Min.Y = std::min(Cell.ContentBounds.Min.Y, WorldBounds.Min.Y);
+                Cell.ContentBounds.Min.Z = std::min(Cell.ContentBounds.Min.Z, WorldBounds.Min.Z);
+
+                Cell.ContentBounds.Max.X = std::max(Cell.ContentBounds.Max.X, WorldBounds.Max.X);
+                Cell.ContentBounds.Max.Y = std::max(Cell.ContentBounds.Max.Y, WorldBounds.Max.Y);
+                Cell.ContentBounds.Max.Z = std::max(Cell.ContentBounds.Max.Z, WorldBounds.Max.Z);
+            }
+            Cell.Primitives.Add(Primitive);
+		});
+	bStaticUniformGridDirty = false;
+}
+
 UScene::~UScene()
 {
     ClearActors();
@@ -489,10 +608,14 @@ UScene::~UScene()
 // Scene.cpp
 void UScene::UpdateBVH(UStaticMeshComponent* Component)
 {
-    if (bDeferBVHUpdates || !Component || !Component->bRegisteredWithScene) return;
+    if (!Component || !Component->bRegisteredWithScene) return;
 
     AActor* Owner = Component->GetOwner();
     if (!Owner || Owner->GetScene() != this) return;
+
+    // 등록과 Bounds 변경은 BVH 갱신 보류 중에도 그리드에 반영해야 합니다.
+    InvalidateStaticUniformGrid();
+    if (bDeferBVHUpdates) return;
 
     // Bounds가 없으면 FSceneBVH::Update가 기존 리프를 제거합니다.
     BVH.Update(Component);
@@ -500,7 +623,10 @@ void UScene::UpdateBVH(UStaticMeshComponent* Component)
 
 void UScene::RemoveFromBVH(UStaticMeshComponent* Component)
 {
-    if (Component) BVH.Remove(Component);
+    if (!Component) return;
+    BVH.Remove(Component);
+    // 다음 조회에서 삭제된 컴포넌트를 제외한 그리드를 재구축합니다.
+    InvalidateStaticUniformGrid();
 }
 
 void UScene::RebuildBVH()

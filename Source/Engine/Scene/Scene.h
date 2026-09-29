@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include "Core/Container/Array.h"
+#include "Core/Math/Box.h"
 #include "Engine/Actor/Actor.h"
 #include "Engine/Object/ObjectFactory.h"
 #include "Engine/Renderer/RenderUtil.h"
@@ -10,6 +11,14 @@
 
 // Todo: BVH
 #include "Engine/Scene/SceneBVH.h"
+
+struct FStaticUniformGridCell
+{
+	uint64 Key = 0;
+	FBoundingBox SpatialBounds;  // 고정 4x4
+	FBoundingBox ContentBounds;  // world AABB 합집합
+	TArray<UPrimitiveComponent*> Primitives;
+};
 
 struct FPrimitiveRenderData;
 class UCameraComponent;
@@ -66,6 +75,9 @@ public:
 
 	void Destroy(UObject* Object);
 	void DestroyActor(AActor* Actor);
+	const TArray<FStaticUniformGridCell>& GetStaticUniformGrid() const;
+	const TArray<UPrimitiveComponent*>& GetStaticUniformGridFallbackPrimitives() const;
+	void InvalidateStaticUniformGrid();
 
 	//외부에서 Primitive 접근 제공
 	template <typename Func>
@@ -179,10 +191,15 @@ protected:
 	/// 저장/불러오기 시에 사용하는 Scene의 메인 Perspective 카메라의 정보
 	/// </summary>
 	FCameraSaveData MainCameraSaveData{};
+	mutable bool bStaticUniformGridDirty = true;
+	mutable TArray<FStaticUniformGridCell> StaticUniformGrid;
+	mutable TArray<UPrimitiveComponent*> StaticUniformGridFallbackPrimitives;
+	void BuildStaticUniformGrid() const;
 
 public:
 	friend void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
-		TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects, const FFrustum* Frustum);
+		TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects,
+		TArray<FVisibleGridCell>& VisibleGridCells, const FFrustum* Frustum);
 
 	friend TArray<FPrimitiveRenderData> RenderUtil::GetGizmoList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
 		const D3D11_VIEWPORT& Viewport, TArray<FRenderObjectData>& Objects);
