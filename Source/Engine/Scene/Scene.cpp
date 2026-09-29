@@ -631,7 +631,7 @@ void UScene::RemoveFromBVH(UStaticMeshComponent* Component)
 
 void UScene::RebuildBVH()
 {
-    if (bDeferBVHUpdates) return;
+    /*
     BVH.Clear();
 
     ForEachPrimitive([&](UPrimitiveComponent* Primitive)
@@ -641,6 +641,22 @@ void UScene::RebuildBVH()
                 UpdateBVH(static_cast<UStaticMeshComponent*>(Primitive));
             }
         });
+    */
+
+
+    TArray<UStaticMeshComponent*> Components;
+
+    // Scene BVH에 들어갈 정적 메시를 먼저 모두 수집한다.
+    ForEachPrimitive([&](UPrimitiveComponent* Primitive)
+        {
+            if (Primitive->IsA(UStaticMeshComponent::GetClass()))
+            {
+                Components.Add(static_cast<UStaticMeshComponent*>(Primitive));
+            }
+        });
+
+    // 전체 객체의 배치를 보고 한 번에 트리를 구성한다.
+    BVH.Build(Components);
 }
 
 void UScene::UpdateBVHForActor(AActor* Actor)
