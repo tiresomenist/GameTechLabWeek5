@@ -55,15 +55,15 @@ namespace
 			throw std::runtime_error(std::format("D3D resource creation failed: {}", Result));
 	}
 
-	TArray<FHZBCellData> BuildHZBCellData(const TArray<FVisibleGridCell>& VisibleGridCells)
+	TArray<FHZBCellData> BuildHZBCellData(const TArray<FGridCellCandidate>& Candidates)
 	{
 		TArray<FHZBCellData> Result;
-		Result.Reserve(VisibleGridCells.Num());
-		for (const FVisibleGridCell& Cell : VisibleGridCells)
+		Result.Reserve(Candidates.Num());
+		for (const FGridCellCandidate& Candidate : Candidates)
 		{
 			FHZBCellData Data{};
-			Data.BoundsMin = FVector4(Cell.OcclusionBounds.Min, 1.0f);
-			Data.BoundsMax = FVector4(Cell.OcclusionBounds.Max, 1.0f);
+			Data.BoundsMin = FVector4(Candidate.OcclusionBounds.Min, 0.0f);
+			Data.BoundsMax = FVector4(Candidate.OcclusionBounds.Max, 0.0f);
 			Result.Add(Data);
 		}
 		return Result;
@@ -393,15 +393,12 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 {
 	PrimitiveVisibility.SetNum(Data.Primitives.Num());
 	for (uint32& Visible : PrimitiveVisibility) Visible = 1;
-	uint32 CellCount = 0;
-	uint32 OccludedCellCount = 0;
-	uint32 OccludedPrimitiveCount = 0;
 	bool bDispatched = false;
 
 	if (!bEnableHZBOcclusion)
 	{
-		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.Primitives.Num()), CellCount,
-			OccludedCellCount, OccludedPrimitiveCount, false, bDispatched);
+		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()), 
+			Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
 		return;
 	}
 
@@ -420,8 +417,8 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 	{
 		// 첫 프레임이나 카메라 변경 이전의 결과는 사용하지 않음
 		State.Culler.Release();
-		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.Primitives.Num()), CellCount,
-			OccludedCellCount, OccludedPrimitiveCount, true, bDispatched);
+		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()),
+			Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
 		return;
 	}
 
@@ -430,31 +427,32 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 	if (!Shader || !HZBCullConstantBuffer)
 	{
 		State.Culler.Release();
-		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.Primitives.Num()), CellCount,
-			OccludedCellCount, OccludedPrimitiveCount, true, bDispatched);
+		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()),
+			Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
 		return;
 	}
 
 	State.Culler.TryReadback(DeviceContext);
-	const TArray<FVisibleGridCell>& Cells = Data.VisibleGridCells;
-	CellCount = static_cast<uint32>(Cells.Num());
-	if (Cells.IsEmpty())
+
+	const TArray<FGridCellCandidate>& HZBCells = Data.GridCellCandidates;
+
+	if (HZBCells.IsEmpty())
 	{
 		State.Culler.Release();
-		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.Primitives.Num()), CellCount,
-			OccludedCellCount, OccludedPrimitiveCount, true, bDispatched);
+		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()),
+			Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
 		return;
 	}
 
 	// 이전 읽기가 끝난 경우에만 단일 staging 버퍼에 새 요청을 보낸다.
 	if (!State.Culler.IsReadbackPending())
 	{
-		const TArray<FHZBCellData> GPUCells = BuildHZBCellData(Cells);
+		const TArray<FHZBCellData> GPUCells = BuildHZBCellData(HZBCells);
 		if (!State.Culler.UploadCells(D3DDevice, DeviceContext, GPUCells))
 		{
 			State.Culler.Release();
-			SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.Primitives.Num()), CellCount,
-				OccludedCellCount, OccludedPrimitiveCount, true, bDispatched);
+			SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()),
+				Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
 			return;
 		}
 
@@ -487,27 +485,15 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 		DeviceContext->CSSetConstantBuffers(1, 1, &NullBuffer);
 		DeviceContext->CSSetShader(nullptr, nullptr, 0);
 		TArray<uint64> CellKeys;
-		CellKeys.Reserve(Cells.Num());
-		for (const FVisibleGridCell& Cell : Cells)
+		CellKeys.Reserve(HZBCells.Num());
+		for (const FGridCellCandidate& Cell : HZBCells)
 		{
 			CellKeys.Add(Cell.Key);
 		}
 		State.Culler.QueueReadback(DeviceContext, CellKeys);
 	}
-
-	// 선택 객체 등 셀에서 제외한 요청은 기본 가시성을 그대로 유지한다.
-	for (const FVisibleGridCell& Cell : Cells)
-	{
-		if (State.Culler.IsVisibleLastFrame(Cell.Key)) continue;
-		++OccludedCellCount;
-		for (uint32 ItemIndex : Cell.PrimitiveIndices)
-		{
-			PrimitiveVisibility[ItemIndex] = 0;
-			++OccludedPrimitiveCount;
-		}
-	}
-	SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.Primitives.Num()), CellCount,
-		OccludedCellCount, OccludedPrimitiveCount, true, bDispatched);
+	SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()),
+		Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
 }
 
 // 해당 View의 컬링 결과를 반영한 뒤 기존 패스 순서로 렌더링한다.
@@ -557,6 +543,42 @@ void FViewRenderer::RenderView(
 	RenderVisibleText(Data);
 
 	UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
+}
+
+void FViewRenderer::FilterGridCellCandidates(const FRenderViewSnapshot& View,
+	const FHZBViewInput& HZB, const TArray<FGridCellCandidate>& Candidates,
+	TArray<FGridCellCandidate>& OutRenderGridCells)
+{
+	OutRenderGridCells.Empty();
+	OutRenderGridCells.Reserve(Candidates.Num());
+
+	FHZBViewState& State = HZBViewStates[HZB.ViewId];
+
+	const bool bCanUseHistory = bEnableHZBOcclusion && HZB.bValid && HZB.Texture && HZB.MipCount > 0
+		&& State.bHasPreviousView && State.PreviousFrameIndex + 1 == HZB.FrameIndex 
+		&& State.PreviousGeneration == HZB.Generation 
+		&& State.PreviousScene == HZB.Scene 
+		&& IsSameHZBView(State.PreviousView, View);
+
+	if (!bCanUseHistory)
+	{
+		for (const FGridCellCandidate& Candidate : Candidates)
+		{
+			OutRenderGridCells.Add(Candidate);
+		}
+		return;
+	}
+
+	// 완료된 GPU readback이 있으면 map을 이번 frame 전에 갱신
+	State.Culler.TryReadback(DeviceContext);
+	for (const FGridCellCandidate& Candidate : Candidates)
+	{
+		if (State.Culler.IsVisibleLastFrame(Candidate.Key))
+		{
+			OutRenderGridCells.Add(Candidate);
+		}
+	}
+
 }
 
 void FViewRenderer::UpdateTransformConstantBuffer(const FMatrix& World, const FMatrix& VP)

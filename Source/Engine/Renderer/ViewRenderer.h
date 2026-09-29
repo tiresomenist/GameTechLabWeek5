@@ -67,6 +67,9 @@ public:
 	void Create(ID3D11Device* InDevice, ID3D11DeviceContext* InContext);
 	void Shutdown();
 	void RenderView(const FViewRenderData& Data, const FHZBViewInput& HZB);
+	void FilterGridCellCandidates(const FRenderViewSnapshot& View,
+		const FHZBViewInput& HZB, const TArray<FGridCellCandidate>& Candidates,
+		TArray<FGridCellCandidate>& OutRenderGridCells);
 
 	// 프레임 전체의 제출 통계를 초기화한다.
 	void BeginSubmissionFrame()

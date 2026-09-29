@@ -534,10 +534,27 @@ void FRenderer::RenderOneView(FEditor* Editor, UScene* Scene, const FRenderView&
 
 	const FFrustum Frustum = FFrustum::FrustumFromViewProjection(ViewData.View.ViewProjection);
 
+	FHZBViewInput HZB{};
+	HZB.Texture = HierarchicalZBuffer.GetSRV();
+	HZB.Scene = Scene;
+	HZB.MipCount = HierarchicalZBuffer.GetMipCount();
+	HZB.ViewId = static_cast<uint32>(View.ViewType);
+	HZB.FrameIndex = HZBFrameIndex;
+	HZB.Generation = HZBGeneration;
+	HZB.bValid = bHZBValid && View.ViewSettings.ViewMode != EViewModeIndex::VMI_Wireframe &&
+		View.ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives) &&
+		View.Viewport.MinDepth == 0.0f && View.Viewport.MaxDepth == 1.0f;
+
 	if (View.ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives))
 	{
+		RenderUtil::GatherGridCellCandidates(Scene, &Frustum, ViewData.GridCellCandidates);
+
+		TArray<FGridCellCandidate> RenderGridCells;
+		ViewRenderer.FilterGridCellCandidates(ViewData.View, HZB, ViewData.GridCellCandidates, RenderGridCells);
+		ViewData.HZBRenderCellCount = static_cast<uint32>(RenderGridCells.Num());
+
 		RenderUtil::GetRenderList(Editor, Scene, Camera, ViewData.Primitives, ViewData.Objects,
-			ViewData.VisibleGridCells, &Frustum);
+			RenderGridCells, &Frustum);
 	}
 	if (View.bDrawEditorGizmos)
 	{
@@ -555,17 +572,6 @@ void FRenderer::RenderOneView(FEditor* Editor, UScene* Scene, const FRenderView&
 		};
 
 	RenderUtil::SubmitLineDrawRequests(Editor,Scene,Camera,View.ViewSettings,Submit,View.ViewType);
-
-	FHZBViewInput HZB{};
-	HZB.Texture = HierarchicalZBuffer.GetSRV();
-	HZB.Scene = Scene;
-	HZB.MipCount = HierarchicalZBuffer.GetMipCount();
-	HZB.ViewId = static_cast<uint32>(View.ViewType);
-	HZB.FrameIndex = HZBFrameIndex;
-	HZB.Generation = HZBGeneration;
-	HZB.bValid = bHZBValid && View.ViewSettings.ViewMode != EViewModeIndex::VMI_Wireframe &&
-		View.ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives) &&
-		View.Viewport.MinDepth == 0.0f && View.Viewport.MaxDepth == 1.0f;
 
 	ViewRenderer.RenderView(ViewData, HZB);
 	ViewRenderer.ReleaseViewReferences();
