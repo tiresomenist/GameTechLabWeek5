@@ -110,9 +110,8 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 	}
 
 	// 비정적 메시에는 기존 개별 경로를 유지
-	Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
+	Scene->ForEachNonStaticMesh([&](UPrimitiveComponent* Primitive)
 		{
-			if (Primitive->IsA(UStaticMeshComponent::GetClass())) return;
 			AddPrimitive(Primitive);
 		});
 

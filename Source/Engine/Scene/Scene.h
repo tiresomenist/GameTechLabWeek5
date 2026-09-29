@@ -110,6 +110,13 @@ public:
 	}
 
 	template <typename Func>
+	void ForEachNonStaticMesh(Func&& Function) const
+	{
+		for (UPrimitiveComponent* Primitive : NonStaticMeshComponents)
+			Function(Primitive);
+	}
+
+	template <typename Func>
 	void ForEachBillboardIcon(Func&& Function) const
 	{
 		// TODO: 공통 아이콘 타입 도입 전까지 SpotLight를 전달합니다.
@@ -166,7 +173,7 @@ private:
 	TArray<UPrimitiveComponent*> PrimitiveComponents;
 	TArray<UTextComponent*> TextComponents;
 	TArray<UWidgetComponent*> WidgetComponents;
-
+	TArray<UPrimitiveComponent*>NonStaticMeshComponents;
 	// TODO: 공통 아이콘 구조 도입 후 SpotLight 전용 타입을 일반화합니다.
 	TArray<USpotLightComponent*> BillboardIcons;
 
