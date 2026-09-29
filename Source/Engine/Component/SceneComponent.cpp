@@ -154,6 +154,8 @@ void USceneComponent::UpdateWorldTransform() const
         ? LocalSRTMatrix * AttachParent->GetWorldMatrix()
         : LocalSRTMatrix;
 
+    OnWorldBoundsChanged();
+
     // 부모 Transform이 바뀌면 모든 자식의 캐시도 즉시 갱신한다.
     for (USceneComponent* Child : AttachChildren)
     {

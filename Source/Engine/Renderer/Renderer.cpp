@@ -536,7 +536,8 @@ void FRenderer::RenderOneView(FEditor* Editor, UScene* Scene, const FRenderView&
 
 	if (View.ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives))
 	{
-		RenderUtil::GetRenderList(Editor, Scene, Camera,ViewData.Primitives, ViewData.Objects, &Frustum);
+		RenderUtil::GetRenderList(Editor, Scene, Camera, ViewData.Primitives, ViewData.Objects,
+			ViewData.VisibleGridCells, &Frustum);
 	}
 	if (View.bDrawEditorGizmos)
 	{
@@ -567,6 +568,8 @@ void FRenderer::RenderOneView(FEditor* Editor, UScene* Scene, const FRenderView&
 		View.Viewport.MinDepth == 0.0f && View.Viewport.MaxDepth == 1.0f;
 
 	ViewRenderer.RenderView(ViewData, HZB);
+	ViewRenderer.ReleaseViewReferences();
+	ViewData.Reset();
 }
 
 // 단일 View -> 이제 더이상 다중 View를 호출하지 않음
@@ -591,7 +594,6 @@ void FRenderer::Render(float DeltaTime,FEditor* Editor,UScene* Scene)
 	FinishHZBFrame();
 	GContext& Context = *GContext::GetInstance();
 	Context.UnbindRenderTargets();
-	//BuildHZBMip0();
 	Context.SetRenderTargets(FrameBufferRTV.Get(), DepthStencilView.Get());
 
 	SetViewportAndScissor(ViewportInfo);

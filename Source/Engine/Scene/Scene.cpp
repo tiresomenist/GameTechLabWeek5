@@ -15,14 +15,35 @@
 #include "Engine/Component/WidgetComponent.h"
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
 
+#include "Core/Container/Map.h"
+
 #include "Core/Serialization/Archive.h"
 #include "Engine/Object/ClassRegistry.h"
 #include "Engine/Log.h"
-
+#include "Engine/Component/Primitive/TextComponent.h"
+#include "Engine/Component/Light/SpotLightComponent.h"
 // Todo: BVH
 
 namespace
 {
+	constexpr float StaticUniformGridCellSize = 4.0f;
+
+	uint64 MakeStaticUniformGridKey(int32 X, int32 Y, int32 Z)
+	{
+		constexpr uint64 Mask = (1ull << 21) - 1;
+		return ((static_cast<uint64>(X) & Mask) << 42) |
+			((static_cast<uint64>(Y) & Mask) << 21) |
+			(static_cast<uint64>(Z) & Mask);
+	}
+
+	FBoundingBox MakeStaticUniformGridBounds(int32 X, int32 Y, int32 Z)
+	{
+		const FVector Min(X * StaticUniformGridCellSize, Y * StaticUniformGridCellSize,
+			Z * StaticUniformGridCellSize);
+		return FBoundingBox(Min, Min + FVector(StaticUniformGridCellSize, StaticUniformGridCellSize,
+			StaticUniformGridCellSize));
+	}
+
 	struct FPendingActorInfo
 	{
 		AActor* Actor;
@@ -35,6 +56,30 @@ namespace
 		USceneComponent* Component;
 		std::optional<uint32> AttachParentUUID;
 	};
+    struct FScopedBVHUpdatePause
+    {
+        bool& Flag;
+        bool PreviousValue;
+
+        // 로딩인 경우에만 갱신 보류를 활성화합니다.
+        FScopedBVHUpdatePause(bool& InFlag, bool bPause)
+            : Flag(InFlag), PreviousValue(InFlag)
+        {
+            if (bPause) Flag = true;
+        }
+
+        // 정상 종료와 기존 예외 경로 모두에서 이전 상태로 되돌립니다.
+        ~FScopedBVHUpdatePause()
+        {
+            Restore();
+        }
+
+        // 최종 BVH 재구축 전에 갱신 보류를 해제합니다.
+        void Restore()
+        {
+            Flag = PreviousValue;
+        }
+    };
 }
 
 FSceneType* UScene::GetStaticSceneType()
@@ -94,6 +139,9 @@ void UScene::CreateMainCamera()
 void UScene::Serialize(FArchive& Archive)
 {
     const bool bLoading = Archive.IsLoading();
+
+    // BVH 구축을 위해 일시정지
+    FScopedBVHUpdatePause BVHPause(bDeferBVHUpdates, bLoading);
 
     // 메인 카메라 처리. 일단은 값이 없어도 기본값으로 설정
     FCameraSaveData PerspectiveCamera = MainCameraSaveData;
@@ -360,7 +408,9 @@ void UScene::Serialize(FArchive& Archive)
     EnsureUUIDWidgets();
 
     // Todo: BVH
+    BVHPause.Restore();
     RebuildBVH();
+    InvalidateStaticUniformGrid();
 }
 
 
@@ -410,98 +460,192 @@ void UScene::Destroy(UObject* Object)
 
 void UScene::DestroyActor(AActor* Actor)
 {
-    if (Actor == nullptr)
-    {
-        return;
-    }
+    if (!Actor || Actor->GetScene() != this) return;
 
-    bool bExistsInScene = false;
-    for (AActor* ExistingActor : Actors)
-    {
-        if (ExistingActor == Actor)
-        {
-            bExistsInScene = true;
-            break;
-        }
-    }
-    if (!bExistsInScene)
-    {
-        return;
-    }
-
-    // 복사본을 사용한다. 자식 삭제 과정에서 부모의 ChildActors는 함께 갱신된다.
+    // 자식 삭제 시 원본 ChildActors가 변경되므로 복사본을 순회합니다.
     const TArray<AActor*> Children = Actor->GetChildActors();
     for (AActor* Child : Children)
-    {
         DestroyActor(Child);
-    }
 
-    for (int32 Index = 0; Index < Actors.Num(); ++Index)
+    Actor->EndPlay();
+
+    // 목록과 BVH에서 빠진 뒤에 객체를 삭제합니다.
+    DetachActor(Actor);
+    delete Actor;
+}
+
+void UScene::ClearActors()
+{
+    // 종료 처리는 아직 Scene과 컴포넌트가 연결된 상태에서 수행합니다.
+    EndPlay();
+
+    // 전체 삭제에서는 컴포넌트마다 배열을 검색하여 제거하지 않습니다.
+    BVH.Clear();
+    // 그리드가 보관한 컴포넌트 참조도 객체 삭제 전에 해제합니다.
+    StaticUniformGrid.Empty();
+    StaticUniformGridFallbackPrimitives.Empty();
+    InvalidateStaticUniformGrid();
+    PrimitiveComponents.Empty();
+    TextComponents.Empty();
+    WidgetComponents.Empty();
+    BillboardIcons.Empty();
+    MainCamera = nullptr;
+
+    // 모든 Actor의 연결을 먼저 끊어 삭제 중 BVH 재등록을 막습니다.
+    for (AActor* Actor : Actors)
     {
-        if (Actors[Index] == Actor)
-        {
-            Actor->EndPlay();
-            
-            // Todo: BVH
-            for (UActorComponent* Component : Actor->GetComponents())
-            {
-                if (Component->IsA(UStaticMeshComponent::GetClass()))
-                {
-                    RemoveFromBVH(static_cast<UStaticMeshComponent*>(Component));
-                }
-            }
-            
-            //
-            
-            delete Actor;
-            Actors.RemoveAt(Index);
+        for (UActorComponent* Component : Actor->GetComponents())
+            Component->bRegisteredWithScene = false;
 
-            break;
-        }
+        Actor->Scene = nullptr;
     }
+
+    for (AActor* Actor : Actors)
+        delete Actor;
+
+    Actors.Empty();
+}
+
+void UScene::InvalidateStaticUniformGrid()
+{
+	bStaticUniformGridDirty = true;
+}
+
+const TArray<FStaticUniformGridCell>& UScene::GetStaticUniformGrid() const
+{
+	BuildStaticUniformGrid();
+	return StaticUniformGrid;
+}
+
+const TArray<UPrimitiveComponent*>& UScene::GetStaticUniformGridFallbackPrimitives() const
+{
+	BuildStaticUniformGrid();
+	return StaticUniformGridFallbackPrimitives;
+}
+
+void UScene::BuildStaticUniformGrid() const
+{
+	if (!bStaticUniformGridDirty) return;
+
+	StaticUniformGrid.Empty();
+	StaticUniformGridFallbackPrimitives.Empty();
+	TMap<uint64, int32> CellIndices;
+	ForEachPrimitive([&](UPrimitiveComponent* Primitive)
+		{
+			if (!Primitive->IsA(UStaticMeshComponent::GetClass())) return;
+
+			FVector LocalMin{};
+			FVector LocalMax{};
+			if (!Primitive->GetLocalBounds(LocalMin, LocalMax))
+			{
+				StaticUniformGridFallbackPrimitives.Add(Primitive);
+				return;
+			}
+
+			const FBoundingBox WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Primitive->GetWorldMatrix());
+			const FVector Center = (WorldBounds.Min + WorldBounds.Max) * 0.5f;
+			const int32 CellX = static_cast<int32>(std::floor(Center.X / StaticUniformGridCellSize));
+			const int32 CellY = static_cast<int32>(std::floor(Center.Y / StaticUniformGridCellSize));
+			const int32 CellZ = static_cast<int32>(std::floor(Center.Z / StaticUniformGridCellSize));
+			const int32 MinCellX = static_cast<int32>(std::floor(WorldBounds.Min.X / StaticUniformGridCellSize));
+			const int32 MinCellY = static_cast<int32>(std::floor(WorldBounds.Min.Y / StaticUniformGridCellSize));
+			const int32 MinCellZ = static_cast<int32>(std::floor(WorldBounds.Min.Z / StaticUniformGridCellSize));
+			const int32 MaxCellX = static_cast<int32>(std::floor(WorldBounds.Max.X / StaticUniformGridCellSize));
+			const int32 MaxCellY = static_cast<int32>(std::floor(WorldBounds.Max.Y / StaticUniformGridCellSize));
+			const int32 MaxCellZ = static_cast<int32>(std::floor(WorldBounds.Max.Z / StaticUniformGridCellSize));
+
+            const int32 SpanX = MaxCellX - MinCellX + 1;
+            const int32 SpanY = MaxCellY - MinCellY + 1;
+            const int32 SpanZ = MaxCellZ - MinCellZ + 1;
+
+            const bool bTooLargeForGrid = SpanX > 2 || SpanY > 2 || SpanZ > 2;
+			if (bTooLargeForGrid)
+			{
+				StaticUniformGridFallbackPrimitives.Add(Primitive);
+				return;
+			}
+
+			const uint64 Key = MakeStaticUniformGridKey(CellX, CellY, CellZ);
+			int32* CellIndex = CellIndices.Find(Key);
+
+			if (CellIndex == nullptr)
+			{
+				FStaticUniformGridCell NewCell{};
+				NewCell.Key = Key;
+				NewCell.SpatialBounds = MakeStaticUniformGridBounds(CellX, CellY, CellZ);
+				StaticUniformGrid.Add(std::move(NewCell));
+				const int32 NewIndex = StaticUniformGrid.Num() - 1;
+				CellIndices.Add(Key, NewIndex);
+				CellIndex = CellIndices.Find(Key);
+			}
+            FStaticUniformGridCell& Cell = StaticUniformGrid[*CellIndex];
+
+            if (Cell.Primitives.IsEmpty())
+            {
+                Cell.ContentBounds = WorldBounds;
+            }
+            else
+            {
+                // 이미 들어 있다면 실제 점유 영역을 확장
+                Cell.ContentBounds.Min.X = std::min(Cell.ContentBounds.Min.X, WorldBounds.Min.X);
+                Cell.ContentBounds.Min.Y = std::min(Cell.ContentBounds.Min.Y, WorldBounds.Min.Y);
+                Cell.ContentBounds.Min.Z = std::min(Cell.ContentBounds.Min.Z, WorldBounds.Min.Z);
+
+                Cell.ContentBounds.Max.X = std::max(Cell.ContentBounds.Max.X, WorldBounds.Max.X);
+                Cell.ContentBounds.Max.Y = std::max(Cell.ContentBounds.Max.Y, WorldBounds.Max.Y);
+                Cell.ContentBounds.Max.Z = std::max(Cell.ContentBounds.Max.Z, WorldBounds.Max.Z);
+            }
+            Cell.Primitives.Add(Primitive);
+		});
+	bStaticUniformGridDirty = false;
 }
 
 UScene::~UScene()
 {
-    // Todo: BVH
-    BVH.Clear();
-
-    for (AActor* Actor : Actors)
-    {
-        delete Actor;
-    }
-
-    Actors.Empty();
+    ClearActors();
 }
 
 // Scene.cpp
 void UScene::UpdateBVH(UStaticMeshComponent* Component)
 {
+    if (!Component || !Component->bRegisteredWithScene) return;
+
+    AActor* Owner = Component->GetOwner();
+    if (!Owner || Owner->GetScene() != this) return;
+
+    // 등록과 Bounds 변경은 BVH 갱신 보류 중에도 그리드에 반영해야 합니다.
+    InvalidateStaticUniformGrid();
+    if (bDeferBVHUpdates) return;
+
+    // Bounds가 없으면 FSceneBVH::Update가 기존 리프를 제거합니다.
     BVH.Update(Component);
 }
 
 void UScene::RemoveFromBVH(UStaticMeshComponent* Component)
 {
+    if (!Component) return;
     BVH.Remove(Component);
+    // 다음 조회에서 삭제된 컴포넌트를 제외한 그리드를 재구축합니다.
+    InvalidateStaticUniformGrid();
 }
 
 void UScene::RebuildBVH()
 {
+    if (bDeferBVHUpdates) return;
     BVH.Clear();
 
-    ForEachPrimitive([this](UPrimitiveComponent* Primitive)
+    ForEachPrimitive([&](UPrimitiveComponent* Primitive)
         {
             if (Primitive->IsA(UStaticMeshComponent::GetClass()))
             {
-                BVH.Update(static_cast<UStaticMeshComponent*>(Primitive));
+                UpdateBVH(static_cast<UStaticMeshComponent*>(Primitive));
             }
         });
 }
 
 void UScene::UpdateBVHForActor(AActor* Actor)
 {
-    if (!Actor)
-    {
+    if (!Actor || Actor->GetScene() != this || bDeferBVHUpdates)
         return;
     }
 
@@ -510,29 +654,97 @@ void UScene::UpdateBVHForActor(AActor* Actor)
     {
         if (Component->IsA(UStaticMeshComponent::GetClass()))
         {
-            BVH.Update(static_cast<UStaticMeshComponent*>(Component));
+            UpdateBVH(static_cast<UStaticMeshComponent*>(Component));
         }
     }
 }
 
-bool UScene::RemoveComponent(
-    AActor* Actor,
-    UActorComponent* Component)
+bool UScene::RemoveComponent(AActor* Actor, UActorComponent* Component)
 {
-    if (!Actor || !Component)
-        return false;
+    if (!Actor || Actor->GetScene() != this) return false;
 
-    if (!Actor->RemoveComponent(Component, false))
-        return false;
+    // Actor::RemoveComponent 내부에서 등록 해제와 객체 삭제까지 처리합니다.
+    return Actor->RemoveComponent(Component, true);
+}
+
+void UScene::AttachActor(AActor* Actor)
+{
+    if (!Actor || Actor->Scene) return;
+
+    Actors.Add(Actor);
+    Actor->Scene = this;
+
+    for (UActorComponent* Component : Actor->GetComponents())
+        RegisterComponent(Component);
+}
+
+// AttachActor->RegisterComponent, UnRegisterComponent->DetachActor 순으로 호출.
+void UScene::DetachActor(AActor* Actor)
+{
+    if (!Actor || Actor->Scene != this) return;
+
+    // 등록 해제가 끝날 때까지 Owner와 Scene 연결을 유지합니다.
+    for (UActorComponent* Component : Actor->GetComponents())
+        UnregisterComponent(Component);
+
+    Actors.Remove(Actor);
+    Actor->Scene = nullptr;
+}
+
+void UScene::RegisterComponent(UActorComponent* Component)
+{
+    if (!Component || Component->bRegisteredWithScene) return;
+
+    AActor* Owner = Component->GetOwner();
+    if (!Owner || Owner->GetScene() != this) return;
+
+    // 파생 타입은 여러 목록에 속할 수 있으므로 독립적으로 검사합니다.
+    if (Component->IsA(UPrimitiveComponent::GetClass()))
+        PrimitiveComponents.Add(static_cast<UPrimitiveComponent*>(Component));
+
+    if (Component->IsA(UTextComponent::GetClass()))
+        TextComponents.Add(static_cast<UTextComponent*>(Component));
+
+    if (Component->IsA(UWidgetComponent::GetClass()))
+        WidgetComponents.Add(static_cast<UWidgetComponent*>(Component));
+
+    if (Component->IsA(USpotLightComponent::GetClass()))
+        BillboardIcons.Add(static_cast<USpotLightComponent*>(Component));
+
+    Component->bRegisteredWithScene = true;
+
+    // 메시가 준비되지 않았다면 BVH에는 등록되지 않아도 됩니다.
+    if (Component->IsA(UStaticMeshComponent::GetClass()))
+        UpdateBVH(static_cast<UStaticMeshComponent*>(Component));
+}
+
+// 컴포넌트가 Scene 소속을 잃기 전에 모든 등록 참조를 제거합니다.
+void UScene::UnregisterComponent(UActorComponent* Component)
+{
+    if (!Component || !Component->bRegisteredWithScene) return;
+
+    AActor* Owner = Component->GetOwner();
+    if (!Owner || Owner->GetScene() != this) return;
+
+    // 이후 Transform 변경 통지가 발생해도 BVH에 다시 들어가지 않게 합니다.
+    Component->bRegisteredWithScene = false;
 
     if (Component->IsA(UStaticMeshComponent::GetClass()))
-    {
-        BVH.Remove(static_cast<UStaticMeshComponent*>(Component));
-    }
+        RemoveFromBVH(static_cast<UStaticMeshComponent*>(Component));
 
-    delete Component;
+    if (Component->IsA(UPrimitiveComponent::GetClass()))
+        PrimitiveComponents.Remove(static_cast<UPrimitiveComponent*>(Component));
 
-    // 부모 컴포넌트 삭제로 자식 메시의 월드 변환이 바뀔 수 있다.
-    UpdateBVHForActor(Actor);
-    return true;
+    if (Component->IsA(UTextComponent::GetClass()))
+        TextComponents.Remove(static_cast<UTextComponent*>(Component));
+
+    if (Component->IsA(UWidgetComponent::GetClass()))
+        WidgetComponents.Remove(static_cast<UWidgetComponent*>(Component));
+
+    if (Component->IsA(USpotLightComponent::GetClass()))
+        BillboardIcons.Remove(static_cast<USpotLightComponent*>(Component));
+
+    // Scene 내부의 별도 참조도 함께 해제합니다.
+    if (MainCamera == Component) MainCamera = nullptr;
 }
+

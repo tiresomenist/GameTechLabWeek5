@@ -2,6 +2,7 @@
 #include "DebugWindow.h"
 
 #include "Editor/Editor.h"
+#include "Engine/Engine.h"
 #include "Engine/Memory/Allocator.h"
 
 void UDebugWindow::Render(float DeltaTime)
@@ -66,6 +67,14 @@ void UDebugWindow::Render(float DeltaTime)
 			else if (_stricmp(CommandBuffer, "stat all") == 0)
 			{
 				Editor->ShowAllStats();
+			}
+			else if (_stricmp(CommandBuffer, "hzb on") == 0)
+			{
+				GEngine::GetInstance()->SetHZBOcclusionEnabled(true);
+			}
+			else if (_stricmp(CommandBuffer, "hzb off") == 0)
+			{
+				GEngine::GetInstance()->SetHZBOcclusionEnabled(false);
 			}
 			CommandBuffer[0] = '\0';
 			bReclaimFocus = true;

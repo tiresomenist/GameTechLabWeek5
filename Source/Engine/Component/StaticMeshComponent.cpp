@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <cassert>
 #include "Engine/Component/CameraComponent.h"
+#include "Engine/Actor/Actor.h"
+#include "Engine/Scene/Scene.h"
 void UStaticMeshComponent::SetStaticMesh(const FName& InMeshKey)
 {
 	if (InMeshKey == MeshKey && (InMeshKey.IsNone() || CachedMesh)) return;
@@ -31,11 +33,13 @@ void UStaticMeshComponent::SetStaticMesh(const FName& InMeshKey)
 	OverrideMaterials.SetNum(NewSlotCount);
 	MeshKey = InMeshKey;
 	CachedMesh = Mesh;
+	OnWorldBoundsChanged();
 }
 
 void UStaticMeshComponent::SetStaticMesh(const FString& FilePath)
 {
 	SetStaticMesh(FName(FilePath));
+
 }
 
 //FMeshResource* UStaticMeshComponent::GetMeshResource() const
@@ -224,4 +228,14 @@ const FString& UStaticMeshComponent::GetMaterialPath(uint32 MaterialSlot) const
 UStaticMesh* UStaticMeshComponent::GetStaticMesh() const
 {
 	return CachedMesh;
+}
+
+void UStaticMeshComponent::OnWorldBoundsChanged() const
+{
+	AActor* Owner = GetOwner();
+	UScene* Scene = Owner ? Owner->GetScene() : nullptr;
+	if (!Scene) return;
+
+	// 기존 BVH API가 비const 포인터를 받지만, 컴포넌트 자체를 수정하지는 않습니다.
+	Scene->UpdateBVH(const_cast<UStaticMeshComponent*>(this));
 }

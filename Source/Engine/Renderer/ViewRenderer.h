@@ -79,6 +79,15 @@ public:
 	{
 		return SubmissionStats.GetCounts();
 	}
+	void ReleaseViewReferences()
+	{
+		// 배열 용량은 유지하면서 Source와 Material 참조를 제거합니다.
+		PassDraws.Clear();
+		OpaqueSortScratch.Empty();
+		PassDrawBuilder.ReleaseViewReferences();
+	}
+	void SetHZBOcclusionEnabled(bool bEnabled) { bEnableHZBOcclusion = bEnabled; }
+	bool IsHZBOcclusionEnabled() const { return bEnableHZBOcclusion; }
 
 private:
 	bool CreateShaders();
@@ -107,9 +116,6 @@ private:
 	void RenderBatchLine(const FMatrix& ViewProj);
 	bool UpdateTextVertexBuffer(const TArray<FVertexTexture>& Vertices);
 	void RenderText(UINT IndexCount);
-
-	bool RenderOcclusionProxy(const FBoundingBox& WorldBounds, const FMatrix& ViewProjection);
-	void RenderOcclusionDepth(const FPrimitiveRenderData& Item, const FMatrix& ViewProjection);
 
 	// Device와 Context는 비소유 참조.
 	ID3D11Device* D3DDevice = nullptr;
@@ -170,9 +176,5 @@ private:
 	TArray<uint32> PrimitiveVisibility;
 	TMap<uint32, FHZBViewState> HZBViewStates;
 	Microsoft::WRL::ComPtr<ID3D11Buffer> HZBCullConstantBuffer;
-
-	// 기존 프록시 함수와 상태 초기화 코드가 참조하므로 우선 유지한다.
-	FOcclusionCuller OcclusionCuller;
-	ID3D11DepthStencilState* OcclusionDepthStencilState = nullptr;
-	ID3D11BlendState* OcclusionBlendState = nullptr;
+	bool bEnableHZBOcclusion = true;
 };

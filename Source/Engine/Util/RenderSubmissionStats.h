@@ -6,6 +6,12 @@ struct FRenderSubmissionCounts
 {
     uint32 DrawCalls = 0;
     uint32 Triangles = 0;
+    uint32 HZBInputPrimitives = 0;
+    uint32 HZBCells = 0;
+    uint32 HZBOccludedCells = 0;
+    uint32 HZBOccludedPrimitives = 0;
+    bool bHZBEnabled = true;
+    bool bHZBDispatched = false;
 };
 
 class FRenderSubmissionStats
@@ -26,6 +32,17 @@ public:
         // 선분은 드로우 수에만 포함한다.
         if (Topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST)
             Counts.Triangles += static_cast<uint32>(IndexCount) / 3;
+    }
+
+    void SetHZBCounts(uint32 InputPrimitives, uint32 Cells, uint32 OccludedCells,
+        uint32 OccludedPrimitives, bool bEnabled, bool bDispatched)
+    {
+        Counts.HZBInputPrimitives = InputPrimitives;
+        Counts.HZBCells = Cells;
+        Counts.HZBOccludedCells = OccludedCells;
+        Counts.HZBOccludedPrimitives = OccludedPrimitives;
+        Counts.bHZBEnabled = bEnabled;
+        Counts.bHZBDispatched = bDispatched;
     }
 
     // 현재 프레임에 누적된 뷰포트 제출량을 반환한다.

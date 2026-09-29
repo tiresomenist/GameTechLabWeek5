@@ -6,6 +6,7 @@
 #include "ImGui/imgui_stdlib.h"
 #include "Editor/Editor.h"
 #include "Core/Math/Quaternion.h"
+#include "Engine/Engine.h"
 #include "Engine/Actor/Actor.h"
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
 #include "Engine/Component/Primitive/FlipbookComponent.h"
@@ -192,6 +193,8 @@ void UPropertyWindow::SetSelectedValue(bool bSetRotation)
 		assert(Scene != nullptr);
 
 		Scene->UpdateBVHForActor(TransformTarget->GetOwner());
+		Scene->InvalidateStaticUniformGrid();
+		GEngine::GetInstance()->InvalidateOcclusionHistory();
 	}
 }
 

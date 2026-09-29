@@ -62,7 +62,7 @@ void FSceneBVH::Update(UStaticMeshComponent* Component)
 void FSceneBVH::Remove(UStaticMeshComponent* Component)
 {
     FSceneBVHNode** FoundNodeOrNull = LeafNodeMap.Find(Component);
-    assert(FoundNodeOrNull != nullptr);
+    if (!FoundNodeOrNull)return;
     
     FSceneBVHNode* Leaf = *FoundNodeOrNull;
     Detach(Leaf);
