@@ -87,7 +87,8 @@ public:
 	ID3D11SamplerState* GetSampler(const FName& Name) const;
 	FMaterial CreateColorMaterial() const;
 	FMaterial CreateTextureMaterial(ID3D11ShaderResourceView* SRV) const;
-	FMaterial CreateStaticMeshMaterial(ID3D11ShaderResourceView* SRV, const FString& InTexturePath = "", bool bClamp = false) const;	void RegisterDefaultPrimitives(GDevice* InDevice);
+	FMaterial CreateStaticMeshMaterial(ID3D11ShaderResourceView* SRV, const FString& InTexturePath = "", bool bClamp = false) const;	
+	void RegisterDefaultPrimitives(GDevice* InDevice);
 	void RegisterTexturePrimitives(GDevice* InDevice);
 	void RegisterRasterizerState(const FName& Name, const D3D11_RASTERIZER_DESC& Desc);
 	ID3D11RasterizerState* GetRasterizerState(const FName& Name) const;
@@ -105,6 +106,8 @@ public:
 	uint32 AllocateMaterialId() const;
 	FMeshPageBinding GetMeshPageBinding(uint32 MeshPageId) const;
 
+	FMaterial CreateImpostorMaterial(ID3D11ShaderResourceView* SRV, const FString& InTexturePath) const;
+	GDevice* GetDevice() const { return Device; }
 private:
 	GResourceManager() = default;
 	~GResourceManager() = default;
