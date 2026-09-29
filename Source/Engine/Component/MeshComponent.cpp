@@ -111,7 +111,7 @@ const FMaterial* UMeshComponent::GetMaterial(uint32 MaterialSlot) const
 		return nullptr;
 }
 
-void UMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, bool bSelected)
+void UMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, const UCameraComponent* Camera, bool bSelected)
 {
 	return;
 }

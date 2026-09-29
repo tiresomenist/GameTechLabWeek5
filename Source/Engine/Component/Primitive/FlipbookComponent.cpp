@@ -134,7 +134,7 @@ FTextureUVTransform UFlipbookComponent::GetUVTransform() const
     };
 }
 
-void UFlipbookComponent::CreateRenderData (TArray<FPrimitiveRenderData>& ComponentRenderData, bool bSelected)
+void UFlipbookComponent::CreateRenderData (TArray<FPrimitiveRenderData>& ComponentRenderData, const UCameraComponent* Camera, bool bSelected)
 {
     if (!Texture || !Texture->GetSRV()||!QuadMesh){ return; }
 

@@ -44,6 +44,15 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			{
 				return;
 			}
+			
+			/*const int32 FirstIndex = RenderList.Num();
+			Primitive->CreateRenderData(RenderList, Camera, Primitive == SelectedComponent);
+			const int32 EndIndex = RenderList.Num();
+			if (FirstIndex == EndIndex)
+			{
+				return;
+			}*/
+
 			FRenderObjectData Object{};
 			Object.SourcePrimitive = Primitive;
 			Object.World = Primitive->GetRenderWorldMatrix(Camera);
@@ -61,7 +70,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			}
 
 			const int32 FirstIndex = RenderList.Num();
-			Primitive->CreateRenderData(RenderList, Primitive == SelectedComponent);
+			Primitive->CreateRenderData(RenderList, Camera, Primitive == SelectedComponent);
 			const int32 EndIndex = RenderList.Num();
 			if (FirstIndex == EndIndex) { return; }
 			// 기존 Objects 뒤에 추가하고 이번 컴포넌트의 모든 섹션에 같은 인덱스를 부여한다.

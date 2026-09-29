@@ -10,6 +10,18 @@
 #include <memory>
 #include <utility>
 
+struct FStaticMeshLOD
+{
+	FMeshResource* MeshResource = nullptr;
+	TArray<FMeshSection> Sections;
+
+	FVector BoundsMin{};
+	FVector BoundsMax{};
+	bool bHasBounds = false;
+
+	float ScreenSize = 0.0f;
+};
+
 class UStaticMesh : public UObject
 {
 	UCLASS(UStaticMesh, "StaticMesh", UObject);
@@ -22,8 +34,31 @@ public:
 
 	FName GetMeshKey() const { return MeshKey; }
 
-	FMeshResource* GetMeshResource() const { return MeshResource; }
-	void SetMeshResource(FMeshResource* InResource) { MeshResource = InResource;}
+	const TArray<FStaticMeshLOD>& GetLODs() const { return LODs; }
+
+	const FStaticMeshLOD* GetLOD(uint32 LODIndex) const {
+		if (LODIndex >= LODs.Num()) {
+			return nullptr;
+		}
+
+		return &LODs[LODIndex];
+	}
+
+	FStaticMeshLOD* GetLOD(uint32 LODIndex) {
+		if (LODIndex >= LODs.Num()) {
+			return nullptr;
+		}
+
+		return &LODs[LODIndex];
+	}
+
+	void AddLOD(FStaticMeshLOD&& InLOD) {
+		LODs.Add(std::move(InLOD));
+	}
+
+	uint32 GetLODCount() const {
+		return LODs.Num();
+	}
 
 	// StaticMesh가 가지고 있는것 -> 해당 StaticMesh의 Default FMaterial
 	const TArray<std::unique_ptr<FMaterial>>& GetDefaultMeshMaterials() const { return Materials; }
@@ -45,22 +80,69 @@ public:
 		Materials[SlotIndex] = std::move(InMaterial);
 	}
 
-	const FVector& GetBoundsMin() const { return MeshResource ? MeshResource->GetBoundsMin() : FVector::Zero; }
-	const FVector& GetBoundsMax() const { return MeshResource ? MeshResource->GetBoundsMax() : FVector::Zero; }
-	bool HasBounds() const { return MeshResource ? bHasBounds : false; }
+	const FString& GetSourceFilePath() const { return SourceFilePath; }
 
-	const TArray<FMeshSection>& GetSections() const { return Sections; } // 섹션 배열 반환
-	void SetSections(TArray<FMeshSection>& InSections) { Sections = InSections; }
-	void AddSection(uint32 InMaterialSlot, uint32 InStartIndex, uint32 InIndexCount)
+	const FMeshResource* GetMeshResource(uint32 LODIndex = 0) const {
+		const FStaticMeshLOD* LOD = GetLOD(LODIndex);
+		return LOD ? LOD->MeshResource : nullptr;
+	}
+
+	FMeshResource* GetMeshResource(uint32 LODIndex = 0)
 	{
-		if (InStartIndex + InIndexCount > IndexCount)
+		FStaticMeshLOD* LOD = GetLOD(LODIndex);
+		return LOD ? LOD->MeshResource : nullptr;
+	}
+
+	const FVector& GetBoundsMin(uint32 LODIndex = 0) const
+	{
+		const FStaticMeshLOD* LOD = GetLOD(LODIndex);
+		return LOD ? LOD->BoundsMin : FVector::Zero;
+	}
+
+	const FVector& GetBoundsMax(uint32 LODIndex = 0) const
+	{
+		const FStaticMeshLOD* LOD = GetLOD(LODIndex);
+		return LOD ? LOD->BoundsMax : FVector::Zero;
+	}
+
+	bool HasBounds(uint32 LODIndex = 0) const
+	{
+		const FStaticMeshLOD* LOD = GetLOD(LODIndex);
+		return LOD ? LOD->bHasBounds : false;
+	}
+
+	const TArray<FMeshSection>& GetSections(uint32 LODIndex = 0) const
+	{
+		const FStaticMeshLOD* LOD = GetLOD(LODIndex);
+		return LOD ? LOD->Sections : EmptySections;
+	}
+
+	void SetSections(uint32 LODIndex, const TArray<FMeshSection>& InSections)
+	{
+		FStaticMeshLOD* LOD = GetLOD(LODIndex);
+		if (!LOD)
 		{
 			return;
 		}
-		Sections.Add(FMeshSection{ InMaterialSlot , InStartIndex, InIndexCount });
+
+		LOD->Sections = InSections;
 	}
 
-	const FString& GetSourceFilePath() const { return SourceFilePath; }
+	void AddSection(uint32 LODIndex, uint32 InMaterialSlot, uint32 InStartIndex, uint32 InIndexCount)
+	{
+		FStaticMeshLOD* LOD = GetLOD(LODIndex);
+		if (!LOD || !LOD->MeshResource)
+		{
+			return;
+		}
+
+		if (InStartIndex + InIndexCount > LOD->MeshResource->GetIndexCount())
+		{
+			return;
+		}
+
+		LOD->Sections.Add(FMeshSection{ InMaterialSlot, InStartIndex, InIndexCount });
+	}
 
 	// MeshResource에 들어가는 내용
 	//ID3D11Buffer* VertexBuffer;
@@ -74,18 +156,14 @@ private:
 	FName MeshKey;	// 메시 에셋 식별자
 	FString SourceFilePath; // 원본 OBJ 경로
 
-	FMeshResource* MeshResource = nullptr;
-
 	TArray<std::unique_ptr<FMaterial>> Materials;
-	TArray<FMeshSection> Sections;
 
 	TArray<FStaticMeshObjectInfo> Objects;
 
-	FVector BoundsMin{};
-	FVector BoundsMax{};
-	bool bHasBounds;
+	TArray<FStaticMeshLOD> LODs;
 
-	uint32 StartIndex;
-	uint32 IndexCount;
+	TArray<FMeshSection> EmptySections;
+	//uint32 StartIndex;
+	//uint32 IndexCount;
 
 };

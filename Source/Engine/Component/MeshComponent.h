@@ -28,7 +28,7 @@ public:
     void ResetOverrideMaterial(uint32 Slot);
     bool HasOverrideMaterial(uint32 SlotIdx);
     
-    virtual void CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, bool bSelected = false) override;
+    virtual void CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, const UCameraComponent* Camera, bool bSelected = false) override;
 
     bool IsVisible() { return bIsVisible; }
     void SetVisibility(bool InVisibility) { bIsVisible = InVisibility; }
