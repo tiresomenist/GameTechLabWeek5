@@ -13,9 +13,9 @@ public:
 	FConstantBufferManager() = default;
 	~FConstantBufferManager() = default;
 
-	void UploadObjectConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const FViewRenderData& ViewLayoutData, const TArray<uint32>& ObjectIndexToCBIndexMap);
+	void UploadObjectConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const FViewRenderData& ViewLayoutData, const TArray<uint32>& ObjectIndexToCBIndices);
 
-	void UploadMaterialConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const TArray<const FMaterial*>& ReferencedMaterials, const TMap<uint32, uint32>& MaterialIdToCBIndexMap);
+	void UploadMaterialConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const TArray<const FMaterial*>& ReferencedMaterials);
 	
 	const FCBRangeAllocation& GetObjectCBRange(uint32 ObjectCBIndex) const;
 	const FCBRangeAllocation& GetMaterialCBRange(uint32 MaterialCBIndex) const;

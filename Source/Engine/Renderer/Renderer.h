@@ -7,6 +7,7 @@
 #include "Engine/Renderer/GPUTimer.h"
 #include "Engine/Renderer/RenderView.h"
 #include "Engine/Renderer/ViewRenderData.h"
+#include "Engine/Renderer/HierarchicalZ.h"
 
 class GDevice;
 class FEditor;
@@ -38,8 +39,15 @@ public:
 	float GetDrawTimeMs() const { return DrawTimeMs; }
 	float GetGPUTimeMs() const { return GPUTimer.GetGPUTimeMs(); }
 	float GetGPUWaitMs() const { return GPUWaitMs; }
-
-
+	const FRenderSubmissionCounts& GetSubmissionCounts() const
+	{
+		return ViewRenderer.GetSubmissionCounts();
+	}
+	void InvalidateOcclusionHistory()
+	{
+		bHZBValid = false;
+		++HZBGeneration;
+	}
 private:
 	bool CreateSwapChain(HWND HWnd, uint32 Width, uint32 Height);
 	bool CreateFrameBuffer();
@@ -48,6 +56,11 @@ private:
 	void ReleaseDepthStencilBuffer();
 	void SetViewportAndScissor(const D3D11_VIEWPORT& Viewport);
 	void SwapBuffer();
+
+	bool CreateHZBConstantBuffer();
+	bool BuildHZBMip0();
+	bool BuildHZBMips();
+	void FinishHZBFrame();
 
 	FViewRenderer ViewRenderer;
 	FViewRenderData ViewData;
@@ -58,6 +71,8 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11RenderTargetView> FrameBufferRTV;
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> DepthStencilBuffer;
 	Microsoft::WRL::ComPtr<ID3D11DepthStencilView> DepthStencilView;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> DepthStencilSRV;
+	Microsoft::WRL::ComPtr<ID3D11Buffer> HZBConstantBuffer;
 
 	D3D11_VIEWPORT ViewportInfo{};
 	bool bRenderReady = false;
@@ -67,4 +82,10 @@ private:
 	FGPUTimer GPUTimer;
 	float DrawTimeMs = 0.0f;
 	float GPUWaitMs = 0.0f;
+
+	FHierarchicalZBuffer HierarchicalZBuffer;
+
+	bool bHZBValid = false;
+	uint64 HZBFrameIndex = 0;
+	uint64 HZBGeneration = 1;
 };

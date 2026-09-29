@@ -2,10 +2,12 @@
 
 #include <d3d11.h>
 #include "Core/Math/Vector.h"
+#include "Core/Math/Box.h"
 #include "Engine/Renderer/Material.h"
 #include "Engine/Renderer/RenderConstants.h"
 
 struct FMatrix; 
+class UPrimitiveComponent;
 
 //struct FPrimitiveRenderData
 //{

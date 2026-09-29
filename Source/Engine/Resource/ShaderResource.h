@@ -7,5 +7,6 @@ struct FShaderResource
 {
 	Microsoft::WRL::ComPtr<ID3D11VertexShader> VertexShader;
 	Microsoft::WRL::ComPtr<ID3D11PixelShader> PixelShader;
+	Microsoft::WRL::ComPtr<ID3D11ComputeShader> ComputeShader;
 	Microsoft::WRL::ComPtr<ID3D11InputLayout> InputLayout;
 };

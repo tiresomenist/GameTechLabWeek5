@@ -1,16 +1,16 @@
 #include "pch.h"
 #include "ConstantBufferManager.h"
 #include <cassert>
-void FConstantBufferManager::UploadObjectConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const FViewRenderData& ViewLayoutData, const TArray<uint32>& ObjectIndexToCBIndexMap)
+void FConstantBufferManager::UploadObjectConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const FViewRenderData& ViewLayoutData, const TArray<uint32>& ObjectIndexToCBIndices)
 {
-	m_ObjectCBAllocations.SetNum(ObjectIndexToCBIndexMap.Num());
+	m_ObjectCBAllocations.SetNum(ObjectIndexToCBIndices.Num());
 
 	const auto& Objects = ViewLayoutData.Objects;
 	const FMatrix& ViewProj = ViewLayoutData.View.ViewProjection;
 
-	for (int32 CBIndex = 0; CBIndex < ObjectIndexToCBIndexMap.Num(); ++CBIndex)
+	for (int32 CBIndex = 0; CBIndex < ObjectIndexToCBIndices.Num(); ++CBIndex)
 	{
-		const uint32 ObjectIndex = ObjectIndexToCBIndexMap[CBIndex];
+		const uint32 ObjectIndex = ObjectIndexToCBIndices[CBIndex];
 
 		FObjectConstants Constants{};
 		Constants.World = Objects[ObjectIndex].World;
@@ -22,31 +22,22 @@ void FConstantBufferManager::UploadObjectConstants(ID3D11DeviceContext* Context,
 	}
 }
 
-void FConstantBufferManager::UploadMaterialConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const TArray<const FMaterial*>& ReferencedMaterials, const TMap<uint32, uint32>& MaterialIdToCBIndexMap)
+void FConstantBufferManager::UploadMaterialConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const TArray<const FMaterial*>& ReferencedMaterials)
 {
-	if (MaterialIdToCBIndexMap.IsEmpty()) return;
+	m_MaterialCBAllocations.SetNum(ReferencedMaterials.Num());
 
-	m_MaterialCBAllocations.resize(MaterialIdToCBIndexMap.Num());
-
-	for (const FMaterial* Material : ReferencedMaterials)
+	for (int32 CBIndex = 0; CBIndex < ReferencedMaterials.Num(); ++CBIndex)
 	{
-		uint32 MatId = Material ? Material->MaterialId : InvalidRenderId;
-		auto It = MaterialIdToCBIndexMap.Find(MatId);
-		if (It == nullptr) continue;
+		const FMaterial& Material = *ReferencedMaterials[CBIndex];
 
-		uint32 CBIndex = *It;
+		FTextureDrawConstants Constants{};
+		Constants.DiffuseColor = Material.DiffuseColor;
+		Constants.AlphaCutoff = Material.AlphaCutoff;
+		Constants.UV.Scale = Material.UVScale;
+		Constants.UV.Offset = Material.UVOffset;
 
-		FTextureDrawConstants MatCBData{};
-		if (Material)
-		{
-			MatCBData.DiffuseColor = Material->DiffuseColor;
-			MatCBData.AlphaCutoff = Material->AlphaCutoff;
-			MatCBData.UV.Scale = Material->UVScale;
-			MatCBData.UV.Offset = Material->UVOffset;
-		}
-
-		FCBRangeAllocation Alloc = CBRing->AllocateAndUpload(Context, &MatCBData, sizeof(FTextureDrawConstants));
-		m_MaterialCBAllocations[CBIndex] = Alloc;
+		// Tick에서 갱신된 UVOffset을 이번 View의 상수에 반영한다.
+		m_MaterialCBAllocations[CBIndex] = CBRing->AllocateAndUpload(Context, &Constants, sizeof(Constants));
 	}
 }
 

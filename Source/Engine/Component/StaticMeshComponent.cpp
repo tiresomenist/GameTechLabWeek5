@@ -8,7 +8,7 @@
 #include "Engine/Component/CameraComponent.h"
 void UStaticMeshComponent::SetStaticMesh(const FName& InMeshKey)
 {
-	if ((!InMeshKey.IsNone() || CachedMesh) && InMeshKey == MeshKey) return;
+	if (InMeshKey == MeshKey && (InMeshKey.IsNone() || CachedMesh)) return;
 
 	UStaticMesh* Mesh = nullptr;
 	int32 NewSlotCount = 0;
