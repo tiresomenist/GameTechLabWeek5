@@ -649,12 +649,18 @@ void UPropertyWindow::RenderSelectedComponentDetails()
 				if (bModified)
 				{
 					FMaterial* Mat = MeshComp->GetOrCreateOverrideMaterial(SlotIdx);
-					Mat->DiffuseColor = Color;
-					Mat->AlphaCutoff = AlphaCutoff;
-					Mat->bEnableUVScroll = bEnableUVScroll;
-					Mat->UVOffset = UVOffset;
-					Mat->UVScale = UVScale;
-					Mat->ScrollSpeed = ScrollSpeed;
+					if (Mat)
+					{
+						Mat->DiffuseColor = Color;
+						Mat->AlphaCutoff = AlphaCutoff;
+						Mat->bEnableUVScroll = bEnableUVScroll;
+						Mat->UVOffset = UVOffset;
+						Mat->UVScale = UVScale;
+						Mat->ScrollSpeed = ScrollSpeed;
+
+						// 최종 편집값이 들어간 뒤 활성 상태를 판정합니다.
+						MeshComp->RefreshUVScrollTick();
+					}
 				}
 
 				// 샘플러 선택 (#27)

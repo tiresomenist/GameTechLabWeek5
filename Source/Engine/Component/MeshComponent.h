@@ -9,6 +9,9 @@ class UMeshComponent : public UPrimitiveComponent
     UCLASS(UMeshComponent, "MeshComponent", UPrimitiveComponent)
 
 public:
+    // 메시 Component의 Tick 사용 가능 여부를 초기화합니다.
+    void Initialize() override;
+
     ~UMeshComponent() override;
 
     //virtual FMeshResource* GetMeshResource() const override;
@@ -50,6 +53,7 @@ public:
     void SetUVOffset(float InOffsetU, float InOffsetV) { UVOffset = FVector2(InOffsetU, InOffsetV); }
     void ResetUVOffset() { UVOffset = FVector2::Zero; }
 
+    void RefreshUVScrollTick();
 protected:
     void ClearOverrideMaterials();
 

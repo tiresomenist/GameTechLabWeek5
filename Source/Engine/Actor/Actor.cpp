@@ -180,10 +180,11 @@ void AActor::BeginPlay()
 
 void AActor::Tick(float DeltaTime)
 {
-    for (UActorComponent* Component : Components)
-    {
-        Component->Tick(DeltaTime);
-    }
+    // 이제 Actor에서 Component들의 틱을 도는게 아닌, 틱 그룹에서 Register되어서 틱을 돌게됨.
+    //for (UActorComponent* Component : Components)
+    //{
+    //    Component->Tick(DeltaTime);
+    //}
 }
 
 void AActor::EndPlay()
@@ -233,4 +234,23 @@ AActor::~AActor()
     DetachChildren();
     EndPlay();
     ReleaseComponents();
+}
+
+// Actor 자체 Tick을 활성화하거나 비활성화합니다.
+void AActor::SetActorTickEnabled(bool bEnabled)
+{
+    const bool bNewEnabled = PrimaryActorTick.bCanEverTick && bEnabled;
+    if (PrimaryActorTick.bTickEnabled == bNewEnabled) return;
+
+    PrimaryActorTick.bTickEnabled = bNewEnabled;
+    if (Scene) Scene->RefreshActorTick(this);
+}
+
+// 실행 그룹이 바뀌면 기존 그룹에서 새 그룹으로 등록을 이동합니다.
+void AActor::SetActorTickGroup(ETickGroup Group)
+{
+    if (Group >= ETickGroup::Count || PrimaryActorTick.TickGroup == Group) return;
+
+    PrimaryActorTick.TickGroup = Group;
+    if (Scene) Scene->RefreshActorTick(this);
 }
