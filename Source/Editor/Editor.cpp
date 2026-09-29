@@ -1044,6 +1044,20 @@ float FEditor::DrawStatUnit(ImDrawList* DrawList, float X, float Y)
 	sprintf_s(Buffer, "View Tris:  %llu",static_cast<unsigned long long>(Submission.Triangles));
 	DrawShadowedText(DrawList, ImVec2(X, Y), IM_COL32(50, 255, 50, 255), Buffer);
 	Y += LineHeight;
+
+	sprintf_s(Buffer, "HZB: %s  Dispatch: %s", Submission.bHZBEnabled ? "ON" : "OFF",
+		Submission.bHZBDispatched ? "YES" : "NO");
+	DrawShadowedText(DrawList, ImVec2(X, Y), IM_COL32(50, 255, 50, 255), Buffer);
+	Y += LineHeight;
+
+	sprintf_s(Buffer, "HZB Input/Cells: %u / %u", Submission.HZBInputPrimitives, Submission.HZBCells);
+	DrawShadowedText(DrawList, ImVec2(X, Y), IM_COL32(50, 255, 50, 255), Buffer);
+	Y += LineHeight;
+
+	sprintf_s(Buffer, "HZB Culled: %u cells, %u primitives", Submission.HZBOccludedCells,
+		Submission.HZBOccludedPrimitives);
+	DrawShadowedText(DrawList, ImVec2(X, Y), IM_COL32(50, 255, 50, 255), Buffer);
+	Y += LineHeight;
 	return Y + 6.0f;
 }
 

@@ -48,6 +48,8 @@ public:
 		bHZBValid = false;
 		++HZBGeneration;
 	}
+	void SetHZBOcclusionEnabled(bool bEnabled) { ViewRenderer.SetHZBOcclusionEnabled(bEnabled); }
+	bool IsHZBOcclusionEnabled() const { return ViewRenderer.IsHZBOcclusionEnabled(); }
 private:
 	bool CreateSwapChain(HWND HWnd, uint32 Width, uint32 Height);
 	bool CreateFrameBuffer();

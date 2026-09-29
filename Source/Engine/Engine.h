@@ -60,6 +60,8 @@ public:
 	float GetTime();
 
 	const FEngineStats& GetEngineStats() const { return EngineStats; };
+	void SetHZBOcclusionEnabled(bool bEnabled) { Renderer.SetHZBOcclusionEnabled(bEnabled); }
+	bool IsHZBOcclusionEnabled() const { return Renderer.IsHZBOcclusionEnabled(); }
 
 private:
 	EApplicationMode ApplicationMode = EApplicationMode::Editor;
