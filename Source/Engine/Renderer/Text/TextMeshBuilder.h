@@ -23,8 +23,13 @@ public:
 		FVector& OutMin,
 		FVector& OutMax,
 		float WorldUnitsPerPixel = 0.02f);
+	static bool UpdateLayoutCache(FTextLayoutCache& Cache, const FString& Text,
+		const FFontAtlas& Atlas, float WorldUnitsPerPixel = 0.02f);
 
-private:
+	static void AppendCached(TArray<FVertexTexture>& OutVertices,
+		const FTextLayoutCache& Cache, const FMatrix& World);
+
+private:	
 	static void AppendString(
 		TArray<FVertexTexture>& OutVertices,
 		const FString& Text,

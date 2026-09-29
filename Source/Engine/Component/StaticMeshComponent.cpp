@@ -5,7 +5,7 @@
 #include "Engine/Resource/ResourceManager.h"
 #include <stdexcept>
 #include <cassert>
-
+#include "Engine/Component/CameraComponent.h"
 void UStaticMeshComponent::SetStaticMesh(const FName& InMeshKey)
 {
 	if (InMeshKey == MeshKey && (InMeshKey.IsNone() || CachedMesh)) return;
@@ -110,24 +110,61 @@ void UStaticMeshComponent::Serialize(FArchive& Archive)
 	}
 }
 
-void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, bool bSelected)
+void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, const UCameraComponent* Camera, bool bSelected)
 {
-	if (!CachedMesh) return;
-	FMeshResource* Resource = CachedMesh->GetMeshResource();
-	if (!Resource){	return; }
+	if (!CachedMesh || !Camera)
+	{
+		return;
+	}
 
+	const FMatrix World = GetRenderWorldMatrix(Camera);
+
+	const FVector LocalCenter = (CachedMesh->GetBoundsMin(0) + CachedMesh->GetBoundsMax(0)) * 0.5f;
+
+	const FVector WorldCenter = World.TransformPosition(LocalCenter);
+
+	const float Distance = (WorldCenter - Camera->GetRelativeLocation()).Length();
+
+	uint32 LODIndex = 0;
+
+	if (CachedMesh->GetLODCount() > 1 && Distance >= 10.0f)
+	{
+		LODIndex = 1;
+	}
+
+	if (CachedMesh->GetLODCount() > 2 && Distance >= 30.0f)
+	{
+		LODIndex = 2;
+	}
+
+	const FStaticMeshLOD* LOD = CachedMesh->GetLOD(LODIndex);
+
+	if (!LOD || !LOD->MeshResource)
+	{
+		return;
+	}
+
+	FMeshResource* Resource = LOD->MeshResource;
 	const FMeshAllocation& Allocation = Resource->GetAllocation();
 
-	//잘못된 메쉬페이지 아이디
-	if (Allocation.MeshPageId == InvalidRenderId){ return; }
-
-	for (const FMeshSection& Section : CachedMesh->GetSections())
+	if (Allocation.MeshPageId == InvalidRenderId)
 	{
-		if (Section.IndexCount == 0){ continue; }
+		return;
+	}
+
+	for (const FMeshSection& Section : LOD->Sections)
+	{
+		if (Section.IndexCount == 0)
+		{
+			continue;
+		}
 
 		const FMaterial* SectionMaterial = GetMaterial(Section.MaterialIndex);
 
-		if (!SectionMaterial){ continue; }
+		if (!SectionMaterial)
+		{
+			continue;
+		}
 
 		assert(SectionMaterial->MaterialId != InvalidRenderId);
 		assert(Section.FirstIndex <= Allocation.IndexCount);
@@ -143,7 +180,11 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 		Data.Material = SectionMaterial;
 
 		Data.Flags = Primitive_AllowOutline;
-		if (bSelected){	Data.Flags |= Primitive_Selected; }
+
+		if (bSelected)
+		{
+			Data.Flags |= Primitive_Selected;
+		}
 
 		ComponentRenderData.Add(Data);
 	}

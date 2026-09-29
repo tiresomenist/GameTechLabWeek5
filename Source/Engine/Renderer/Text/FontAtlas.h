@@ -5,6 +5,7 @@
 
 #include "Core/Container/String.h"
 #include "Engine/Renderer/Text/GlyphInfo.h"
+#include "Core/Core.h"
 
 class FFontAtlas
 {
@@ -14,9 +15,12 @@ public:
 
 	const FGlyphInfo* FindGlyph(char32_t Codepoint) const;
 	ID3D11ShaderResourceView* GetSRV() const { return AtlasSRV; }
+	uint32 GetRevision() const { return Revision; }
 
 private:
 	std::unordered_map<char32_t, FGlyphInfo> Glyphs;
 	ID3D11Texture2D* AtlasTexture = nullptr;
 	ID3D11ShaderResourceView* AtlasSRV = nullptr;
+	inline static uint32 NextRevision = 0;
+	uint32 Revision = ++NextRevision;
 };

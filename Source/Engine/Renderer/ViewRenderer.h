@@ -107,7 +107,7 @@ private:
 	void RenderOutline(const FPrimitiveRenderData& Data);
 	void RenderGizmo(const FPrimitiveRenderData& Data);
 	void RenderBatchLine(const FMatrix& ViewProj);
-	void UpdateTextVertexBuffer(TArray<FVertexTexture>& Vertices);
+	bool UpdateTextVertexBuffer(const TArray<FVertexTexture>& Vertices);
 	void RenderText(UINT IndexCount);
 
 	// Device와 Context는 비소유 참조.
@@ -142,7 +142,19 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> TextVertexBuffer;
 	Microsoft::WRL::ComPtr<ID3D11Buffer> TextIndexBuffer;
 	Microsoft::WRL::ComPtr<ID3D11Buffer> MaterialConstantBuffer;
-	static const UINT MaxTextVertices = 8192;
+
+	UINT TextVertexCapacity = 0;
+	TArray<FVertexTexture> TextVertexScratch;
+	TArray<uint32> TextObjectVisibility;
+
+	// 부족할 때만 텍스트 VB와 고정 패턴 IB를 함께 확장한다.
+	bool EnsureTextCapacity(UINT RequiredVertices);
+
+	// 전체 정점을 업로드하며 실패하면 이번 텍스트 Draw를 생략한다.
+
+	// 메시 가시성과 텍스트 Bounds를 반영하여 해당 View의 텍스트를 출력한다.
+	void RenderVisibleText(const FViewRenderData& Data);
+
 	FLineBatcher LineBatcher;
 	void PreparePrimitiveVisibility(const FViewRenderData& Data, const FHZBViewInput& HZB);
 	FPipelineStateCache PipelineStateCache;

@@ -17,6 +17,7 @@ namespace
 
 bool FFontAtlas::Build(ID3D11Device* Device, const FString& TTFPath, float PixelHeight)
 {
+    Revision = ++NextRevision;
     // 1. TTF 파일을 통째로 메모리에 읽는다.
     const std::filesystem::path FontPath = File::PathFromUtf8(TTFPath);
     std::ifstream File(FontPath, std::ios::binary | std::ios::ate);
@@ -111,6 +112,7 @@ bool FFontAtlas::Build(ID3D11Device* Device, const FString& TTFPath, float Pixel
 
 void FFontAtlas::Release()
 {
+    Revision = ++NextRevision;
     if (AtlasSRV) { AtlasSRV->Release(); AtlasSRV = nullptr; }
     if (AtlasTexture) { AtlasTexture->Release(); AtlasTexture = nullptr; }
     Glyphs.clear();

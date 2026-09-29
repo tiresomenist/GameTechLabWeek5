@@ -45,7 +45,17 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			{
 				return;
 			}
+			
+			/*const int32 FirstIndex = RenderList.Num();
+			Primitive->CreateRenderData(RenderList, Camera, Primitive == SelectedComponent);
+			const int32 EndIndex = RenderList.Num();
+			if (FirstIndex == EndIndex)
+			{
+				return;
+			}*/
+
 			FRenderObjectData Object{};
+			Object.SourcePrimitive = Primitive;
 			Object.World = Primitive->GetRenderWorldMatrix(Camera);
 			Object.SortCenterWS = Object.World.GetOrigin();
 			FVector LocalMin{};
@@ -60,7 +70,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			}
 
 			const int32 FirstIndex = RenderList.Num();
-			Primitive->CreateRenderData(RenderList, Primitive == SelectedComponent);
+			Primitive->CreateRenderData(RenderList, Camera, Primitive == SelectedComponent);
 			const int32 EndIndex = RenderList.Num();
 			if (FirstIndex == EndIndex) { return; }
 
@@ -163,51 +173,55 @@ TArray<FPrimitiveRenderData> RenderUtil::GetGizmoList(FEditor* Editor, UScene* S
 	return RenderList;
 }
 
-TArray<FWorldTextItem> RenderUtil::GetTextRenderList(UScene* Scene, const UCameraComponent* Camera, bool bShowUUIDWidgets)
+void RenderUtil::GetTextRenderList(UScene* Scene, const UCameraComponent* Camera, 
+	bool bShowUUIDWidgets, FViewRenderData& OutData)
 {
-	TArray<FWorldTextItem> TextList;
-	if (!Scene || !Camera) return TextList;
+	OutData.TextCamera = Camera;
+	OutData.TextRequests.Empty();
+	if (!Scene || !Camera) return;
 
 	if (bShowUUIDWidgets)
 	{
-		Scene->ForEachWidget(
-			[&TextList, Camera](UWidgetComponent* Widget)
-			{
-				if (!Widget->IsVisible())
-				{
-					return;
-				}
+		// 현재 수집된 메시만 연결한다. 프러스텀에서 탈락한 메시는 들어 있지 않다.
+		TMap<const UPrimitiveComponent*, uint32> ObjectIndices;
+		for (int32 Index = 0; Index < OutData.Objects.Num(); ++Index)
+		{
+			const UPrimitiveComponent* Source = OutData.Objects[Index].SourcePrimitive;
+			if (Source) ObjectIndices.Add(Source, static_cast<uint32>(Index));
+		}
 
-				FWorldTextItem Item;
-				if (Widget->BuildTextItem(Camera, Item))
-				{
-					TextList.Add(Item);
-				}
-			}
-		);
+		Scene->ForEachWidget([&](UWidgetComponent* Widget)
+			{
+				if (!Widget->IsVisible() || !Widget->GetOwner()) return;
+
+				USceneComponent* Root = Widget->GetOwner()->GetRootComponent();
+				if (!Root || !Root->IsA(UPrimitiveComponent::GetClass())) return;
+
+				const auto* Primitive = static_cast<const UPrimitiveComponent*>(Root);
+				if (!Primitive->IsVisible()) return;
+
+				const uint32* ObjectIndex = ObjectIndices.Find(Primitive);
+
+				// 일반 TextComponent는 메시 요청을 만들지 않으므로 예외로 남긴다.
+				if (!ObjectIndex && !Primitive->IsA(UTextComponent::GetClass())) return;
+
+				FTextDrawRequest Request{};
+				Request.Widget = Widget;
+				if (ObjectIndex) Request.OwnerObjectIndex = *ObjectIndex;
+				OutData.TextRequests.Add(Request);
+			});
 	}
 
-	Scene->ForEachPrimitive(
-		[&TextList, Camera](UPrimitiveComponent* Primitive)
+	Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
 		{
-			if (Primitive->IsA(UTextComponent::GetClass()))
-			{
-				FWorldTextItem Item;
-				auto* Text = static_cast<UTextComponent*>(Primitive);
+			if (!Primitive->IsVisible() ||
+				!Primitive->IsA(UTextComponent::GetClass())) return;
 
-				if (!Text->IsVisible())
-				{
-					return;
-				}
+			FTextDrawRequest Request{};
+			Request.TextComponent = static_cast<const UTextComponent*>(Primitive);
+			OutData.TextRequests.Add(Request);
+		});
 
-				if (Text->BuildTextItem(Camera, Item))
-				{
-					TextList.Add(Item);
-				}
-			}
-		}
-	);
-	return TextList;
 }
 
 void RenderUtil::SubmitLineDrawRequests(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,

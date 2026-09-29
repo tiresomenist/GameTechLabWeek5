@@ -178,6 +178,20 @@ FVector& FVector::operator-=(const FVector& rhs)
 	return *this;
 }
 
+FVector& FVector::operator+=(float scalar)
+{
+	X += scalar;
+	Y += scalar;
+	Z += scalar;
+
+	return *this;
+}
+
+FVector& FVector::operator-=(float scalar)
+{
+	return operator+=(-scalar);
+}
+
 FVector& FVector::operator*=(float scalar)
 {
 	FVector result = *this * scalar;

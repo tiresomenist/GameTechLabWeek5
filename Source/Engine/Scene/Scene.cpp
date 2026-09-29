@@ -21,6 +21,8 @@
 #include "Engine/Object/ClassRegistry.h"
 #include "Engine/Log.h"
 
+// Todo: BVH
+
 namespace
 {
 	constexpr float StaticUniformGridCellSize = 4.0f;
@@ -376,6 +378,9 @@ void UScene::Serialize(FArchive& Archive)
     }
 
     EnsureUUIDWidgets();
+
+    // Todo: BVH
+    RebuildBVH();
 }
 
 
@@ -456,6 +461,18 @@ void UScene::DestroyActor(AActor* Actor)
         if (Actors[Index] == Actor)
         {
             Actor->EndPlay();
+            
+            // Todo: BVH
+            for (UActorComponent* Component : Actor->GetComponents())
+            {
+                if (Component->IsA(UStaticMeshComponent::GetClass()))
+                {
+                    RemoveFromBVH(static_cast<UStaticMeshComponent*>(Component));
+                }
+            }
+            
+            //
+            
             delete Actor;
             Actors.RemoveAt(Index);
 			InvalidateStaticUniformGrid();
@@ -560,10 +577,74 @@ void UScene::BuildStaticUniformGrid() const
 
 UScene::~UScene()
 {
+    // Todo: BVH
+    BVH.Clear();
+
     for (AActor* Actor : Actors)
     {
         delete Actor;
     }
 
     Actors.Empty();
+}
+
+// Scene.cpp
+void UScene::UpdateBVH(UStaticMeshComponent* Component)
+{
+    BVH.Update(Component);
+}
+
+void UScene::RemoveFromBVH(UStaticMeshComponent* Component)
+{
+    BVH.Remove(Component);
+}
+
+void UScene::RebuildBVH()
+{
+    BVH.Clear();
+
+    ForEachPrimitive([this](UPrimitiveComponent* Primitive)
+        {
+            if (Primitive->IsA(UStaticMeshComponent::GetClass()))
+            {
+                BVH.Update(static_cast<UStaticMeshComponent*>(Primitive));
+            }
+        });
+}
+
+void UScene::UpdateBVHForActor(AActor* Actor)
+{
+    if (!Actor)
+        return;
+
+    // 부모 컴포넌트의 이동으로 위치가 바뀐 자식 메시도 갱신한다.
+    for (UActorComponent* Component : Actor->GetComponents())
+    {
+        if (Component->IsA(UStaticMeshComponent::GetClass()))
+        {
+            BVH.Update(static_cast<UStaticMeshComponent*>(Component));
+        }
+    }
+}
+
+bool UScene::RemoveComponent(
+    AActor* Actor,
+    UActorComponent* Component)
+{
+    if (!Actor || !Component)
+        return false;
+
+    if (!Actor->RemoveComponent(Component, false))
+        return false;
+
+    if (Component->IsA(UStaticMeshComponent::GetClass()))
+    {
+        BVH.Remove(static_cast<UStaticMeshComponent*>(Component));
+    }
+
+    delete Component;
+
+    // 부모 컴포넌트 삭제로 자식 메시의 월드 변환이 바뀔 수 있다.
+    UpdateBVHForActor(Actor);
+    return true;
 }

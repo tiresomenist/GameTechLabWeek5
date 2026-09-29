@@ -37,14 +37,14 @@ public:
 
     // 선택한 섹션의 렌더 데이터에 외곽선 표시를 요청합니다.
     // 기존 섹션 렌더 데이터를 생성하고 표시할 섹션만 남깁니다.
-    void CreateRenderData(TArray<FPrimitiveRenderData>& OutData, bool bSelected) override
+    void CreateRenderData(TArray<FPrimitiveRenderData>& OutData, const UCameraComponent* Camera, bool bSelected) override
     {
         UStaticMesh* Mesh = GetStaticMesh();
         if (!Mesh){ return; }
 
         const int32 FirstNewIndex = OutData.Num();
 
-        Super::CreateRenderData(OutData, false);
+        Super::CreateRenderData(OutData, Camera, false);
 
         const int32 EndNewIndex = OutData.Num();
         if (FirstNewIndex == EndNewIndex){ return; }
@@ -544,6 +544,9 @@ void FObjViewer::LoadPreviewMesh(const std::filesystem::path& FilePath)
         Component->SetStaticMesh(MeshKey);
         Component->SetRelativeScale3D(FVector(PreviewScale, PreviewScale, PreviewScale));
         Component->SetRelativeLocation(PreviewLocation);
+
+        // Todo: BVH
+        PreviewScene->UpdateBVH(Component);
 
         // 현재 SpawnActor는 실행 중인 씬에서도 BeginPlay를 자동 호출하지 않습니다.
         NewActor->BeginPlay();
