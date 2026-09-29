@@ -7,7 +7,9 @@
 #include "Engine/Renderer/ViewSettings.h"
 #include "Engine/Renderer/Line/LineBatcher.h"
 #include "Engine/Renderer/RenderView.h"
-
+#include "Engine/Renderer/ViewRenderData.h"
+#include "Engine/Renderer/Occlusion.h"
+#include "Core/Container/Map.h"
 #include "PipelineStateCache.h"
 #include "PassDrawBuilder.h"
 #include "OpaqueDrawSorter.h"
@@ -26,20 +28,58 @@ struct FVertexTexture;
 enum class EViewportType;
 struct FViewRenderData;
 
+struct FHZBCullConstants
+{
+	FMatrix ViewProjection;
+	uint32 CellCount = 0;
+	float ViewportWidth = 0.0f;
+	float ViewportHeight = 0.0f;
+	uint32 HZBMipCount = 0;
+	float ViewportTopLeftX = 0.0f;
+	float ViewportTopLeftY = 0.0f;
+	uint32 Padding0 = 0;
+	uint32 Padding1 = 0;
+};
+struct FHZBViewInput
+{
+	ID3D11ShaderResourceView* Texture = nullptr;
+	const UScene* Scene = nullptr;
+	uint32 MipCount = 0;
+	uint32 ViewId = 0;
+	uint64 FrameIndex = 0;
+	uint64 Generation = 0;
+	bool bValid = false;
+};
+
+struct FHZBViewState
+{
+	FHZBOcclusionCuller Culler;
+	FRenderViewSnapshot PreviousView{};
+	const UScene* PreviousScene = nullptr;
+	uint64 PreviousFrameIndex = 0;
+	uint64 PreviousGeneration = 0;
+	bool bHasPreviousView = false;
+};
 // 출력 타깃은 호출자가 준비한다. 각 View는 데이터를 수집한 직후 그린다.
 class FViewRenderer
 {
 public:
 	void Create(ID3D11Device* InDevice, ID3D11DeviceContext* InContext);
 	void Shutdown();
-	void RenderView(const FViewRenderData& Data);
-	void BeginSubmissionFrame() {
+	void RenderView(const FViewRenderData& Data, const FHZBViewInput& HZB);
+
+	// 프레임 전체의 제출 통계를 초기화한다.
+	void BeginSubmissionFrame()
+	{
 		SubmissionStats.BeginFrame();
 	}
-	const FRenderSubmissionCounts& GetSubmissionCounts()const
+
+	// 모든 View에서 누적한 제출 통계를 반환한다.
+	const FRenderSubmissionCounts& GetSubmissionCounts() const
 	{
 		return SubmissionStats.GetCounts();
 	}
+
 private:
 	bool CreateShaders();
 	void ReleaseShaders();
@@ -67,6 +107,9 @@ private:
 	void RenderBatchLine(const FMatrix& ViewProj);
 	void UpdateTextVertexBuffer(TArray<FVertexTexture>& Vertices);
 	void RenderText(UINT IndexCount);
+
+	bool RenderOcclusionProxy(const FBoundingBox& WorldBounds, const FMatrix& ViewProjection);
+	void RenderOcclusionDepth(const FPrimitiveRenderData& Item, const FMatrix& ViewProjection);
 
 	// Device와 Context는 비소유 참조.
 	ID3D11Device* D3DDevice = nullptr;
@@ -102,7 +145,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> MaterialConstantBuffer;
 	static const UINT MaxTextVertices = 8192;
 	FLineBatcher LineBatcher;
-
+	void PreparePrimitiveVisibility(const FViewRenderData& Data, const FHZBViewInput& HZB);
 	FPipelineStateCache PipelineStateCache;
 	FPassDrawBuilder PassDrawBuilder;
 	FConstantBufferRing CBRingBuffer;
@@ -110,6 +153,14 @@ private:
 	FPassExecutor PassExecutor;
 	FPassDrawList PassDraws;
 	TArray<FPreparedDraw> OpaqueSortScratch;
-
 	FRenderSubmissionStats SubmissionStats;
+
+	TArray<uint32> PrimitiveVisibility;
+	TMap<uint32, FHZBViewState> HZBViewStates;
+	Microsoft::WRL::ComPtr<ID3D11Buffer> HZBCullConstantBuffer;
+
+	// 기존 프록시 함수와 상태 초기화 코드가 참조하므로 우선 유지한다.
+	FOcclusionCuller OcclusionCuller;
+	ID3D11DepthStencilState* OcclusionDepthStencilState = nullptr;
+	ID3D11BlendState* OcclusionBlendState = nullptr;
 };

@@ -4,7 +4,8 @@
 #include <algorithm>
 #include <cmath>
 
-void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPipelineStateCache* PipelineCache, FPassDrawList& OutPassDraws)
+void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPipelineStateCache* PipelineCache, 
+	FPassDrawList& OutPassDraws, const TArray<uint32>& PrimitiveVisibility)
 {
 	OutPassDraws.Clear();
 	m_MaterialIdToCBIndex.Empty();
@@ -40,7 +41,12 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 	};
 
 	// 일반 primitives 처리
-	for (const FPrimitiveRenderData& Prim : ViewLayoutData.Primitives) {
+	for (int32 Index = 0; Index < ViewLayoutData.Primitives.Num(); ++Index)
+	{
+		// 페이지 조회와 CB 매핑보다 먼저 제외한다.
+		if (PrimitiveVisibility[Index] == 0) continue;
+
+		const FPrimitiveRenderData& Prim = ViewLayoutData.Primitives[Index];
 		if (Prim.ObjectIndex >= Objects.Num()) continue;
 		const FRenderObjectData& ObjDatum = Objects[Prim.ObjectIndex];
 		const FMaterial* Material = Prim.Material;

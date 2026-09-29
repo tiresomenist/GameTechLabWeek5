@@ -10,6 +10,7 @@
 #include "Engine/Renderer/PrimitiveRenderData.h"
 #include "Engine/Renderer/Line/LineDrawRequest.h"
 #include "Engine/Renderer/Text/WorldTextItem.h"
+#include "Core/Math/Box.h"
 
 struct FRenderViewSnapshot
 {
@@ -24,6 +25,8 @@ struct FRenderObjectData
 {
     FMatrix World = FMatrix::Identity;
     FVector SortCenterWS{};
+    FBoundingBox WorldBounds{};
+    bool bHasWorldBounds = false;
 };
 
 struct FViewRenderData

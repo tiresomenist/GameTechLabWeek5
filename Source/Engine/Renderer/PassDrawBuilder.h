@@ -11,7 +11,8 @@ public:
 	FPassDrawBuilder() = default;
 	~FPassDrawBuilder() = default;
 
-	void BuildPassDraws(const FViewRenderData& ViewLayoutData, FPipelineStateCache* PipelineCache, FPassDrawList& OutPassDraws);
+	void BuildPassDraws(const FViewRenderData& ViewLayoutData, FPipelineStateCache* PipelineCache, 
+		FPassDrawList& OutPassDraws,const TArray<uint32>& PrimitiveVisibility);
 	const TArray<uint32>& GetObjectCBIndexMap() const { return ObjectIndexToCBIndex; }
 	const TArray<uint32>& GetReferenceObjectIndices() const { return ReferenceObjectIndices; }
 	const TMap<uint32, uint32>& GetMaterialCBIndexMap() const { return m_MaterialIdToCBIndex; }

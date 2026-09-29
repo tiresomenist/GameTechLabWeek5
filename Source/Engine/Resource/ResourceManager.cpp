@@ -909,6 +909,37 @@ void GResourceManager::RegisterShader(const FName& Name, const WCHAR* FilePath,
     }
 }
 
+void GResourceManager::RegisterComputeShader(const FName& Name, const WCHAR* FilePath, const char* EntryPoint)
+{
+    if (!Device || !Device->GetDevice())
+    {
+        throw std::runtime_error("Shader device is not initialized");
+    }
+    if (Name.IsNone() || !FilePath || !*FilePath || !EntryPoint || !*EntryPoint)
+    {
+        throw std::invalid_argument("Invalid compute shader registration");
+    }
+    if (ShaderCache.Contains(Name))
+    {
+        throw std::logic_error(std::format("Shader already registered: {}", Name.ToString()));
+    }
+
+    const auto ShaderBlob = CompileResourceShader(FilePath, EntryPoint, "cs_5_0");
+    FShaderResource Resource{};
+    CheckRenderResourceHR(Device->GetDevice()->CreateComputeShader(ShaderBlob->GetBufferPointer(), 
+        ShaderBlob->GetBufferSize(), nullptr, Resource.ComputeShader.GetAddressOf()), "CreateComputeShader");
+    if (!ShaderCache.Add(Name, Resource))
+    {
+        throw std::logic_error("Failed to register compute shader");
+    }
+}
+
+ID3D11ComputeShader* GResourceManager::GetComputeShader(const FName& Name) const
+{
+    const FShaderResource* Resource = GetShader(Name);
+    return Resource ? Resource->ComputeShader.Get() : nullptr;
+}
+
 const FShaderResource* GResourceManager::GetShader(const FName& Name) const
 {
     return ShaderCache.Find(Name);
@@ -1112,6 +1143,9 @@ void GResourceManager::RegisterDefaultRenderResources()
         "VS_Grid", "PS_Grid", ColorLayout);
     RegisterShader(FName("Editor.BatchLine"), L"Assets/Shaders/BatchLineShader.hlsl",
         "mainVS", "mainPS", ColorLayout);
+    RegisterComputeShader(FName("HZB.CopyDepth"), L"Assets/Shaders/HZB.hlsl", "CopyDepthCS");
+    RegisterComputeShader(FName("HZB.DownsampleMax"), L"Assets/Shaders/HZB.hlsl", "DownsampleMaxCS");
+    RegisterComputeShader(FName("HZB.CullCells"), L"Assets/Shaders/HZB.hlsl", "CullCellsCS");
 
     // 와이어프레임은 메시의 VS를 유지하고 PS만 교체하므로 별도로 소유한다.
     const auto WireframeBlob = CompileResourceShader(
@@ -1369,6 +1403,13 @@ void GResourceManager::RegisterDefaultBlendStates()
     AdditiveTarget.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
     RegisterBlendState(FName("Blend.Additive"), AdditiveDesc);
+
+    D3D11_BLEND_DESC OcclusionBlendDesc{};
+    OcclusionBlendDesc.AlphaToCoverageEnable = FALSE;
+    OcclusionBlendDesc.IndependentBlendEnable = FALSE;
+    OcclusionBlendDesc.RenderTarget[0].BlendEnable = FALSE;
+    OcclusionBlendDesc.RenderTarget[0].RenderTargetWriteMask = 0;  // 프레임 버퍼 색상은 바뀌지 않음
+    RegisterBlendState(FName("Blend.Occlusion"), OcclusionBlendDesc);
 }
 
 void GResourceManager::RegisterDepthStencilState(const FName& Name, const D3D11_DEPTH_STENCIL_DESC& Desc)
@@ -1436,6 +1477,9 @@ void GResourceManager::RegisterDefaultDepthStencilStates()
 
     // 선택된 메시: 스텐실 마스크 기록
     D3D11_DEPTH_STENCIL_DESC StencilWriteDesc = DefaultDesc;
+    StencilWriteDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+    StencilWriteDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+
     StencilWriteDesc.StencilEnable = TRUE;
     StencilWriteDesc.StencilReadMask = 0xFF;
     StencilWriteDesc.StencilWriteMask = 0xFF;
@@ -1466,11 +1510,18 @@ void GResourceManager::RegisterDefaultDepthStencilStates()
     OutlineDesc.BackFace = OutlineDesc.FrontFace;
 
     RegisterDepthStencilState(FName("Depth.Outline"), OutlineDesc);
+
+    // 오클루전 프록시는 기존 깊이와 비교만 하고 깊이 버퍼에는 기록하지 않는다.
+    D3D11_DEPTH_STENCIL_DESC OcclusionDepthDesc{};
+    OcclusionDepthDesc.DepthEnable = TRUE;
+    OcclusionDepthDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+    OcclusionDepthDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+    OcclusionDepthDesc.StencilEnable = FALSE;
+    RegisterDepthStencilState(FName("Depth.Occlusion"), OcclusionDepthDesc);
 }
 
 uint32 GResourceManager::AllocateMaterialId() const
 {
-    assert(NextMaterialId != InvalidRenderId);
     return NextMaterialId++;
 }
 

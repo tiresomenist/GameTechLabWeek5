@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "RenderUtil.h"
 #include "Core/Container/Array.h"
+#include "Core/Math/Box.h"
 #include "Engine/Renderer/PrimitiveRenderData.h"
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
 #include "Engine/Component/Primitive/TextComponent.h"
@@ -27,8 +28,9 @@ namespace
 	}
 }
 
+// 현재 View의 Bounds와 Frustum을 검사하고 객체별 렌더 요청을 수집한다.
 void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
-	TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects)
+	TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects, const FFrustum* Frustum)
 {
 	RenderList.Empty();
 	if (!Editor || !Scene || !Camera) return;
@@ -42,33 +44,28 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			{
 				return;
 			}
-			
-			const int32 FirstIndex = RenderList.Num();
-			Primitive->CreateRenderData(RenderList, Primitive == SelectedComponent);
-			const int32 EndIndex = RenderList.Num();
-			if (FirstIndex == EndIndex)
-			{
-				return;
-			}
-
 			FRenderObjectData Object{};
 			Object.World = Primitive->GetRenderWorldMatrix(Camera);
 			Object.SortCenterWS = Object.World.GetOrigin();
-
 			FVector LocalMin{};
 			FVector LocalMax{};
-
 			if (Primitive->GetLocalBounds(LocalMin, LocalMax))
 			{
-				const FVector LocalCenter =	LocalMin * 0.5f + LocalMax * 0.5f;
+				Object.WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Object.World);
+				Object.bHasWorldBounds = true;
+				Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
 
-				Object.SortCenterWS = Object.World.TransformPosition(LocalCenter);
+				// 화면 밖 객체는 요청 생성 전에 제외하고, Bounds가 없으면 그대로 수집한다.
+				if (Frustum && !Frustum->Intersects(Object.WorldBounds)) return;
 			}
 
+			const int32 FirstIndex = RenderList.Num();
+			Primitive->CreateRenderData(RenderList, Primitive == SelectedComponent);
+			const int32 EndIndex = RenderList.Num();
+			if (FirstIndex == EndIndex) { return; }
+			// 기존 Objects 뒤에 추가하고 이번 컴포넌트의 모든 섹션에 같은 인덱스를 부여한다.
 			const uint32 ObjectIndex = static_cast<uint32>(Objects.Num());
-
 			Objects.Add(Object);
-
 			for (int32 Index = FirstIndex; Index < EndIndex; ++Index)
 			{
 				RenderList[Index].ObjectIndex = ObjectIndex;
