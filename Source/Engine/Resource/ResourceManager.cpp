@@ -1195,6 +1195,8 @@ void GResourceManager::RegisterDefaultRenderResources()
     RegisterShader(FName("Mesh.Texture"),L"Assets/Shaders/TextureShader.hlsl","mainVS","mainPS",TextureLayout);
     RegisterShader(FName("Editor.Text"), L"Assets/Shaders/TextShader.hlsl","mainVS_Text","mainPS_Text",TextureLayout);
     RegisterShader(FName("Mesh.StaticMesh"), L"Assets/Shaders/StaticMeshShader.hlsl", "mainVS", "mainPS", StaticMeshLayout);
+    RegisterShader(FName("Mesh.Impostor"), L"Assets/Shaders/ImpostorShader.hlsl", "mainVS", "mainPS", StaticMeshLayout);
+    RegisterShader(FName("Mesh.ImpostorBake"), L"Assets/Shaders/ImpostorBakeShader.hlsl", "mainVS", "mainPS", StaticMeshLayout);;
 
     D3D11_SAMPLER_DESC SamplerDesc{};
     SamplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -1528,4 +1530,26 @@ uint32 GResourceManager::AllocateMaterialId() const
 FMeshPageBinding GResourceManager::GetMeshPageBinding(uint32 MeshPageId) const
 {
     return MeshBufferPool.GetPageBinding(MeshPageId);
+}
+
+FMaterial GResourceManager::CreateImpostorMaterial(ID3D11ShaderResourceView* SRV, const FString& InTexturePath) const
+{
+    static const FName ShaderName("Mesh.Impostor");
+    static const FName SamplerName("LinearClamp");
+
+    FMaterial Material{};
+
+    Material.MaterialId = AllocateMaterialId();
+    Material.SRV = SRV;
+    Material.TexturePath = InTexturePath;
+
+    Material.Shader = GetShader(ShaderName);
+    Material.Sampler = GetSampler(SamplerName);
+
+    Material.bTwoSided = true;
+
+    Material.BlendMode = EPrimitiveBlendMode::Opaque;
+    Material.AlphaCutoff = 0.01f;
+
+    return Material;
 }

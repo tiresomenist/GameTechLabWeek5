@@ -10,6 +10,24 @@
 #include <memory>
 #include <utility>
 
+struct FImpostorLOD {
+	FString TexturePath;
+
+	uint32 ViewCountX = 8;
+	uint32 ViewCountY = 4;
+
+	FVector Pivot = FVector::Zero;
+
+	float Width = 1.0f;
+	float Height = 1.0f;
+
+	uint32 MaterialIndex = InvalidRenderId;
+
+	bool IsValid() const {
+		return !TexturePath.empty() && MaterialIndex != InvalidRenderId;
+	}
+};
+
 struct FStaticMeshLOD
 {
 	FMeshResource* MeshResource = nullptr;
@@ -20,6 +38,9 @@ struct FStaticMeshLOD
 	bool bHasBounds = false;
 
 	float ScreenSize = 0.0f;
+
+	bool bImpostor = false;
+	FImpostorLOD Impostor;
 };
 
 class UStaticMesh : public UObject
@@ -33,6 +54,8 @@ public:
 	virtual void Serialize(FArchive& Archive) override {};
 
 	FName GetMeshKey() const { return MeshKey; }
+
+	FStaticMeshLOD BuildImpostorLOD(const FStaticMeshLOD& SourceLOD, const FString& TexturePath, float ScreenSize);
 
 	const TArray<FStaticMeshLOD>& GetLODs() const { return LODs; }
 

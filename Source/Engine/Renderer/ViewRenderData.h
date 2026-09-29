@@ -27,6 +27,12 @@ struct FRenderObjectData
     FVector SortCenterWS{};
     FBoundingBox WorldBounds{};
     bool bHasWorldBounds = false;
+
+    //Impostor
+    FVector ImpostorCenterWS{};
+    FVector4 ImpostorSize{ 1.0f, 1.0f, 0.0f, 0.0f };
+    FVector4 ImpostorUV{ 1.0f, 1.0f, 0.0f, 0.0f };
+    FVector ImpostorCameraLocation{};
 };
 
 struct FViewRenderData

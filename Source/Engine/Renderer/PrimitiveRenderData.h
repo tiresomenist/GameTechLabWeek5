@@ -36,4 +36,11 @@ struct FPrimitiveRenderData
 	uint32 Flags = Primitive_AllowOutline;
 	D3D11_PRIMITIVE_TOPOLOGY Topology =	D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	//Topology에 대해, 회전 기즈모는 LINELIST로 바꿔주면 됩니다.
+
+	//Impostor
+	bool bImpostor = false;
+	FVector ImpostorCenterWS{};
+	FVector4 ImpostorSize{ 1.0f,1.0f,0.0f,0.0f };
+	FVector4 ImpostorUV{ 1.0f,1.0f,0.0f,0.0f };
+	FVector ImpostorCameraLocation{};
 };

@@ -155,4 +155,15 @@ public:
 	void Swap(TArray& Other) {
 		Array.swap(Other.Array);
 	}
+
+	void SetNumZeroed(size_t NewNum)
+	{
+		size_t OldNum = Array.size();
+		Array.resize(NewNum);
+
+		if (NewNum > OldNum)
+		{
+			std::memset(&Array[OldNum], 0, (NewNum - OldNum) * sizeof(T));
+		}
+	}
 };

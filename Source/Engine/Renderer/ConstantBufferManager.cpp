@@ -16,6 +16,26 @@ void FConstantBufferManager::UploadObjectConstants(ID3D11DeviceContext* Context,
 		Constants.World = Objects[ObjectIndex].World;
 		Constants.ViewProjection = ViewProj;
 
+		Constants.ImpostorCenterWS =
+			FVector4(
+				Objects[ObjectIndex].ImpostorCenterWS.X,
+				Objects[ObjectIndex].ImpostorCenterWS.Y,
+				Objects[ObjectIndex].ImpostorCenterWS.Z,
+				1.0f
+			);
+
+		Constants.ImpostorSize = Objects[ObjectIndex].ImpostorSize;
+
+		Constants.ImpostorUV = Objects[ObjectIndex].ImpostorUV;
+
+		Constants.ImpostorCameraLocation =
+			FVector4(
+				Objects[ObjectIndex].ImpostorCameraLocation.X,
+				Objects[ObjectIndex].ImpostorCameraLocation.Y,
+				Objects[ObjectIndex].ImpostorCameraLocation.Z,
+				1.0f
+			);
+
 		// 드로우 요청의 ObjectConstantIndex와 같은 위치에 기록한다.
 		m_ObjectCBAllocations[CBIndex] = CBRing->AllocateAndUpload(
 			Context, &Constants, sizeof(Constants));

@@ -44,14 +44,6 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			{
 				return;
 			}
-			
-			/*const int32 FirstIndex = RenderList.Num();
-			Primitive->CreateRenderData(RenderList, Camera, Primitive == SelectedComponent);
-			const int32 EndIndex = RenderList.Num();
-			if (FirstIndex == EndIndex)
-			{
-				return;
-			}*/
 
 			FRenderObjectData Object{};
 			Object.World = Primitive->GetRenderWorldMatrix(Camera);
@@ -78,6 +70,16 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			for (int32 Index = FirstIndex; Index < EndIndex; ++Index)
 			{
 				RenderList[Index].ObjectIndex = ObjectIndex;
+
+				if (RenderList[Index].bImpostor) {
+					Objects[ObjectIndex].ImpostorCenterWS = RenderList[Index].ImpostorCenterWS;
+
+					Objects[ObjectIndex].ImpostorSize = RenderList[Index].ImpostorSize;
+
+					Objects[ObjectIndex].ImpostorUV = RenderList[Index].ImpostorUV;
+
+					Objects[ObjectIndex].ImpostorCameraLocation = RenderList[Index].ImpostorCameraLocation;
+				}
 			}
 		});
 
