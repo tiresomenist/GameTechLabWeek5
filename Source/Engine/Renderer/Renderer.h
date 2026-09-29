@@ -39,6 +39,7 @@ public:
 	float GetDrawTimeMs() const { return DrawTimeMs; }
 	float GetGPUTimeMs() const { return GPUTimer.GetGPUTimeMs(); }
 	float GetGPUWaitMs() const { return GPUWaitMs; }
+
 	const FRenderSubmissionCounts& GetSubmissionCounts() const
 	{
 		return ViewRenderer.GetSubmissionCounts();
@@ -50,6 +51,7 @@ public:
 	}
 	void SetHZBOcclusionEnabled(bool bEnabled) { ViewRenderer.SetHZBOcclusionEnabled(bEnabled); }
 	bool IsHZBOcclusionEnabled() const { return ViewRenderer.IsHZBOcclusionEnabled(); }
+
 private:
 	bool CreateSwapChain(HWND HWnd, uint32 Width, uint32 Height);
 	bool CreateFrameBuffer();

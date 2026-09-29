@@ -6,6 +6,7 @@
 #include "Engine/Input/InputManager.h"
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
 #include "Editor/Gizmo/ObjectAxisGizmo.h"
+#include "Engine/Engine.h"
 
 // Todo: BVH
 #include "Engine/Scene/Scene.h"
@@ -406,8 +407,9 @@ void FGizmoController::Tick()
     // Todo: BVH
     if (bTransformChanged && Editor->GetCurrentScene())
     {
-        Editor->GetCurrentScene()->UpdateBVHForActor(
-            SelectedObject->GetOwner());
+        Editor->GetCurrentScene()->UpdateBVHForActor(SelectedObject->GetOwner());
+        Editor->GetCurrentScene()->InvalidateStaticUniformGrid();
+        GEngine::GetInstance()->InvalidateOcclusionHistory();
     }
 
 	if (!Input.GetKey(GInputManager::EI_LMOUSE)) EndDrag();

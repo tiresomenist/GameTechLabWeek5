@@ -381,6 +381,7 @@ void UScene::Serialize(FArchive& Archive)
 
     // Todo: BVH
     RebuildBVH();
+    InvalidateStaticUniformGrid();
 }
 
 
@@ -558,7 +559,7 @@ void UScene::BuildStaticUniformGrid() const
             if (Cell.Primitives.IsEmpty())
             {
                 Cell.ContentBounds = WorldBounds;
-            }
+            } 
             else
             {
                 // 이미 들어 있다면 실제 점유 영역을 확장
