@@ -33,4 +33,5 @@ public:
 
 private:
     FName MeshKey;
+    UStaticMesh* CachedMesh = nullptr;
 };

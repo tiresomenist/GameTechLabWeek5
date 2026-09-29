@@ -7,31 +7,25 @@
 void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPipelineStateCache* PipelineCache, FPassDrawList& OutPassDraws)
 {
 	OutPassDraws.Clear();
-	m_ObjectIndexToCBIndex.clear();
-	m_MaterialIdToCBIndex.clear();
-	m_ReferencedMaterials.clear();
+	ObjectIndexToCBIndex.Empty();
+	m_MaterialIdToCBIndex.Empty();
+	m_ReferencedMaterials.Empty();
+	ResetObjectMapping(ViewLayoutData.Objects.Num());
 
 	const auto& ViewSnapshot = ViewLayoutData.View;
 	const auto& Objects = ViewLayoutData.Objects;
 	printf("ViewMode = %d\n", static_cast<int>(ViewSnapshot.ViewMode));
-	auto GetOrCreateObjectCBIndex = [this](uint32 ObjectIndex) -> uint32 {
-		auto It = m_ObjectIndexToCBIndex.find(ObjectIndex);
-		if (It != m_ObjectIndexToCBIndex.end())	return It->second;
 
-		uint32 NewIndex = static_cast<uint32>(m_ObjectIndexToCBIndex.size());
-		m_ObjectIndexToCBIndex[ObjectIndex] = NewIndex;
-		return NewIndex;
-	};
 
 	auto GetOrCreateMaterialCBIndex = [this](const FMaterial* Material) -> uint32 {
 		uint32 MatId = Material ? Material->MaterialId : InvalidRenderId;
-		auto It = m_MaterialIdToCBIndex.find(MatId);
-		if (It != m_MaterialIdToCBIndex.end()) return It->second;
+		auto It = m_MaterialIdToCBIndex.Find(MatId);
+		if (It != nullptr) return *It;
 
-		uint32 NewIndex = static_cast<uint32>(m_MaterialIdToCBIndex.size());
+		uint32 NewIndex = static_cast<uint32>(m_MaterialIdToCBIndex.Num());
 		m_MaterialIdToCBIndex[MatId] = NewIndex;
 		if (Material) {
-			m_ReferencedMaterials.push_back(Material);
+			m_ReferencedMaterials.Add(Material);
 		}
 		return NewIndex;
 	};
@@ -161,4 +155,22 @@ uint32 FPassDrawBuilder::CalculateDepthBucket(const FVector& SortCenterWS, const
 	NormalizedDepth = std::clamp(NormalizedDepth, 0.0f, 1.0f);
 
 	return static_cast<uint32>(NormalizedDepth * 65535.0f);
+}
+
+void FPassDrawBuilder::ResetObjectMapping(size_t ObjectCount)
+{
+	ObjectIndexToCBIndex.SetNum(ObjectCount);
+	std::fill(ObjectIndexToCBIndex.begin(), ObjectIndexToCBIndex.end(), InvalidRenderId);
+
+	ReferenceObjectIndices.Empty();
+}
+
+uint32 FPassDrawBuilder::GetOrCreateObjectCBIndex(uint32 ObjectIndex)
+{
+	uint32& CBIndex = ObjectIndexToCBIndex[ObjectIndex];
+	if (CBIndex != InvalidRenderId) return CBIndex;
+	const uint32 NewIndex = static_cast<uint32>(ReferenceObjectIndices.Num());
+	ReferenceObjectIndices.Add(NewIndex);
+	CBIndex = NewIndex;
+	return CBIndex;
 }

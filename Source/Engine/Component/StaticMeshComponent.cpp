@@ -8,13 +8,14 @@
 
 void UStaticMeshComponent::SetStaticMesh(const FName& InMeshKey)
 {
-	if (!InMeshKey.IsNone() && InMeshKey == MeshKey) return;
+	if ((!InMeshKey.IsNone() || CachedMesh) && InMeshKey == MeshKey) return;
 
+	UStaticMesh* Mesh = nullptr;
 	int32 NewSlotCount = 0;
 	if (!InMeshKey.IsNone())
 	{
 		// 새 메시를 확보하지 못하면 기존 상태를 변경하지 않는다.
-		UStaticMesh* Mesh = GResourceManager::GetInstance()->GetOrLoadStaticMesh(InMeshKey);
+		Mesh = GResourceManager::GetInstance()->GetOrLoadStaticMesh(InMeshKey);
 		if (!Mesh)
 		{
 			throw std::runtime_error("Static mesh could not be loaded: " + InMeshKey.ToString());
@@ -29,6 +30,7 @@ void UStaticMeshComponent::SetStaticMesh(const FName& InMeshKey)
 	ClearOverrideMaterials();
 	OverrideMaterials.SetNum(NewSlotCount);
 	MeshKey = InMeshKey;
+	CachedMesh = Mesh;
 }
 
 void UStaticMeshComponent::SetStaticMesh(const FString& FilePath)
@@ -110,10 +112,7 @@ void UStaticMeshComponent::Serialize(FArchive& Archive)
 
 void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, bool bSelected)
 {
-	UStaticMesh* Mesh = GetStaticMesh();
-	if (!Mesh){	return; }
-
-	FMeshResource* Resource = Mesh->GetMeshResource();
+	FMeshResource* Resource = CachedMesh->GetMeshResource();
 	if (!Resource){	return; }
 
 	const FMeshAllocation& Allocation = Resource->GetAllocation();
@@ -121,7 +120,7 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 	//잘못된 메쉬페이지 아이디
 	if (Allocation.MeshPageId == InvalidRenderId){ return; }
 
-	for (const FMeshSection& Section : Mesh->GetSections())
+	for (const FMeshSection& Section : CachedMesh->GetSections())
 	{
 		if (Section.IndexCount == 0){ continue; }
 
@@ -159,28 +158,18 @@ FMeshResource* UStaticMeshComponent::GetMeshResource() const
 
 bool UStaticMeshComponent::GetLocalBounds(FVector& OutMin, FVector& OutMax) const
 {
-	const UStaticMesh* Mesh = GetStaticMesh();
-	if (!Mesh || !Mesh->HasBounds())
-	{
-		return false;
-	}
-
-	OutMin = Mesh->GetBoundsMin();
-	OutMax = Mesh->GetBoundsMax();
+	if (!CachedMesh || !CachedMesh->HasBounds()) { return false; }
+	OutMin = CachedMesh->GetBoundsMin();
+	OutMax = CachedMesh->GetBoundsMax();
 	return true;
 }
 
 const FMaterial* UStaticMeshComponent::GetMaterial(uint32 MaterialSlot) const
 {
-	const FMaterial* Mat = Super::GetMaterial(MaterialSlot);
-	if (!Mat)
-	{
-		if (UStaticMesh* Mesh = GetStaticMesh()) 
-		{ 
-			Mat = Mesh->GetMaterial(MaterialSlot);
-		}
-	}
-	return Mat;
+	if (const FMaterial* Override = Super::GetMaterial(MaterialSlot))
+		return Override;
+
+	return CachedMesh ? CachedMesh->GetMaterial(MaterialSlot) : nullptr;
 }
 
 const FString& UStaticMeshComponent::GetMaterialPath(uint32 MaterialSlot) const
@@ -192,9 +181,5 @@ const FString& UStaticMeshComponent::GetMaterialPath(uint32 MaterialSlot) const
 
 UStaticMesh* UStaticMeshComponent::GetStaticMesh() const
 {
-	if (MeshKey.IsNone())
-	{
-		return nullptr;
-	}
-	return GResourceManager::GetInstance()->GetStaticMesh(MeshKey);
+	return CachedMesh;
 }

@@ -1,42 +1,40 @@
 #include "pch.h"
 #include "ConstantBufferManager.h"
 #include <cassert>
-void FConstantBufferManager::UploadObjectConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const FViewRenderData& ViewLayoutData, const std::unordered_map<uint32, uint32>& ObjectIndexToCBIndexMap)
+void FConstantBufferManager::UploadObjectConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const FViewRenderData& ViewLayoutData, const TArray<uint32>& ObjectIndexToCBIndexMap)
 {
-	if (ObjectIndexToCBIndexMap.empty()) return;
-
-	m_ObjectCBAllocations.resize(ObjectIndexToCBIndexMap.size());
+	m_ObjectCBAllocations.SetNum(ObjectIndexToCBIndexMap.Num());
 
 	const auto& Objects = ViewLayoutData.Objects;
 	const FMatrix& ViewProj = ViewLayoutData.View.ViewProjection;
 
-	for (const auto& [ObjIndex, CBIndex] : ObjectIndexToCBIndexMap) {
-		assert(CBIndex < m_ObjectCBAllocations.size());
-		assert(ObjIndex < Objects.size());
+	for (int32 CBIndex = 0; CBIndex < ObjectIndexToCBIndexMap.Num(); ++CBIndex)
+	{
+		const uint32 ObjectIndex = ObjectIndexToCBIndexMap[CBIndex];
 
-		FObjectConstants ObjCBData;
-		ObjCBData.World = Objects[ObjIndex].World;
-		ObjCBData.ViewProjection = ViewProj;
+		FObjectConstants Constants{};
+		Constants.World = Objects[ObjectIndex].World;
+		Constants.ViewProjection = ViewProj;
 
-		FCBRangeAllocation Alloc = CBRing->AllocateAndUpload(Context, &ObjCBData, sizeof(FObjectConstants));
-		m_ObjectCBAllocations[CBIndex] = Alloc;
+		// 드로우 요청의 ObjectConstantIndex와 같은 위치에 기록한다.
+		m_ObjectCBAllocations[CBIndex] = CBRing->AllocateAndUpload(
+			Context, &Constants, sizeof(Constants));
 	}
 }
 
-void FConstantBufferManager::UploadMaterialConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const std::vector<const FMaterial*>& ReferencedMaterials, const std::unordered_map<uint32, uint32>& MaterialIdToCBIndexMap)
+void FConstantBufferManager::UploadMaterialConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const TArray<const FMaterial*>& ReferencedMaterials, const TMap<uint32, uint32>& MaterialIdToCBIndexMap)
 {
-	if (MaterialIdToCBIndexMap.empty()) return;
+	if (MaterialIdToCBIndexMap.IsEmpty()) return;
 
-	m_MaterialCBAllocations.resize(MaterialIdToCBIndexMap.size());
+	m_MaterialCBAllocations.resize(MaterialIdToCBIndexMap.Num());
 
 	for (const FMaterial* Material : ReferencedMaterials)
 	{
 		uint32 MatId = Material ? Material->MaterialId : InvalidRenderId;
-		auto It = MaterialIdToCBIndexMap.find(MatId);
-		if (It == MaterialIdToCBIndexMap.end()) continue;
+		auto It = MaterialIdToCBIndexMap.Find(MatId);
+		if (It == nullptr) continue;
 
-		uint32 CBIndex = It->second;
-		assert(CBIndex < m_MaterialCBAllocations.size());
+		uint32 CBIndex = *It;
 
 		FTextureDrawConstants MatCBData{};
 		if (Material)
@@ -54,18 +52,16 @@ void FConstantBufferManager::UploadMaterialConstants(ID3D11DeviceContext* Contex
 
 const FCBRangeAllocation& FConstantBufferManager::GetObjectCBRange(uint32 ObjectCBIndex) const
 {
-	assert(ObjectCBIndex < m_ObjectCBAllocations.size());
 	return m_ObjectCBAllocations[ObjectCBIndex];
 }
 
 const FCBRangeAllocation& FConstantBufferManager::GetMaterialCBRange(uint32 MaterialCBIndex) const
 {
-	assert(MaterialCBIndex < m_MaterialCBAllocations.size());
 	return m_MaterialCBAllocations[MaterialCBIndex];
 }
 
 void FConstantBufferManager::Clear()
 {
-	m_ObjectCBAllocations.clear();
-	m_MaterialCBAllocations.clear();
+	m_ObjectCBAllocations.Empty();
+	m_MaterialCBAllocations.Empty();
 }

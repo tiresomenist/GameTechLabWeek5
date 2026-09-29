@@ -60,6 +60,11 @@ public:
         return Map.size();
     }
 
+    bool IsEmpty()const
+    {
+        return Map.empty();
+    }
+
     auto begin() { return Map.begin(); }
     auto end() { return Map.end(); }
 
