@@ -16,6 +16,8 @@
 #include "PassExecutor.h"
 #include "PreparedDraw.h"
 #include "Core/Container/Array.h"
+#include "Engine/Util/RenderSubmissionStats.h"
+
 class UScene;
 class FEditor;
 class UCameraComponent;
@@ -31,7 +33,13 @@ public:
 	void Create(ID3D11Device* InDevice, ID3D11DeviceContext* InContext);
 	void Shutdown();
 	void RenderView(const FViewRenderData& Data);
-
+	void BeginSubmissionFrame() {
+		SubmissionStats.BeginFrame();
+	}
+	const FRenderSubmissionCounts& GetSubmissionCounts()const
+	{
+		return SubmissionStats.GetCounts();
+	}
 private:
 	bool CreateShaders();
 	void ReleaseShaders();
@@ -103,4 +111,5 @@ private:
 	FPassDrawList PassDraws;
 	TArray<FPreparedDraw> OpaqueSortScratch;
 
+	FRenderSubmissionStats SubmissionStats;
 };

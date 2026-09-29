@@ -341,6 +341,7 @@ void FViewRenderer::RenderText(UINT IndexCount)
 	DeviceContext->OMSetDepthStencilState(TextDepthStencilState, 0);
 
 	DeviceContext->DrawIndexed(IndexCount, 0, 0);
+	SubmissionStats.RecordIndexedDraw(IndexCount, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
 void FViewRenderer::RenderPrimitive(const FPrimitiveRenderData& Data, EViewModeIndex InViewMode, bool bWriteStencil)
@@ -412,19 +413,19 @@ void FViewRenderer::RenderView(const FViewRenderData& Data)
 	ID3D11Buffer* ViewCB = TransformConstantBuffer.Get();
 
 	// Opaque 씬 오브젝트 렌더링
-	PassExecutor.ExecutePass(Context1.Get(), PassDraws.OpaqueDraws, PipelineStateCache, CBManager, ViewCB);
+	PassExecutor.ExecutePass(Context1.Get(), PassDraws.OpaqueDraws, PipelineStateCache, CBManager, ViewCB, SubmissionStats);
 
 	// 배치 라인 렌더링
 	RenderBatchLine(Data.View.ViewProjection);
 
 	// Additive / Translucent 렌더링
-	PassExecutor.ExecutePass(Context1.Get(), PassDraws.AdditiveDraws, PipelineStateCache, CBManager, ViewCB);
+	PassExecutor.ExecutePass(Context1.Get(), PassDraws.AdditiveDraws, PipelineStateCache, CBManager, ViewCB, SubmissionStats);
 
 	// 외곽선 렌더링
-	PassExecutor.ExecutePass(Context1.Get(), PassDraws.OutlineDraws, PipelineStateCache, CBManager, ViewCB);
+	PassExecutor.ExecutePass(Context1.Get(), PassDraws.OutlineDraws, PipelineStateCache, CBManager, ViewCB, SubmissionStats);
 
 	// Gizmo 렌더링
-	PassExecutor.ExecutePass(Context1.Get(), PassDraws.GizmoDraws, PipelineStateCache, CBManager, ViewCB);
+	PassExecutor.ExecutePass(Context1.Get(), PassDraws.GizmoDraws, PipelineStateCache, CBManager, ViewCB, SubmissionStats);
 
 	// Text 렌더링
 	if (Data.TextItems.Num() > 0) {
@@ -573,6 +574,7 @@ void FViewRenderer::RenderBatchLine(const FMatrix& ViewProj)
 	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
 
 	DeviceContext->DrawIndexed(IndexCount, 0, 0);
+	SubmissionStats.RecordIndexedDraw(IndexCount, D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
 
 	// 나중에 같은 데이터로 여러번 그리려면 Clear() 분리가 필요할 수 있음
 	LineBatcher.Clear();

@@ -13,6 +13,8 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 
 	const auto& ViewSnapshot = ViewLayoutData.View;
 	const auto& Objects = ViewLayoutData.Objects;
+	FPipelineKey LastPipelineKey{};
+	const FPipelineState* LastPipelineState = nullptr;
 
 	auto FindPipeline = [&](const FPipelineKey& Key) -> const FPipelineState* {
 		if (LastPipelineState && LastPipelineKey == Key) return LastPipelineState;

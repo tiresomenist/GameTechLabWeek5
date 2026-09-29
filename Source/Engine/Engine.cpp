@@ -125,6 +125,7 @@ void GEngine::Tick()
     UScene* CurrentScene = Editor->GetCurrentScene();
 	Renderer.Render(DeltaTime, Editor, CurrentScene);
 
+    EngineStats.UpdateSubmissionStat(Renderer.GetSubmissionCounts());
     EngineStats.UpdateUnitStat(DeltaTime, GameTimeMs, Renderer.GetDrawTimeMs(),
         Renderer.GetGPUTimeMs(), Renderer.GetGPUWaitMs());
     EngineStats.UpdateMemoryStat();

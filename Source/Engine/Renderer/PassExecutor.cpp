@@ -3,12 +3,14 @@
 #include "Engine/Resource/ResourceManager.h"
 #include <cassert>
 
-void FPassExecutor::ExecutePass(ID3D11DeviceContext1* Context1, const TArray<FPreparedDraw>& PassDraws, const FPipelineStateCache& PipelineCache, const FConstantBufferManager& CBManager, ID3D11Buffer* ViewConstantBuffer)
+void FPassExecutor::ExecutePass(ID3D11DeviceContext1* Context1, const TArray<FPreparedDraw>& PassDraws, 
+	const FPipelineStateCache& PipelineCache, const FConstantBufferManager& CBManager, 
+	ID3D11Buffer* ViewConstantBuffer, FRenderSubmissionStats& SubmissionStats)
 {
 	if (!Context1 || PassDraws.IsEmpty()) return;
 
 	ResetStateCache();
-
+	D3D11_PRIMITIVE_TOPOLOGY CurrentTopology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
 	if (ViewConstantBuffer) {
 		Context1->VSSetConstantBuffers(2, 1, &ViewConstantBuffer);
 		Context1->PSSetConstantBuffers(2, 1, &ViewConstantBuffer);
@@ -28,7 +30,7 @@ void FPassExecutor::ExecutePass(ID3D11DeviceContext1* Context1, const TArray<FPr
 
 
 				Context1->IASetPrimitiveTopology(State->Topology);
-
+				CurrentTopology = State->Topology;
 				// Pipeline States
 				Context1->RSSetState(State->RasterizerState);
 				Context1->OMSetDepthStencilState(State->DepthStencilState, 0);
@@ -95,5 +97,6 @@ void FPassExecutor::ExecutePass(ID3D11DeviceContext1* Context1, const TArray<FPr
 			Geo.FirstIndex,
 			Geo.BaseVertex
 		);
+		SubmissionStats.RecordIndexedDraw(Geo.IndexCount, CurrentTopology);
 	}
 }

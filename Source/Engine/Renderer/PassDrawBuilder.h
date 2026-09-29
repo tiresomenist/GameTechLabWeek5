@@ -25,8 +25,6 @@ private:
 	uint32 GetOrCreateObjectCBIndex(uint32 ObjectIndex);
 	TArray<uint32> ObjectIndexToCBIndex;
 	TArray<uint32> ReferenceObjectIndices;
-	const FPipelineState* LastPipelineState;
-	FPipelineKey LastPipelineKey;
 	TMap<uint32, uint32> m_MaterialIdToCBIndex;
 	TArray<const FMaterial*> m_ReferencedMaterials;
 };

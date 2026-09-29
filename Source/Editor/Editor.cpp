@@ -1035,6 +1035,15 @@ float FEditor::DrawStatUnit(ImDrawList* DrawList, float X, float Y)
 	DrawShadowedText(DrawList, ImVec2(X, Y), IM_COL32(50, 255, 50, 255), Buffer);
 	Y += LineHeight;
 
+	const FRenderSubmissionCounts& Submission =	GEngine::GetInstance()->GetEngineStats().GetSubmissionStat();
+
+	sprintf_s(Buffer, "View Draws: %llu",static_cast<unsigned long long>(Submission.DrawCalls));
+	DrawShadowedText(DrawList, ImVec2(X, Y), IM_COL32(50, 255, 50, 255), Buffer);
+	Y += LineHeight;
+
+	sprintf_s(Buffer, "View Tris:  %llu",static_cast<unsigned long long>(Submission.Triangles));
+	DrawShadowedText(DrawList, ImVec2(X, Y), IM_COL32(50, 255, 50, 255), Buffer);
+	Y += LineHeight;
 	return Y + 6.0f;
 }
 

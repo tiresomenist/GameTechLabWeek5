@@ -22,7 +22,7 @@ const FPipelineState* FPipelineStateCache::GetOrCreate(const FPipelineKey& Key)
 		return m_PipelineStates[It->second].get();
 	}
 
-	assert(m_PipelineState.size() < INVALID_PIPELINE_ID && "PipelineId overflow!");
+	assert(m_PipelineStates.size() < INVALID_PIPELINE_ID && "PipelineId overflow!");
 	FPipelineId NewId = static_cast<FPipelineId>(m_PipelineStates.size());
 
 	std::unique_ptr<FPipelineState> NewState = CreatePipelineState(Key, NewId);

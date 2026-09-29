@@ -38,7 +38,10 @@ public:
 	float GetDrawTimeMs() const { return DrawTimeMs; }
 	float GetGPUTimeMs() const { return GPUTimer.GetGPUTimeMs(); }
 	float GetGPUWaitMs() const { return GPUWaitMs; }
-
+	const FRenderSubmissionCounts& GetSubmissionCounts() const
+	{
+		return ViewRenderer.GetSubmissionCounts();
+	}
 
 private:
 	bool CreateSwapChain(HWND HWnd, uint32 Width, uint32 Height);

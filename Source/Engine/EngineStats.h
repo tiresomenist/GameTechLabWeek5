@@ -1,5 +1,6 @@
 #pragma once
 #include "Core/Core.h"
+#include "Engine/Util/RenderSubmissionStats.h"
 
 struct FUnitStat
 {
@@ -40,8 +41,17 @@ public:
 
 	void UpdateUnitStat(float DeltaTime, float GameTimeMs, float DrawTimeMs, float GPUTimeMs, float GPUWaitMs);
 	void UpdateMemoryStat();
+	void UpdateSubmissionStat(const FRenderSubmissionCounts& Counts)
+	{
+		SubmissionStat = Counts;
+	}
 
-
+	// UI에서 사용할 완료된 프레임의 제출량을 반환한다.
+	const FRenderSubmissionCounts& GetSubmissionStat() const
+	{
+		return SubmissionStat;
+	}
+	FRenderSubmissionCounts SubmissionStat;
 	FUnitStat UnitStat;
 	FMemoryStat MemoryStat;
 };
