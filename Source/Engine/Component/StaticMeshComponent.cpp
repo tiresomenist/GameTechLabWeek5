@@ -114,81 +114,61 @@ void UStaticMeshComponent::Serialize(FArchive& Archive)
 	}
 }
 
-void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, const UCameraComponent* Camera, bool bSelected)
+void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData,
+	const UCameraComponent* Camera, bool bSelected)
 {
-	if (!CachedMesh || !Camera)
-	{
-		return;
-	}
+	if (!CachedMesh || !Camera) return;
 
-	const FMatrix World = GetRenderWorldMatrix(Camera);
-
-	const FVector LocalCenter = (CachedMesh->GetBoundsMin(0) + CachedMesh->GetBoundsMax(0)) * 0.5f;
-
-	const FVector WorldCenter = World.TransformPosition(LocalCenter);
-
-	const float Distance = (WorldCenter - Camera->GetRelativeLocation()).Length();
+	const TArray<FStaticMeshLOD>& LODs = CachedMesh->GetLODs();
+	const uint32 LODCount = static_cast<uint32>(LODs.Num());
+	if (LODCount == 0) return;
 
 	uint32 LODIndex = 0;
-
-	if (CachedMesh->GetLODCount() > 1 && Distance >= 10.0f)
+	if (LODCount > 1)
 	{
-		LODIndex = 1;
+		// Bounds getter마다 LOD를 다시 찾지 않고 LOD0 정보를 재사용합니다.
+		const FStaticMeshLOD& BaseLOD = LODs[0];
+		const FVector LocalCenter = (BaseLOD.BoundsMin + BaseLOD.BoundsMax) * 0.5f;
+		const FMatrix World = GetRenderWorldMatrix(Camera);
+		const FVector WorldCenter = World.TransformPosition(LocalCenter);
+		const FVector ToCamera = WorldCenter - Camera->GetRelativeLocation();
+
+		const float DistanceSquared = ToCamera.LengthSquared();
+		if (DistanceSquared >= 100.0f)
+			LODIndex = 1;
+		if (LODCount > 2 && DistanceSquared >= 900.0f)
+			LODIndex = 2;
 	}
 
-	if (CachedMesh->GetLODCount() > 2 && Distance >= 30.0f)
+	// 위 조건에서 실제 존재하는 LOD 인덱스만 선택합니다.
+	const FStaticMeshLOD& LOD = LODs[LODIndex];
+	if (!LOD.MeshResource) return;
+
+	const FMeshAllocation& Allocation = LOD.MeshResource->GetAllocation();
+	if (Allocation.MeshPageId == InvalidRenderId) return;
+
+	for (const FMeshSection& Section : LOD.Sections)
 	{
-		LODIndex = 2;
-	}
+		if (Section.IndexCount == 0) continue;
 
-	const FStaticMeshLOD* LOD = CachedMesh->GetLOD(LODIndex);
-
-	if (!LOD || !LOD->MeshResource)
-	{
-		return;
-	}
-
-	FMeshResource* Resource = LOD->MeshResource;
-	const FMeshAllocation& Allocation = Resource->GetAllocation();
-
-	if (Allocation.MeshPageId == InvalidRenderId)
-	{
-		return;
-	}
-
-	for (const FMeshSection& Section : LOD->Sections)
-	{
-		if (Section.IndexCount == 0)
-		{
-			continue;
-		}
-
+		// Override 우선순위와 기본 머티리얼 조회 동작을 유지합니다.
 		const FMaterial* SectionMaterial = GetMaterial(Section.MaterialIndex);
-
-		if (!SectionMaterial)
-		{
-			continue;
-		}
+		if (!SectionMaterial) continue;
 
 		assert(SectionMaterial->MaterialId != InvalidRenderId);
 		assert(Section.FirstIndex <= Allocation.IndexCount);
 		assert(Section.IndexCount <= Allocation.IndexCount - Section.FirstIndex);
 
 		FPrimitiveRenderData Data{};
-
 		Data.Geometry.MeshPageId = Allocation.MeshPageId;
 		Data.Geometry.FirstIndex = Allocation.FirstIndex + Section.FirstIndex;
 		Data.Geometry.IndexCount = Section.IndexCount;
 		Data.Geometry.BaseVertex = Allocation.BaseVertex;
-
 		Data.Material = SectionMaterial;
 
+		// 기존 Outline 허용 여부와 선택 상태를 전달합니다.
 		Data.Flags = Primitive_AllowOutline;
-
-		if (bSelected)
-		{
-			Data.Flags |= Primitive_Selected;
-		}
+		if (bSelected) Data.Flags |= Primitive_Selected;
 
 		ComponentRenderData.Add(Data);
 	}

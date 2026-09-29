@@ -28,17 +28,35 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 		return State;
 	};
 
-	auto GetOrCreateMaterialCBIndex = [this](const FMaterial* Material) -> uint32 {
-		if (const uint32* Existing = m_MaterialIdToCBIndex.Find(Material->MaterialId))
+	const FMaterial* LastMaterial = nullptr;
+	uint32 LastMaterialCBIndex = InvalidRenderId;
+
+	// 현재 View에서 머티리얼의 CB 인덱스를 찾고, 처음 사용하는 머티리얼만 등록합니다.
+	auto GetOrCreateMaterialCBIndex =
+		[this, &LastMaterial, &LastMaterialCBIndex](const FMaterial* Material) -> uint32
 		{
-			return *Existing;
-		}
-		const uint32 NewIndex =	static_cast<uint32>(m_ReferencedMaterials.Num());
-		// 배열 위치와 CB 인덱스를 동일하게 유지한다.
-		m_ReferencedMaterials.Add(Material);
-		m_MaterialIdToCBIndex.Add(Material->MaterialId, NewIndex);
-		return NewIndex;
-	};
+			// 직전 요청과 같은 머티리얼이면 해시 조회를 생략합니다.
+			if (Material == LastMaterial)
+				return LastMaterialCBIndex;
+
+			uint32 MaterialCBIndex;
+			if (const uint32* Existing = m_MaterialIdToCBIndex.Find(Material->MaterialId))
+			{
+				MaterialCBIndex = *Existing;
+			}
+			else
+			{
+				// 참조 배열의 위치를 CB 인덱스로 사용합니다.
+				MaterialCBIndex = static_cast<uint32>(m_ReferencedMaterials.Num());
+				m_ReferencedMaterials.Add(Material);
+				m_MaterialIdToCBIndex.Add(Material->MaterialId, MaterialCBIndex);
+			}
+
+			// 기존 항목을 찾은 경우에도 직전 조회 결과를 갱신합니다.
+			LastMaterial = Material;
+			LastMaterialCBIndex = MaterialCBIndex;
+			return MaterialCBIndex;
+		};
 
 	// 일반 primitives 처리
 	for (int32 Index = 0; Index < ViewLayoutData.Primitives.Num(); ++Index)
@@ -166,15 +184,19 @@ FPipelineKey FPassDrawBuilder::MakePipelineKey(const FMaterial* Material, EVerte
 	return Key;
 }
 
-uint32 FPassDrawBuilder::CalculateDepthBucket(const FVector& SortCenterWS, const FMatrix& ViewMatrix, float NearZ, float FarZ) const
+uint32 FPassDrawBuilder::CalculateDepthBucket(
+	const FVector& SortCenterWS, const FMatrix& ViewMatrix, float NearZ, float FarZ) const
 {
+	// 정렬에는 Z만 필요하므로 X, Y, W 성분의 변환을 생략합니다.
+	const float ViewZ =
+		SortCenterWS.X * ViewMatrix.M[0][2] +
+		SortCenterWS.Y * ViewMatrix.M[1][2] +
+		SortCenterWS.Z * ViewMatrix.M[2][2] +
+		ViewMatrix.M[3][2];
 
-	FVector4 ViewPos = FVector4(SortCenterWS, 1) * ViewMatrix;
-	float ViewZ = ViewPos.Z;
-
-	float NormalizedDepth = (ViewZ - NearZ) / (FarZ - NearZ);
-	NormalizedDepth = std::clamp(NormalizedDepth, 0.0f, 1.0f);
-
+	// 기존 깊이 범위와 버킷 생성 규칙을 유지합니다.
+	const float NormalizedDepth =
+		std::clamp((ViewZ - NearZ) / (FarZ - NearZ), 0.0f, 1.0f);
 	return static_cast<uint32>(NormalizedDepth * 65535.0f);
 }
 
