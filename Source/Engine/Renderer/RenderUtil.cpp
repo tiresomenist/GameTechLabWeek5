@@ -82,39 +82,27 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			}
 		});
 
-	//SpotLight를 렌더링하기위한 임시 순회, 차후에 분리 해야함.
-	Scene->ForEachActor([&](AActor* Actor)
+	//SpotLight를 렌더링하기위한 임시 순회, 차후에 Billborad로 확장할것임.
+	Scene->ForEachBillboardIcon([&](USpotLightComponent* SpotLight)
 		{
-			for (UActorComponent* Component : Actor->GetComponents())
-			{
-				if (!Component->IsA(USpotLightComponent::GetClass()))
-				{
-					continue;
-				}
+			if (!SpotLight->IsVisible()) return;
 
-				const auto* SpotLight = static_cast<const USpotLightComponent*>(Component);
+			// 선택 상태와 카메라 의존 렌더 데이터 생성은 기존 동작을 유지합니다.
+			FPrimitiveRenderData Data = SpotLight->BuildIconRenderData(
+				Camera, SelectedComponent == SpotLight);
 
-				if (!SpotLight->IsVisible())
-				{
-					continue;
-				}
+			if (!Data.Material || Data.Geometry.MeshPageId == InvalidRenderId
+				|| Data.Geometry.IndexCount == 0)
+				return;
 
-				FPrimitiveRenderData Data = SpotLight->BuildIconRenderData(Camera, SelectedComponent==SpotLight);
+			FRenderObjectData Object{};
+			Object.World = SpotLight->GetIconWorldMatrix(Camera);
+			Object.SortCenterWS = Object.World.GetOrigin();
 
-				if (!Data.Material || Data.Geometry.MeshPageId == InvalidRenderId || Data.Geometry.IndexCount == 0)
-				{
-					continue;
-				}
-
-				FRenderObjectData Object{};
-				Object.World = SpotLight->GetIconWorldMatrix(Camera);
-				Object.SortCenterWS = Object.World.GetOrigin();
-
-				Data.ObjectIndex = static_cast<uint32>(Objects.Num());
-
-				Objects.Add(Object);
-				RenderList.Add(Data);
-			}
+			// 기존 Objects 뒤에 추가하여 이전 ObjectIndex를 유지합니다.
+			Data.ObjectIndex = static_cast<uint32>(Objects.Num());
+			Objects.Add(Object);
+			RenderList.Add(Data);
 		});
 
 	return;
@@ -178,14 +166,14 @@ void RenderUtil::GetTextRenderList(UScene* Scene, const UCameraComponent* Camera
 			});
 	}
 
-	Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
+	Scene->ForEachText([&](UTextComponent* Text)
 		{
-			if (!Primitive->IsVisible() ||
-				!Primitive->IsA(UTextComponent::GetClass())) return;
+			if (!Text->IsVisible()) return;
 
 			FTextDrawRequest Request{};
-			Request.TextComponent = static_cast<const UTextComponent*>(Primitive);
+			Request.TextComponent = Text;
 			OutData.TextRequests.Add(Request);
+
 		});
 
 }

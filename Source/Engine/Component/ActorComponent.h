@@ -3,6 +3,8 @@
 #include "Engine/Object/Object.h"
 
 class AActor;
+class UScene;
+
 
 // Actor에 소속되는 기능 단위입니다. Owner는 Actor만 설정할 수 있습니다.
 class UActorComponent : public UObject
@@ -25,6 +27,8 @@ private:
     AActor* Owner = nullptr;
 
     void SetOwner(AActor* InOwner) { Owner = InOwner; }
+    bool bRegisteredWithScene = false;
 
+    friend class UScene;
     friend class AActor;
 };

@@ -5,6 +5,8 @@
 
 class USceneComponent;
 struct FClassType;
+class UScene;
+
 
 // Scene에 배치되는 게임 오브젝트 단위입니다. Component의 생성과 파괴를 소유합니다.
 class AActor : public UObject
@@ -35,7 +37,7 @@ public:
     void SetVisibility(bool bIsVisible) { bVisible = bIsVisible; }
 
     ~AActor() override;
-
+    UScene* GetScene()const { return Scene; }
 private:
     void ReleaseComponents();
     void DetachChildren();
@@ -46,4 +48,7 @@ private:
     TArray<AActor*> ChildActors;
     bool bHasBegunPlay = false;
     bool bVisible = true;
+
+    UScene* Scene = nullptr;
+    friend class UScene;
 };

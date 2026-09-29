@@ -79,7 +79,13 @@ public:
 	{
 		return SubmissionStats.GetCounts();
 	}
-
+	void ReleaseViewReferences()
+	{
+		// 배열 용량은 유지하면서 Source와 Material 참조를 제거합니다.
+		PassDraws.Clear();
+		OpaqueSortScratch.Empty();
+		PassDrawBuilder.ReleaseViewReferences();
+	}
 private:
 	bool CreateShaders();
 	void ReleaseShaders();

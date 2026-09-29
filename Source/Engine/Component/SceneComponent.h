@@ -67,6 +67,9 @@ protected:
     mutable FMatrix CachedWorldMatrix;
 
     void UpdateWorldTransform() const;
+
+virtual void OnWorldBoundsChanged() const {}
+
 private:
     // 행렬 회전 합성용 쿼터니언
     FQuaternion RelativeRotation;

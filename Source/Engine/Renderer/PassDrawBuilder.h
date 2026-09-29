@@ -17,6 +17,12 @@ public:
 	const TArray<uint32>& GetReferenceObjectIndices() const { return ReferenceObjectIndices; }
 	const TMap<uint32, uint32>& GetMaterialCBIndexMap() const { return m_MaterialIdToCBIndex; }
 	const TArray<const FMaterial*>& GetReferencedMaterials() const { return m_ReferencedMaterials; }
+	// 현재 View에서 사용한 머티리얼의 비소유 참조를 해제합니다.
+	void ReleaseViewReferences()
+	{
+		// 다음 View의 매핑 초기화는 기존 BuildPassDraws 경로에서 수행합니다.
+		m_ReferencedMaterials.Empty();
+	}
 private:
 	FPipelineKey MakePipelineKey(const FMaterial* Material, EVertexFormat VertexFormat, EPipelinePass Pass, EViewModeIndex ViewMode) const;
 	uint32 CalculateDepthBucket(const FVector& SortCenterWS, const FMatrix& ViewMatrix, float NearZ = 0.1f, float FarZ = 1000.0f) const;

@@ -5,16 +5,16 @@
 #include "Engine/Object/ObjectFactory.h"
 #include "Engine/Component/SceneComponent.h"
 #include "Core/Serialization/Archive.h"
+#include "Engine/Scene/Scene.h"
 
 UActorComponent* AActor::CreateComponent(FClassType* Type, uint32 UUID)
 {
-    if (Type == nullptr || !Type->IsA(UActorComponent::GetClass()))
+    if (!Type || !Type->IsA(UActorComponent::GetClass()))
     {
         return nullptr;
     }
 
-    UActorComponent* Component = static_cast<UActorComponent*>(
-        FObjectFactory::ConstructSceneObject(Type, UUID));
+    UActorComponent* Component = static_cast<UActorComponent*>(FObjectFactory::ConstructSceneObject(Type, UUID));
 
     Component->SetOwner(this);
     Components.Add(Component);
@@ -22,11 +22,11 @@ UActorComponent* AActor::CreateComponent(FClassType* Type, uint32 UUID)
     if (Component->IsA(USceneComponent::GetClass()))
     {
         USceneComponent* SceneComponent = static_cast<USceneComponent*>(Component);
-        if (RootComponent == nullptr && SceneComponent->CanBeRootComponent())
+        if (!RootComponent && SceneComponent->CanBeRootComponent())
         {
             RootComponent = SceneComponent;
         }
-        else if (RootComponent != nullptr && SceneComponent != RootComponent)
+        else if (RootComponent && SceneComponent != RootComponent)
         {
             // Root가 될 수 없는 보조 SceneComponent도 Transform 계층에는 포함한다.
             SceneComponent->AttachTo(RootComponent);
@@ -34,6 +34,7 @@ UActorComponent* AActor::CreateComponent(FClassType* Type, uint32 UUID)
     }
 
     Component->OnRegister();
+    if (Scene)Scene->RegisterComponent(Component);
     if (bHasBegunPlay)
     {
         Component->BeginPlay();
@@ -53,16 +54,23 @@ bool AActor::RemoveComponent(UActorComponent* Component, bool bDestroy)
     {
         Component->EndPlay();
     }
+
+    if (Scene) Scene->UnregisterComponent(Component);
+
     Component->OnUnregister();
 
-    for (int32 Index = 0; Index < Components.Num(); ++Index)
+    if (Component->IsA(USceneComponent::GetClass()))
     {
-        if (Components[Index] == Component)
-        {
-            Components.RemoveAt(Index);
-            break;
-        }
+        USceneComponent* SceneComponent = static_cast<USceneComponent*>(Component);
+
+        const TArray<USceneComponent*> Children = SceneComponent->GetAttachChildren();
+        for (USceneComponent* Child : Children)
+            Child->DetachFromParent();
+
+        SceneComponent->DetachFromParent();
     }
+
+    Components.Remove(Component);
 
     if (RootComponent == Component)
     {
@@ -209,6 +217,7 @@ void AActor::ReleaseComponents()
 {
     for (UActorComponent* Component : Components)
     {
+        if (Scene) Scene->UnregisterComponent(Component);
         Component->OnUnregister();
         Component->SetOwner(nullptr);
         delete Component;

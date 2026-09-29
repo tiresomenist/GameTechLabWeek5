@@ -34,4 +34,7 @@ public:
 private:
     FName MeshKey;
     UStaticMesh* CachedMesh = nullptr;
+
+protected:
+    void OnWorldBoundsChanged() const override;
 };

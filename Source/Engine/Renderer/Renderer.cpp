@@ -567,6 +567,8 @@ void FRenderer::RenderOneView(FEditor* Editor, UScene* Scene, const FRenderView&
 		View.Viewport.MinDepth == 0.0f && View.Viewport.MaxDepth == 1.0f;
 
 	ViewRenderer.RenderView(ViewData, HZB);
+	ViewRenderer.ReleaseViewReferences();
+	ViewData.Reset();
 }
 
 // 단일 View -> 이제 더이상 다중 View를 호출하지 않음
