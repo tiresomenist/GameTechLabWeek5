@@ -23,6 +23,11 @@ struct FObjectConstants
 {
     FMatrix World = FMatrix::Identity;
     FMatrix ViewProjection = FMatrix::Identity;
+
+    FVector4 ImpostorCenterWS{};
+    FVector4 ImpostorSize{ 1.0f, 1.0f, 0.0f, 0.0f };
+    FVector4 ImpostorUV{ 1.0f, 1.0f, 0.0f, 0.0f };
+    FVector4 ImpostorCameraLocation{};
 };
 
 // b1
@@ -37,5 +42,5 @@ struct FTextureDrawConstants
 };
 
 static_assert(sizeof(FTextureUVTransform) == 16);
-static_assert(sizeof(FObjectConstants) == 128);
+static_assert(sizeof(FObjectConstants) == 192);
 static_assert(sizeof(FTextureDrawConstants) == 48);
