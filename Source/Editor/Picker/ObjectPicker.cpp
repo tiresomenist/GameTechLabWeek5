@@ -176,6 +176,7 @@ void FObjectPicker::PickPrimitives(UScene* Scene, const FRay& Ray, float& Closes
 		});
 }
 
+/*
 void FObjectPicker::PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
 {
 	if (!Node) return;
@@ -195,6 +196,7 @@ void FObjectPicker::PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& 
 	PickBVHNodeRecursive(Node->LeftChild, Ray, ClosestDistance, SelectedObject);
 	PickBVHNodeRecursive(Node->RightChild, Ray, ClosestDistance, SelectedObject);
 }
+*/
 
 /*
 void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
@@ -442,6 +444,7 @@ void FObjectPicker::PickIcon(UScene* Scene, const UCameraComponent* Camera, cons
 		});
 }
 
+/*
 // Todo: BVH Mesh
 bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, float& ClosestDistance)
 {
@@ -489,4 +492,194 @@ bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMe
 	const bool bRightHit = PickMeshBVHNodeRecursive(Node->RightChild, BVH, Mesh, LocalRay, ClosestDistance);
 
 	return bLeftHit || bRightHit;
+}
+*/
+
+void FObjectPicker::PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject, float EnterDistance)
+{
+	if (Node == nullptr)
+	{
+		return;
+	}
+
+	// 아직 검사하지 않은 루트 노드의 AABB를 검사한다.
+	if (EnterDistance < 0.0f)
+	{
+		if (!RayAABBIntersect(Ray, Node->WorldMin, Node->WorldMax, ClosestDistance, EnterDistance))
+		{
+			return;
+		}
+	}
+
+	// 앞선 탐색에서 더 가까운 교차점을 찾았다면 이 노드를 제외한다.
+	if (EnterDistance > ClosestDistance)
+	{
+		return;
+	}
+
+	// 리프에 도달하면 해당 메시를 정확히 검사한다.
+	if (Node->ComponentOrNull != nullptr)
+	{
+		TestPrimitive(Node->ComponentOrNull, Ray, ClosestDistance, SelectedObject);
+		return;
+	}
+
+	const FSceneBVHNode* FirstChild = Node->LeftChild;
+	const FSceneBVHNode* SecondChild = Node->RightChild;
+
+	float FirstDistance = 0.0f;
+	float SecondDistance = 0.0f;
+
+	// 두 자식의 AABB를 검사하고 진입 거리를 구한다.
+	{
+		if (FirstChild != nullptr)
+		{
+			if (!RayAABBIntersect(Ray, FirstChild->WorldMin, FirstChild->WorldMax, ClosestDistance, FirstDistance))
+			{
+				FirstChild = nullptr;
+			}
+		}
+
+		if (SecondChild != nullptr)
+		{
+			if (!RayAABBIntersect(Ray, SecondChild->WorldMin, SecondChild->WorldMax, ClosestDistance, SecondDistance))
+			{
+				SecondChild = nullptr;
+			}
+		}
+	}
+
+	// 교차하는 자식 중 가까운 자식을 먼저 방문하도록 순서를 정한다.
+	{
+		if (SecondChild != nullptr && (FirstChild == nullptr || SecondDistance < FirstDistance))
+		{
+			const FSceneBVHNode* TempChild = FirstChild;
+			FirstChild = SecondChild;
+			SecondChild = TempChild;
+
+			const float TempDistance = FirstDistance;
+			FirstDistance = SecondDistance;
+			SecondDistance = TempDistance;
+		}
+	}
+
+	// 가까운 자식을 탐색해 최단 교차 거리를 먼저 갱신한다.
+	if (FirstChild != nullptr)
+	{
+		PickBVHNodeRecursive(FirstChild, Ray, ClosestDistance, SelectedObject, FirstDistance);
+	}
+
+	// 갱신된 최단 거리 안에 있는 경우에만 먼 자식을 탐색한다.
+	if (SecondChild != nullptr && SecondDistance <= ClosestDistance)
+	{
+		PickBVHNodeRecursive(SecondChild, Ray, ClosestDistance, SelectedObject, SecondDistance);
+	}
+}
+
+bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, float& ClosestDistance, float EnterDistance)
+{
+	if (Node == nullptr)
+	{
+		return false;
+	}
+
+	// 아직 검사하지 않은 루트 노드의 AABB를 검사한다.
+	if (EnterDistance < 0.0f)
+	{
+		if (!RayAABBIntersect(LocalRay, Node->LocalMin, Node->LocalMax, ClosestDistance, EnterDistance))
+		{
+			return false;
+		}
+	}
+
+	// 앞선 탐색에서 더 가까운 교차점을 찾았다면 이 노드를 제외한다.
+	if (EnterDistance > ClosestDistance)
+	{
+		return false;
+	}
+
+	// 리프에 배정된 삼각형만 정확히 검사한다.
+	if (Node->TrianglesCount > 0)
+	{
+		const TArray<uint32>& TriangleOrders = BVH.GetTriangleOrders();
+		const TArray<uint32>& Indices = Mesh.GetIndices();
+		const TArray<FVector>& Positions = Mesh.GetPositions();
+
+		bool bHit = false;
+		const uint32 End = Node->FirstTriangleOffset + Node->TrianglesCount;
+
+		for (uint32 Index = Node->FirstTriangleOffset; Index < End; ++Index)
+		{
+			const uint32 TriangleIndex = TriangleOrders[Index];
+			const uint32 Base = TriangleIndex * 3;
+
+			float HitDistance = 0.0f;
+
+			if (RayTriangleIntersect(LocalRay, Positions[Indices[Base]], Positions[Indices[Base + 1]], Positions[Indices[Base + 2]], HitDistance) && HitDistance < ClosestDistance)
+			{
+				ClosestDistance = HitDistance;
+				bHit = true;
+			}
+		}
+
+		return bHit;
+	}
+
+	const FMeshBVHNode* FirstChild = Node->LeftChild;
+	const FMeshBVHNode* SecondChild = Node->RightChild;
+
+	float FirstDistance = 0.0f;
+	float SecondDistance = 0.0f;
+
+	// 두 자식의 AABB를 검사하고 진입 거리를 구한다.
+	{
+		if (FirstChild != nullptr)
+		{
+			if (!RayAABBIntersect(LocalRay, FirstChild->LocalMin, FirstChild->LocalMax, ClosestDistance, FirstDistance))
+			{
+				FirstChild = nullptr;
+			}
+		}
+
+		if (SecondChild != nullptr)
+		{
+			if (!RayAABBIntersect(LocalRay, SecondChild->LocalMin, SecondChild->LocalMax, ClosestDistance, SecondDistance))
+			{
+				SecondChild = nullptr;
+			}
+		}
+	}
+
+	// 교차하는 자식 중 가까운 자식을 먼저 방문하도록 순서를 정한다.
+	{
+		if (SecondChild != nullptr && (FirstChild == nullptr || SecondDistance < FirstDistance))
+		{
+			const FMeshBVHNode* TempChild = FirstChild;
+			FirstChild = SecondChild;
+			SecondChild = TempChild;
+
+			const float TempDistance = FirstDistance;
+			FirstDistance = SecondDistance;
+			SecondDistance = TempDistance;
+		}
+	}
+
+	bool bHit = false;
+
+	// 가까운 자식의 삼각형부터 검사한다.
+	if (FirstChild != nullptr)
+	{
+		bHit = PickMeshBVHNodeRecursive(FirstChild, BVH, Mesh, LocalRay, ClosestDistance, FirstDistance);
+	}
+
+	// 더 가까운 교차점이 있을 수 있는 경우에만 먼 자식을 탐색한다.
+	if (SecondChild != nullptr && SecondDistance <= ClosestDistance)
+	{
+		if (PickMeshBVHNodeRecursive(SecondChild, BVH, Mesh, LocalRay, ClosestDistance, SecondDistance))
+		{
+			bHit = true;
+		}
+	}
+
+	return bHit;
 }
