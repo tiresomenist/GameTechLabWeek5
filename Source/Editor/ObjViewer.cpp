@@ -545,6 +545,9 @@ void FObjViewer::LoadPreviewMesh(const std::filesystem::path& FilePath)
         Component->SetRelativeScale3D(FVector(PreviewScale, PreviewScale, PreviewScale));
         Component->SetRelativeLocation(PreviewLocation);
 
+        // Todo: BVH
+        PreviewScene->UpdateBVH(Component);
+
         // 현재 SpawnActor는 실행 중인 씬에서도 BeginPlay를 자동 호출하지 않습니다.
         NewActor->BeginPlay();
     }

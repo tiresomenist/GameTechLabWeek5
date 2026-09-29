@@ -7,6 +7,8 @@
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
 #include "Editor/Gizmo/ObjectAxisGizmo.h"
 
+// Todo: BVH
+#include "Engine/Scene/Scene.h"
 
 namespace
 {
@@ -296,6 +298,10 @@ void FGizmoController::Tick()
 
     FVector NewScale = StartObjectScale;
 
+
+    // Todo: BVH
+    bool bTransformChanged = false;
+
     switch (Mode)
     {
     case EGizmoMode::Translate:
@@ -338,6 +344,10 @@ void FGizmoController::Tick()
         }
 
         SelectedObject->SetRelativeLocation(StartObjectLocation + LocalDelta);
+
+        // Todo: BVH
+        bTransformChanged = true;
+
         break;
     }
 
@@ -363,6 +373,10 @@ void FGizmoController::Tick()
         }
         PreviousRotationDirection = Direction;
         bHasRotationDirection = true;
+
+        // Todo: BVH
+        bTransformChanged = true;
+
         break;
     }
     case EGizmoMode::Scale:
@@ -381,8 +395,19 @@ void FGizmoController::Tick()
         case 2: NewScale.Z *= Factor; break;
         }
         SelectedObject->SetRelativeScale3D(NewScale);
+
+        // Todo: BVH
+        bTransformChanged = true;
+
         break;
     }
+    }
+
+    // Todo: BVH
+    if (bTransformChanged && Editor->GetCurrentScene())
+    {
+        Editor->GetCurrentScene()->UpdateBVHForActor(
+            SelectedObject->GetOwner());
     }
 
 	if (!Input.GetKey(GInputManager::EI_LMOUSE)) EndDrag();

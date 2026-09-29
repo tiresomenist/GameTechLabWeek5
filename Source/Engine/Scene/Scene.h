@@ -8,6 +8,9 @@
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
 #include "Engine/Component/WidgetComponent.h"
 
+// Todo: BVH
+#include "Engine/Scene/SceneBVH.h"
+
 struct FPrimitiveRenderData;
 class UCameraComponent;
 class FRenderer;
@@ -118,6 +121,21 @@ public:
 	}
 
 	virtual ~UScene();
+
+	// Todo: BVH
+	void UpdateBVH(UStaticMeshComponent* Component);
+	void UpdateBVHForActor(AActor* Actor);
+	void RemoveFromBVH(UStaticMeshComponent* Component);
+	bool RemoveComponent(AActor* Actor, UActorComponent* Component);
+	void RebuildBVH();
+
+	const FSceneBVHNode* GetBVHRoot() const
+	{
+		return BVH.GetRoot();
+	}
+
+private:
+	FSceneBVH BVH;
 
 protected:
 	void EnsureUUIDWidgets();

@@ -511,6 +511,8 @@ void FEditor::SpawnStaticMesh(const FName& MeshKey, int Count)
 			if (!StaticMeshComp) throw std::runtime_error("Failed to create a static mesh component.");
 
 			StaticMeshComp->SetStaticMesh(MeshKey);
+			// Todo: BVH
+			CurrentScene->UpdateBVH(StaticMeshComp);
 
 			// 기존 Rocket의 정점색 표시 정책을 유지한다.
 			if (MeshKey == "Rocket")
@@ -667,7 +669,22 @@ void FEditor::RemoveSelectedComponent()
 	UActorComponent* ComponentToDelete = SelectedComponent;
 	CancelWindowRenames();
 	SetSelectedActor(nullptr);
+
+	// Todo: BVH
+	/*
 	if (Actor->RemoveComponent(ComponentToDelete))
+	{
+		SetSelectedActor(Actor);
+	}
+	else
+	{
+		SetSelectedComponent(ComponentToDelete);
+	}
+	*/
+
+	UScene* Scene = GetCurrentScene();
+	assert(Scene != nullptr);
+	if (Scene->RemoveComponent(Actor, ComponentToDelete))
 	{
 		SetSelectedActor(Actor);
 	}

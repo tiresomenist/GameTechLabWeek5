@@ -8,6 +8,9 @@
 #include "Core/Math/Vector.h"
 #include "Engine/Renderer/RenderDataTypes.h"
 
+// Todo: BVH Mesh
+#include "Engine/Scene/MeshBVH.h"
+
 struct FMeshResource
 {
     friend class GResourceManager;
@@ -35,6 +38,10 @@ public:
 
 
     //void AddSection(uint32 InMaterialSlot, uint32 InStartIndex, uint32 InIndexCount);
+
+    // Todo: BVH Mesh
+    const FMeshBVH& GetTriangleBVH() const { return TriangleBVH; }
+
 private:
     //Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer = nullptr;
     //Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer = nullptr;
@@ -50,4 +57,6 @@ private:
     bool bHasBounds;
     FMeshAllocation Allocation{};
 
+    // Todo: BVH Mesh
+    FMeshBVH TriangleBVH;
 };

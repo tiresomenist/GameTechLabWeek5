@@ -60,9 +60,12 @@ struct FVector
 
 	FVector& operator+=(const FVector& rhs);
 	FVector& operator-=(const FVector& rhs);
+	
+	FVector& operator+=(float scalar);
+	FVector& operator-=(float scalar);
+
 	FVector& operator*=(float scalar);
 	FVector& operator/=(float scalar);
-
 
 	float Dot(const FVector& rhs)const;
 	FVector Cross(const FVector& rhs)const;
