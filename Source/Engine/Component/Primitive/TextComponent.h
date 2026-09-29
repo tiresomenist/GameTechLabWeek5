@@ -29,4 +29,6 @@ private:
 
 	FString Text = "한글 텍스트";
 	mutable FMatrix BillboardWorldMatrix;
+
+	mutable FTextLayoutCache TextLayout;
 };

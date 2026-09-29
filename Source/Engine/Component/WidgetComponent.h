@@ -13,4 +13,9 @@ class UWidgetComponent : public USceneComponent
 public:
 	virtual bool CanBeRootComponent() const override { return false; }
 	bool BuildTextItem(const UCameraComponent* Camera, FWorldTextItem& OutItem) const;
+private:
+	mutable bool bHasCachedUUID = false;
+	mutable uint32 CachedUUID = 0;
+	mutable FString CachedUUIDText;
+	mutable FTextLayoutCache TextLayout;
 };

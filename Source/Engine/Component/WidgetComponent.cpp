@@ -4,7 +4,8 @@
 #include "Engine/Actor/Actor.h"
 #include "Engine/Component/CameraComponent.h"
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
-
+#include "Engine/Renderer/Text/TextMeshBuilder.h"
+#include "Engine/Resource/ResourceManager.h"
 bool UWidgetComponent::BuildTextItem(const UCameraComponent* Camera, FWorldTextItem& OutItem) const
 {
 	if (!Camera || !GetOwner()) return false;
@@ -47,7 +48,21 @@ bool UWidgetComponent::BuildTextItem(const UCameraComponent* Camera, FWorldTextI
 		(WorldMin.Y + WorldMax.Y) * 0.5f,
 		WorldMax.Z);
 	const FVector FinalAnchor = Anchor + GetRelativeLocation() + FVector::Up * 0.3f;
-	OutItem.Text = std::to_string(Primitive->GetUUID());
+
+	// UUID가 달라졌을 때만 문자열로 변환한다.
+	const uint32 UUID = Primitive->GetUUID();
+	if (!bHasCachedUUID || CachedUUID != UUID)
+	{
+		CachedUUID = UUID;
+		CachedUUIDText = std::to_string(UUID);
+		bHasCachedUUID = true;
+	}
+
+	FFontAtlas* Font = GResourceManager::GetInstance()->GetDefaultFont();
+	if (!Font || !FTextMeshBuilder::UpdateLayoutCache(TextLayout, CachedUUIDText, *Font)) return false;
+	OutItem.Text = CachedUUIDText;
+	OutItem.Layout = &TextLayout;	
+	
 	OutItem.WorldMatrix = FMatrix::MakeScaleMatrix(GetRelativeScale3D())
 		* Camera->GetRelativeRotation().ToRotationMatrix()
 		* FMatrix::MakeTranslationMatrix(FinalAnchor);

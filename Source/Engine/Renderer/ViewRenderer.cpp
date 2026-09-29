@@ -10,6 +10,10 @@
 
 #include <format>
 #include <stdexcept>
+#include "Engine/Component/WidgetComponent.h"
+#include "Engine/Component/Primitive/TextComponent.h"
+#include "Engine/Renderer/Frustum.h"
+#include <limits>
 
 namespace
 {
@@ -461,36 +465,6 @@ void FViewRenderer::CreateTextResources()
 
 	TextShader = SharedTextShader;
 	FontSamplerState = SharedFontSampler;
-
-	// Vertex Buffer: 매 프레임 내용이 바뀌므로 DYNAMIC, 고정 용량으로 1회만 생성
-	D3D11_BUFFER_DESC VBDesc = {};
-	VBDesc.ByteWidth = sizeof(FVertexTexture) * MaxTextVertices;
-	VBDesc.Usage = D3D11_USAGE_DYNAMIC;
-	VBDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	VBDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	CheckHR(D3DDevice->CreateBuffer(&VBDesc, nullptr, TextVertexBuffer.GetAddressOf()));
-
-	// Index Buffer: quad 패턴(0,1,2,0,2,3)이 항상 동일하므로 1회 IMMUTABLE 생성
-	const UINT MaxQuads = MaxTextVertices / 4;
-	TArray<uint32> Indices;
-	Indices.Reserve(MaxQuads * 6);
-	for (UINT q = 0; q < MaxQuads; ++q)
-	{
-		const uint32 Base = q * 4;
-		Indices.Add(Base + 0);
-		Indices.Add(Base + 1);
-		Indices.Add(Base + 2);
-		Indices.Add(Base + 0);
-		Indices.Add(Base + 2);
-		Indices.Add(Base + 3);
-	}
-
-	D3D11_BUFFER_DESC IBDesc = {};
-	IBDesc.ByteWidth = static_cast<UINT>(sizeof(uint32) * Indices.Num());
-	IBDesc.Usage = D3D11_USAGE_IMMUTABLE;
-	IBDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	D3D11_SUBRESOURCE_DATA IBData = { Indices.GetData() };
-	CheckHR(D3DDevice->CreateBuffer(&IBDesc, &IBData, TextIndexBuffer.GetAddressOf()));
 }
 
 void FViewRenderer::ReleaseTextResources()
@@ -501,19 +475,9 @@ void FViewRenderer::ReleaseTextResources()
 
 	TextVertexBuffer.Reset();
 	TextIndexBuffer.Reset();
+	TextVertexCapacity = 0;
 }
 
-void FViewRenderer::UpdateTextVertexBuffer(TArray<FVertexTexture>& Vertices)
-{
-	if (Vertices.Num() == 0) return;
-
-	const UINT CopyCount = (static_cast<UINT>(Vertices.Num()) < MaxTextVertices) ? static_cast<UINT>(Vertices.Num()) : MaxTextVertices;
-
-	D3D11_MAPPED_SUBRESOURCE Mapped;
-	DeviceContext->Map(TextVertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &Mapped);
-	memcpy(Mapped.pData, Vertices.GetData(), sizeof(FVertexTexture) * CopyCount);
-	DeviceContext->Unmap(TextVertexBuffer.Get(), 0);
-}
 
 void FViewRenderer::RenderText(UINT IndexCount)
 {
@@ -717,22 +681,7 @@ void FViewRenderer::RenderView(
 	PassExecutor.ExecutePass(Context1.Get(), PassDraws.GizmoDraws,
 		PipelineStateCache, CBManager, ViewCB, SubmissionStats);
 
-	if (!Data.TextItems.IsEmpty())
-	{
-		FFontAtlas* FontAtlas = GResourceManager::GetInstance()->GetDefaultFont();
-		if (FontAtlas)
-		{
-			TArray<FVertexTexture> TextVerts =
-				FTextMeshBuilder::Build(Data.TextItems, *FontAtlas);
-			UpdateTextVertexBuffer(TextVerts);
-			UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
-
-			const UINT TextVertexCount =
-				static_cast<UINT>(TextVerts.Num()) < MaxTextVertices
-				? static_cast<UINT>(TextVerts.Num()) : MaxTextVertices;
-			RenderText(TextVertexCount / 4 * 6);
-		}
-	}
+	RenderVisibleText(Data);
 
 	UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
 }
@@ -961,4 +910,131 @@ bool FViewRenderer::RenderOcclusionProxy(const FBoundingBox& WorldBounds, const 
 	DeviceContext->DrawIndexed(36, 0, 0);
 	
 	return true;
+}
+
+
+// 용량 부족 시에만 버퍼를 확장하고, 두 버퍼 생성 성공 후 기존 자원을 교체한다.
+bool FViewRenderer::EnsureTextCapacity(UINT RequiredVertices)
+{
+	if (RequiredVertices == 0) return true;
+	if (TextVertexBuffer && TextIndexBuffer && RequiredVertices <= TextVertexCapacity) return true;
+
+	constexpr UINT MaxVertices =((std::numeric_limits<UINT>::max)() / sizeof(FVertexTexture) / 4) * 4;
+	if (RequiredVertices > MaxVertices || RequiredVertices % 4 != 0) return false;
+
+	UINT NewCapacity = TextVertexCapacity ? TextVertexCapacity : 8192;
+	while (NewCapacity < RequiredVertices)
+	{
+		NewCapacity = static_cast<UINT>((std::min)(static_cast<uint64>(MaxVertices),static_cast<uint64>(NewCapacity) * 2));
+	}
+
+	Microsoft::WRL::ComPtr<ID3D11Buffer> NewVB;
+	Microsoft::WRL::ComPtr<ID3D11Buffer> NewIB;
+
+	D3D11_BUFFER_DESC VBDesc{};
+	VBDesc.ByteWidth = NewCapacity * sizeof(FVertexTexture);
+	VBDesc.Usage = D3D11_USAGE_DYNAMIC;
+	VBDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	VBDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	if (FAILED(D3DDevice->CreateBuffer(&VBDesc, nullptr, NewVB.GetAddressOf()))) return false;
+
+	// 글자 인덱스는 내용과 무관하므로 확장할 때만 만든다.
+	TArray<uint32> Indices;
+	Indices.Reserve(static_cast<size_t>(NewCapacity / 4) * 6);
+	for (UINT Base = 0; Base < NewCapacity; Base += 4)
+	{
+		Indices.Add(Base);
+		Indices.Add(Base + 1);
+		Indices.Add(Base + 2);
+		Indices.Add(Base);
+		Indices.Add(Base + 2);
+		Indices.Add(Base + 3);
+	}
+
+	D3D11_BUFFER_DESC IBDesc{};
+	IBDesc.ByteWidth = static_cast<UINT>(Indices.Num() * sizeof(uint32));
+	IBDesc.Usage = D3D11_USAGE_IMMUTABLE;
+	IBDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	D3D11_SUBRESOURCE_DATA IBData{};
+	IBData.pSysMem = Indices.GetData();
+	if (FAILED(D3DDevice->CreateBuffer(&IBDesc, &IBData, NewIB.GetAddressOf()))) return false;
+
+	TextVertexBuffer = std::move(NewVB);
+	TextIndexBuffer = std::move(NewIB);
+	TextVertexCapacity = NewCapacity;
+	return true;
+}
+
+// 고정 최대치로 자르지 않고 생성된 정점 전체를 업로드한다.
+bool FViewRenderer::UpdateTextVertexBuffer(const TArray<FVertexTexture>& Vertices)
+{
+	if (Vertices.IsEmpty()) return true;
+	if (!EnsureTextCapacity(static_cast<UINT>(Vertices.Num()))) return false;
+
+	D3D11_MAPPED_SUBRESOURCE Mapped{};
+	if (FAILED(DeviceContext->Map(TextVertexBuffer.Get(), 0,D3D11_MAP_WRITE_DISCARD, 0, &Mapped))) return false;
+
+	memcpy(Mapped.pData, Vertices.GetData(),static_cast<size_t>(Vertices.Num()) * sizeof(FVertexTexture));
+	DeviceContext->Unmap(TextVertexBuffer.Get(), 0);
+	return true;
+}
+
+// 메시에서 살아 있는 객체의 UUID와 화면 안의 일반 텍스트만 출력한다.
+void FViewRenderer::RenderVisibleText(const FViewRenderData& Data)
+{
+	if (!Data.TextCamera || Data.TextRequests.IsEmpty()) return;
+
+	TextVertexScratch.Empty();
+	TextObjectVisibility.SetNum(Data.Objects.Num());
+	for (uint32& Visible : TextObjectVisibility) Visible = 0;
+
+	// 여러 섹션 중 하나라도 살아 있으면 해당 객체의 UUID를 표시한다.
+	for (int32 Index = 0; Index < Data.Primitives.Num(); ++Index)
+	{
+		const uint32 ObjectIndex = Data.Primitives[Index].ObjectIndex;
+		if (PrimitiveVisibility[Index] != 0 && ObjectIndex < static_cast<uint32>(TextObjectVisibility.Num()))
+		{
+			TextObjectVisibility[ObjectIndex] = 1;
+		}
+	}
+
+	const FFrustum Frustum = FFrustum::FrustumFromViewProjection(Data.View.ViewProjection);
+
+	for (const FTextDrawRequest& Request : Data.TextRequests)
+	{
+		if (Request.OwnerObjectIndex != InvalidRenderId)
+		{
+			if (Request.OwnerObjectIndex >=	static_cast<uint32>(TextObjectVisibility.Num()) ||
+				TextObjectVisibility[Request.OwnerObjectIndex] == 0)
+			{
+				continue;
+			}
+		}
+
+		// HZB로 탈락한 UUID는 문자열·앵커 계산도 수행하지 않는다.
+		FWorldTextItem Item{};
+		bool bBuilt = false;
+		if (Request.Widget)
+			bBuilt = Request.Widget->BuildTextItem(Data.TextCamera, Item);
+		else if (Request.TextComponent)
+			bBuilt = Request.TextComponent->BuildTextItem(Data.TextCamera, Item);
+
+		if (!bBuilt || !Item.Layout) continue;
+
+		// 라벨 자체가 화면 밖이면 월드 정점 생성과 업로드를 생략한다.
+		const FBoundingBox WorldBounds = Item.Layout->LocalBounds.TransformBounds(Item.WorldMatrix);
+		if (!Frustum.Intersects(WorldBounds)) continue;
+
+		FTextMeshBuilder::AppendCached(TextVertexScratch, *Item.Layout, Item.WorldMatrix);
+	}
+
+	if (TextVertexScratch.IsEmpty()) return;
+	if (!UpdateTextVertexBuffer(TextVertexScratch))
+	{
+		UE_LOG("[Text] 텍스트 버퍼 생성 또는 업로드 실패");
+		return;
+	}
+
+	UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
+	RenderText(static_cast<UINT>(TextVertexScratch.Num() / 4) * 6);
 }

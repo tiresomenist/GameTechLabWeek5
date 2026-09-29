@@ -165,3 +165,57 @@ bool FTextMeshBuilder::GetLocalBounds(
 
 	return bHasGlyphBounds;
 }
+
+
+// 문자열·폰트·크기가 같으면 기존 로컬 정점과 Bounds를 재사용한다.
+bool FTextMeshBuilder::UpdateLayoutCache(FTextLayoutCache& Cache, const FString& Text,
+	const FFontAtlas& Atlas, float WorldUnitsPerPixel)
+{
+	if (Cache.bValid && Cache.Text == Text && Cache.Atlas == &Atlas &&
+		Cache.AtlasRevision == Atlas.GetRevision() &&
+		Cache.WorldUnitsPerPixel == WorldUnitsPerPixel)
+	{
+		return !Cache.LocalVertices.IsEmpty();
+	}
+
+	Cache.Text = Text;
+	Cache.Atlas = &Atlas;
+	Cache.AtlasRevision = Atlas.GetRevision();
+	Cache.WorldUnitsPerPixel = WorldUnitsPerPixel;
+	Cache.LocalVertices.Empty();
+	Cache.LocalBounds = FBoundingBox{};
+
+	// Identity로 생성하여 카메라와 무관한 로컬 글자 배치를 저장한다.
+	AppendString(Cache.LocalVertices, Text, FMatrix::Identity, Atlas, WorldUnitsPerPixel);
+	Cache.bValid = true;
+	if (Cache.LocalVertices.IsEmpty()) return false;
+
+	const FVertexTexture& First = Cache.LocalVertices[0];
+	Cache.LocalBounds.Min = FVector(First.x, First.y, First.z);
+	Cache.LocalBounds.Max = Cache.LocalBounds.Min;
+	for (const FVertexTexture& Vertex : Cache.LocalVertices)
+	{
+		Cache.LocalBounds.Min.X = (std::min)(Cache.LocalBounds.Min.X, Vertex.x);
+		Cache.LocalBounds.Min.Y = (std::min)(Cache.LocalBounds.Min.Y, Vertex.y);
+		Cache.LocalBounds.Min.Z = (std::min)(Cache.LocalBounds.Min.Z, Vertex.z);
+		Cache.LocalBounds.Max.X = (std::max)(Cache.LocalBounds.Max.X, Vertex.x);
+		Cache.LocalBounds.Max.Y = (std::max)(Cache.LocalBounds.Max.Y, Vertex.y);
+		Cache.LocalBounds.Max.Z = (std::max)(Cache.LocalBounds.Max.Z, Vertex.z);
+	}
+	return true;
+}
+
+// 글자 디코딩과 Glyph 조회 없이 현재 View에 맞는 정점만 추가한다.
+void FTextMeshBuilder::AppendCached(TArray<FVertexTexture>& OutVertices,
+	const FTextLayoutCache& Cache, const FMatrix& World)
+{
+	for (const FVertexTexture& Local : Cache.LocalVertices)
+	{
+		FVertexTexture Vertex = Local;
+		const FVector Position = World.TransformPosition(FVector(Local.x, Local.y, Local.z));
+		Vertex.x = Position.X;
+		Vertex.y = Position.Y;
+		Vertex.z = Position.Z;
+		OutVertices.Add(Vertex);
+	}
+}

@@ -12,6 +12,9 @@
 #include "Engine/Renderer/Text/WorldTextItem.h"
 #include "Core/Math/Box.h"
 
+class UCameraComponent;
+class UPrimitiveComponent;
+
 struct FRenderViewSnapshot
 {
     FMatrix ViewMatrix = FMatrix::Identity;
@@ -27,6 +30,7 @@ struct FRenderObjectData
     FVector SortCenterWS{};
     FBoundingBox WorldBounds{};
     bool bHasWorldBounds = false;
+    const UPrimitiveComponent* SourcePrimitive = nullptr;
 };
 
 struct FViewRenderData
@@ -36,7 +40,8 @@ struct FViewRenderData
     TArray<FPrimitiveRenderData> Primitives;
     TArray<FPrimitiveRenderData> Gizmos;
     FLineDrawRequest Lines;
-    TArray<FWorldTextItem> TextItems;
+    const UCameraComponent* TextCamera = nullptr;
+    TArray<FTextDrawRequest> TextRequests;
 
     void Reset() {
         View = FRenderViewSnapshot{};
@@ -45,7 +50,8 @@ struct FViewRenderData
         Gizmos.Empty();
         Lines.Vertices.Empty();
         Lines.Indices.Empty();
-        TextItems.Empty();
+        TextCamera = nullptr;
+        TextRequests.Empty();
     }
 
 };

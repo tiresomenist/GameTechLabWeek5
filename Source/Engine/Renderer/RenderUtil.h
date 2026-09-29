@@ -21,8 +21,7 @@ namespace RenderUtil
 			const UCameraComponent* Camera,	const D3D11_VIEWPORT& Viewport,
 		TArray<FRenderObjectData>& Objects);
 
-	TArray<FWorldTextItem> GetTextRenderList(UScene* Scene, const UCameraComponent* Camera,
-		bool bShowUUIDWidgets);
+	void GetTextRenderList(UScene* Scene, const UCameraComponent* Camera, bool bShowUUIDWidgets, FViewRenderData& OutData);	
 	void SubmitLineDrawRequests(FEditor* Editor,UScene* Scene, const UCameraComponent* Camera,
 		const FViewSettings& ViewSettings, const FLineRequestConsumer& Submit, EViewportType InViewtype);
 };

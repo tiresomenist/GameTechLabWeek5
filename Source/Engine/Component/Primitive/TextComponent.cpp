@@ -6,16 +6,6 @@
 #include "Engine/Renderer/Text/TextMeshBuilder.h"
 #include "Engine/Resource/ResourceManager.h"
 
-bool UTextComponent::GetLocalBounds(FVector& OutMin, FVector& OutMax) const
-{
-	FFontAtlas* Font = GResourceManager::GetInstance()->GetDefaultFont();
-	if (!Font || !FTextMeshBuilder::GetLocalBounds(Text, *Font, OutMin, OutMax)) return false;
-
-	OutMin -= FVector(SelectionPadding, SelectionPadding, SelectionPadding);
-	OutMax += FVector(SelectionPadding, SelectionPadding, SelectionPadding);
-	return true;
-}
-
 const FMatrix& UTextComponent::GetRenderWorldMatrix(const UCameraComponent* Camera) const
 {
 	if (!Camera) return GetWorldMatrix();
@@ -33,16 +23,34 @@ const FMatrix& UTextComponent::GetRenderWorldMatrix(const UCameraComponent* Came
 	return BillboardWorldMatrix;
 }
 
-bool UTextComponent::BuildTextItem(const UCameraComponent* Camera, FWorldTextItem& OutItem) const
-{
-	if (!Camera || Text.empty()) return false;
-	OutItem.Text = Text;
-	OutItem.WorldMatrix = GetRenderWorldMatrix(Camera);
-	return true;
-}
-
 void UTextComponent::Serialize(FArchive& Archive)
 {
 	Super::Serialize(Archive);
 	Archive.OptionalField("Text", Text);
+}
+
+// 캐시된 글자 Bounds에 기존 선택 여백을 더한다.
+bool UTextComponent::GetLocalBounds(FVector& OutMin, FVector& OutMax) const
+{
+	FFontAtlas* Font = GResourceManager::GetInstance()->GetDefaultFont();
+	if (!Font || !FTextMeshBuilder::UpdateLayoutCache(TextLayout, Text, *Font)) return false;
+
+	const FVector Padding(SelectionPadding, SelectionPadding, SelectionPadding);
+	OutMin = TextLayout.LocalBounds.Min - Padding;
+	OutMax = TextLayout.LocalBounds.Max + Padding;
+	return true;
+}
+
+// 문자열 배치는 재사용하고 해당 카메라의 빌보드 행렬만 복사한다.
+bool UTextComponent::BuildTextItem(const UCameraComponent* Camera, FWorldTextItem& OutItem) const
+{
+	if (!Camera || Text.empty()) return false;
+
+	FFontAtlas* Font = GResourceManager::GetInstance()->GetDefaultFont();
+	if (!Font || !FTextMeshBuilder::UpdateLayoutCache(TextLayout, Text, *Font)) return false;
+
+	OutItem.Text = Text;
+	OutItem.Layout = &TextLayout;
+	OutItem.WorldMatrix = GetRenderWorldMatrix(Camera);
+	return true;
 }

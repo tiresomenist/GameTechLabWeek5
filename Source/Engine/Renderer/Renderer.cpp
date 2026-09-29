@@ -543,7 +543,7 @@ void FRenderer::RenderOneView(FEditor* Editor, UScene* Scene, const FRenderView&
 		ViewData.Gizmos = RenderUtil::GetGizmoList(Editor,Scene,Camera,View.Viewport,ViewData.Objects);
 	}
 
-	ViewData.TextItems = RenderUtil::GetTextRenderList(Scene,Camera,View.ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::UUID));
+	RenderUtil::GetTextRenderList(Scene, Camera,View.ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::UUID),ViewData);
 
 	const FLineRequestConsumer Submit = [&](const FLineDrawRequest& Request)
 		{
