@@ -13,7 +13,7 @@ public:
 	FPassExecutor() = default;
 	~FPassExecutor() = default;
 
-	void ExecutePass(ID3D11DeviceContext1* Context1, const std::vector<FPreparedDraw>& PassDraws, const FPipelineStateCache& PipelineCache, const FConstantBufferManager& CBManager, ID3D11Buffer* ViewConstantBuffer);
+	void ExecutePass(ID3D11DeviceContext1* Context1, const TArray<FPreparedDraw>& PassDraws, const FPipelineStateCache& PipelineCache, const FConstantBufferManager& CBManager, ID3D11Buffer* ViewConstantBuffer);
 private:
 	uint32 m_LastPipelineId = InvalidRenderId;
 	uint32 m_LastMeshPageId = InvalidRenderId;

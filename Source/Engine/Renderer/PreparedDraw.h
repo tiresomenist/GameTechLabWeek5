@@ -26,15 +26,15 @@ struct FPreparedDraw {
 };
 
 struct FPassDrawList {
-	std::vector<FPreparedDraw> OpaqueDraws;
-	std::vector<FPreparedDraw> AdditiveDraws;
-	std::vector<FPreparedDraw> OutlineDraws;
-	std::vector<FPreparedDraw> GizmoDraws;
+	TArray<FPreparedDraw> OpaqueDraws;
+	TArray<FPreparedDraw> AdditiveDraws;
+	TArray<FPreparedDraw> OutlineDraws;
+	TArray<FPreparedDraw> GizmoDraws;
 
 	void Clear() {
-		OpaqueDraws.clear();
-		AdditiveDraws.clear();
-		OutlineDraws.clear();
-		GizmoDraws.clear();
+		OpaqueDraws.Empty();
+		AdditiveDraws.Empty();
+		OutlineDraws.Empty();
+		GizmoDraws.Empty();
 	}
 };

@@ -1,57 +1,50 @@
 #include "pch.h"
 #include "OpaqueDrawSorter.h"
 
-void FOpaqueDrawSorter::SortOpaqueDraws(std::vector<FPreparedDraw>& InOutOpaqueDraws)
+void FOpaqueDrawSorter::SortOpaqueDraws(TArray<FPreparedDraw>& Draws, TArray<FPreparedDraw>& Scratch)
 {
-	const size_t Count = InOutOpaqueDraws.size();
-
+	const size_t Count = Draws.Num();
 	if (Count <= 1) return;
-	std::vector<FPreparedDraw> Temp(Count);
 
-	std::vector<FPreparedDraw>* Src = &InOutOpaqueDraws;
-	std::vector<FPreparedDraw>* Dst = &Temp;
+	const uint64 FirstKey = Draws.First().SortKey;
+	uint64 VaryingBits = 0;
 
-	constexpr uint32 RadixBits = 8;
-	constexpr uint32 RadixSize = 1u << RadixBits;
-	constexpr uint32 RadixMask = RadixSize - 1;
+	for (const FPreparedDraw& Draw : Draws)
+		VaryingBits |= Draw.SortKey ^ FirstKey;
 
-	uint32 Counts[RadixSize] = {};
+	if (VaryingBits == 0) return;
 
-	for (uint32 Shift = 0; Shift < 64; Shift += RadixBits) {
-		std::memset(Counts, 0, sizeof(Counts));
+	Scratch.resize(Count);
 
+	auto* Src = &Draws;
+	auto* Dst = &Scratch;
+
+	for (uint32 Shift = 0; Shift < 64; Shift += 8) {
+		if (((VaryingBits >> Shift) & 0xffull) == 0) continue;
+		size_t Counts[256]{};
 		for (const FPreparedDraw& Draw : *Src) {
-			const uint32 Digit =
-				static_cast<uint32>((Draw.SortKey >> Shift) & RadixMask);
-
+			const uint32 Digit = static_cast<uint32>((Draw.SortKey >> Shift) & 0xffull);
 			++Counts[Digit];
 		}
-
-		uint32 Offset = 0;
-
-		for (uint32 i = 0; i < RadixSize; ++i) {
-			const uint32 CountForBucket = Counts[i];
-			Counts[i] = Offset;
-			Offset += CountForBucket;
+		
+		size_t Offset = 0;
+		for (size_t& Bucket : Counts) {
+			const size_t BucketCount = Bucket;
+			Bucket = Offset;
+			Offset += BucketCount;
 		}
 
 		for (const FPreparedDraw& Draw : *Src) {
-			const uint32 Digit =
-				static_cast<uint32>((Draw.SortKey >> Shift) & RadixMask);
-
+			const uint32 Digit = static_cast<uint32>((Draw.SortKey >> Shift) & 0xffull);
 			(*Dst)[Counts[Digit]++] = Draw;
 		}
 
 		std::swap(Src, Dst);
 	}
-
-	assert(Src == &InOutOpaqueDraws);
+	if (Src != &Draws) Draws.Swap(Scratch);
 }
 
-bool FOpaqueDrawSorter::IsSorted(const std::vector<FPreparedDraw>& Draws)
+bool FOpaqueDrawSorter::IsSorted(const TArray<FPreparedDraw>& Draws)
 {
-	for (size_t i = 1; i < Draws.size(); ++i) {
-		if (Draws[i - 1].SortKey > Draws[i].SortKey) return false;
-	}
 	return true;
 }

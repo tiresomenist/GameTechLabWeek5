@@ -14,7 +14,8 @@
 #include "ConstantBufferRing.h"
 #include "ConstantBufferManager.h"
 #include "PassExecutor.h"
-
+#include "PreparedDraw.h"
+#include "Core/Container/Array.h"
 class UScene;
 class FEditor;
 class UCameraComponent;
@@ -99,4 +100,7 @@ private:
 	FConstantBufferRing CBRingBuffer;
 	FConstantBufferManager CBManager;
 	FPassExecutor PassExecutor;
+	FPassDrawList PassDraws;
+	TArray<FPreparedDraw> OpaqueSortScratch;
+
 };

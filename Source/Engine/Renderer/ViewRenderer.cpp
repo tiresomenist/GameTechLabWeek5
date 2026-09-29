@@ -389,14 +389,8 @@ void FViewRenderer::RenderView(const FViewRenderData& Data)
 		assert(false && "DeviceContext does not support ID3D11DeviceContext1!");
 		return;
 	}
-/*
-	DeviceContext->RSSetState(DefaultRasterizerState);
-	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
-	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);*/
-	SetViewportAndScissor(Data.View.Viewport);
 
-/*	ID3D11ShaderResourceView* NullSRV = nullptr;
-	DeviceContext->PSSetShaderResources(0, 1, &NullSRV);*/
+	SetViewportAndScissor(Data.View.Viewport);
 
 	LineBatcher.Clear();
 	LineBatcher.AddRequest(Data.Lines);
@@ -404,10 +398,9 @@ void FViewRenderer::RenderView(const FViewRenderData& Data)
 	CBRingBuffer.Reset();
 	CBManager.Clear();
 
-	FPassDrawList PassDraws;
 	PassDrawBuilder.BuildPassDraws(Data, &PipelineStateCache, PassDraws);
 
-	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws);
+	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws, OpaqueSortScratch);
 
 	CBRingBuffer.BeginFrameMap(Context1.Get());
 
@@ -450,107 +443,6 @@ void FViewRenderer::RenderView(const FViewRenderData& Data)
 			RenderText(TextVertexCount / 4 * 6);
 		}
 	}
-	
-	
-/*	TArray<const FPrimitiveRenderData*> AdditiveRenderList;
-	TArray<const FPrimitiveRenderData*> OutlineRenderList;
-
-	for (const FPrimitiveRenderData& Item : Data.Primitives)
-	{
-		if (Item.Geometry.IndexCount == 0) 
-			continue;
-
-		if (!Item.Material) 
-			continue;
-
-		if (Item.Material->BlendMode == EPrimitiveBlendMode::Additive) 
-		{
-			AdditiveRenderList.Add(&Item);
-			continue;
-		}
-
-		if (Item.ObjectIndex >= static_cast<uint32>(Data.Objects.Num())) 
-			continue;
-
-		UpdateTransformConstantBuffer(Data.Objects[Item.ObjectIndex].World, Data.View.ViewProjection);
-
-		const bool bSelected = (Item.Flags & Primitive_Selected) != 0;
-
-		const bool bAllowOutline = (Item.Flags & Primitive_AllowOutline) != 0;
-
-		const bool bOutline = bSelected && bAllowOutline && Data.View.ViewMode != EViewModeIndex::VMI_Wireframe;
-
-		RenderPrimitive(Item, Data.View.ViewMode, bOutline);
-
-		if (bOutline) {
-			OutlineRenderList.Add(&Item);
-		}
-	}
-	
-	// 통합 데이터를 GPU에 업로드하고 배치 렌더링함
-	RenderBatchLine(Data.View.ViewProjection);
-
-	for (const FPrimitiveRenderData* Item : AdditiveRenderList)
-	{
-		if (!Item)	continue;
-
-		if (Item->ObjectIndex >= static_cast<uint32>(Data.Objects.Num())) continue;
-
-		UpdateTransformConstantBuffer(Data.Objects[Item->ObjectIndex].World, Data.View.ViewProjection);
-
-		RenderPrimitive(*Item, Data.View.ViewMode);
-	}
-
-	// 외곽선: 모든 씬 오브젝트 이후, 기즈모 이전에 그림 (깊이 무시라 뒤에 그려진 물체에 덮이지 않게)
-	for (const FPrimitiveRenderData* Item : OutlineRenderList)
-	{
-		if (!Item)	continue;
-
-		if (Item->ObjectIndex >= static_cast<uint32>(Data.Objects.Num())) continue;
-
-		UpdateTransformConstantBuffer(Data.Objects[Item->ObjectIndex].World, Data.View.ViewProjection);
-
-		RenderOutline(*Item);
-	}
-
-	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
-	// Render Gizmo
-	for (const FPrimitiveRenderData& Item : Data.Gizmos) {
-		if (Item.Geometry.IndexCount == 0)	continue;
-
-		if (!Item.Material)	continue;
-
-		if (Item.ObjectIndex >= static_cast<uint32>(Data.Objects.Num()))	continue;
-		
-		UpdateTransformConstantBuffer(Data.Objects[Item.ObjectIndex].World, Data.View.ViewProjection);
-
-		const bool bSelected = (Item.Flags & Primitive_Selected) != 0;
-
-		if (bSelected) {
-			RenderHighlight(Item);
-		}
-
-		RenderGizmo(Item);
-	}
-
-	//Text
-	if (Data.TextItems.Num() > 0) {
-		FFontAtlas* FontAtlas = GResourceManager::GetInstance()->GetDefaultFont();
-
-		if (FontAtlas) {
-			TArray<FVertexTexture> TextVerts = FTextMeshBuilder::Build(Data.TextItems, *FontAtlas);
-
-			UpdateTextVertexBuffer(TextVerts);
-
-			UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
-
-			const UINT TextVertexCount = (static_cast<UINT>(TextVerts.Num()) < MaxTextVertices) ?
-				static_cast<UINT>(TextVerts.Num()) :
-				MaxTextVertices;
-
-			RenderText(TextVertexCount / 4 * 6);
-		}
-	}*/
 
 	UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
 }

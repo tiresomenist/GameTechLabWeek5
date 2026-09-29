@@ -14,8 +14,17 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 
 	const auto& ViewSnapshot = ViewLayoutData.View;
 	const auto& Objects = ViewLayoutData.Objects;
-	printf("ViewMode = %d\n", static_cast<int>(ViewSnapshot.ViewMode));
 
+	auto FindPipeline = [&](const FPipelineKey& Key) -> const FPipelineState* {
+		if (LastPipelineState && LastPipelineKey == Key) return LastPipelineState;
+
+		const FPipelineState* State = PipelineCache->GetOrCreate(Key);
+		if (State) {
+			LastPipelineKey = Key;
+			LastPipelineState = State;
+		}
+		return State;
+	};
 
 	auto GetOrCreateMaterialCBIndex = [this](const FMaterial* Material) -> uint32 {
 		uint32 MatId = Material ? Material->MaterialId : InvalidRenderId;
@@ -48,7 +57,7 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 		EPipelinePass TargetPass = bIsTransparent ? EPipelinePass::Additive : EPipelinePass::Opaque;
 
 		FPipelineKey Key = MakePipelineKey(Material, PageBinding.VertexFormat, TargetPass, ViewSnapshot.ViewMode);
-		const FPipelineState* State = PipelineCache->GetOrCreate(Key);
+		const FPipelineState* State = FindPipeline(Key);
 		if (!State) continue;
 
 		FPreparedDraw Draw;
@@ -67,10 +76,10 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 			(static_cast<uint64>(Draw.MeshPageId));
 
 		if (bIsTransparent) {
-			OutPassDraws.AdditiveDraws.push_back(Draw);
+			OutPassDraws.AdditiveDraws.Add(Draw);
 		}
 		else {
-			OutPassDraws.OpaqueDraws.push_back(Draw);
+			OutPassDraws.OpaqueDraws.Add(Draw);
 		}
 
 		const bool bSelected = (Prim.Flags & Primitive_Selected) != 0;
@@ -78,11 +87,11 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 
 		if (bSelected && bAllowOutline) {
 			FPipelineKey OutlineKey = MakePipelineKey(Material, PageBinding.VertexFormat, EPipelinePass::Outline, ViewSnapshot.ViewMode);
-			const FPipelineState* OutlineState = PipelineCache->GetOrCreate(OutlineKey);
+			const FPipelineState* OutlineState = FindPipeline(OutlineKey);
 			if (OutlineState) {
 				FPreparedDraw OutlineDraw = Draw;
 				OutlineDraw.PipelineId = OutlineState->PipelineId;
-				OutPassDraws.OutlineDraws.push_back(OutlineDraw);
+				OutPassDraws.OutlineDraws.Add(OutlineDraw);
 			}
 		}
 	}
@@ -102,7 +111,7 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 		uint32 DepthBucket = CalculateDepthBucket(ObjDatum.SortCenterWS, ViewSnapshot.ViewMatrix);
 
 		FPipelineKey Key = MakePipelineKey(Material, PageBinding.VertexFormat, EPipelinePass::Gizmo, ViewSnapshot.ViewMode);
-		const FPipelineState* State = PipelineCache->GetOrCreate(Key);
+		const FPipelineState* State = FindPipeline(Key);
 		if (!State) continue;
 
 		FPreparedDraw Draw;
@@ -120,7 +129,7 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 			(static_cast<uint64>(Draw.DepthBucket) << 16) |
 			(static_cast<uint64>(Draw.MeshPageId));
 
-		OutPassDraws.GizmoDraws.push_back(Draw);
+		OutPassDraws.GizmoDraws.Add(Draw);
 	}
 }
 

@@ -104,6 +104,18 @@ public:
 		return Array.back();
 	}
 
+	T& First()
+	{
+		if (Array.empty()) throw std::runtime_error("Array empty");
+		return Array.front();
+	}
+	const T& First() const
+	{
+		if (Array.empty())
+			throw std::runtime_error("Array empty");
+		return Array.front();
+	}
+
 	void Sort(std::function<bool(const T&, const T&)> Compare = std::less<T>())
 	{
 		std::sort(Array.begin(), Array.end(), Compare);
@@ -136,6 +148,11 @@ public:
 		return Array.data();
 	}
 
+	void Swap(size_t IndexA, size_t IndexB) {
+		std::swap(Array[IndexA], Array[IndexB]);
+	}
 
-
+	void Swap(TArray& Other) {
+		Array.swap(Other.Array);
+	}
 };

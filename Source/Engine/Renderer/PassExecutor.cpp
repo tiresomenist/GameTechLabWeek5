@@ -3,9 +3,9 @@
 #include "Engine/Resource/ResourceManager.h"
 #include <cassert>
 
-void FPassExecutor::ExecutePass(ID3D11DeviceContext1* Context1, const std::vector<FPreparedDraw>& PassDraws, const FPipelineStateCache& PipelineCache, const FConstantBufferManager& CBManager, ID3D11Buffer* ViewConstantBuffer)
+void FPassExecutor::ExecutePass(ID3D11DeviceContext1* Context1, const TArray<FPreparedDraw>& PassDraws, const FPipelineStateCache& PipelineCache, const FConstantBufferManager& CBManager, ID3D11Buffer* ViewConstantBuffer)
 {
-	if (!Context1 || PassDraws.empty()) return;
+	if (!Context1 || PassDraws.IsEmpty()) return;
 
 	ResetStateCache();
 
