@@ -20,7 +20,6 @@
 #include "Engine/Log.h"
 
 // Todo: BVH
-#include "SceneBVHNode.h"
 
 namespace
 {
@@ -465,8 +464,7 @@ void UScene::DestroyActor(AActor* Actor)
 UScene::~UScene()
 {
     // Todo: BVH
-    FSceneBVHNode::Clear(BVHRoot);
-    BVHLeaves.Empty();
+    BVH.Clear();
 
     for (AActor* Actor : Actors)
     {
@@ -476,71 +474,63 @@ UScene::~UScene()
     Actors.Empty();
 }
 
-// Todo: BVH
+// Scene.cpp
 void UScene::UpdateBVH(UStaticMeshComponent* Component)
 {
-    if (!Component) return;
-
-    FSceneBVHNode** Found = BVHLeaves.Find(Component);
-    FSceneBVHNode* OldLeaf = Found ? *Found : nullptr;
-
-    FSceneBVHNode* NewLeaf = FSceneBVHNode::Update(BVHRoot, OldLeaf, Component);
-
-    if (!OldLeaf && NewLeaf)
-        BVHLeaves.Add(Component, NewLeaf);
-    else if (OldLeaf && !NewLeaf)
-        BVHLeaves.Remove(Component);
-}
-
-void UScene::UpdateBVHForActor(AActor* Actor)
-{
-    if (!Actor) return;
-
-    // 부모 컴포넌트 이동으로 함께 움직인 자식 메시도 갱신한다.
-    for (UActorComponent* Component : Actor->GetComponents())
-    {
-        if (Component->IsA(UStaticMeshComponent::GetClass()))
-            UpdateBVH(static_cast<UStaticMeshComponent*>(Component));
-    }
+    BVH.Update(Component);
 }
 
 void UScene::RemoveFromBVH(UStaticMeshComponent* Component)
 {
-    FSceneBVHNode** Found = BVHLeaves.Find(Component);
-    if (!Found) return;
-
-    FSceneBVHNode::Remove(BVHRoot, *Found);
-    BVHLeaves.Remove(Component);
+    BVH.Remove(Component);
 }
 
 void UScene::RebuildBVH()
 {
-    FSceneBVHNode::Clear(BVHRoot);
-    BVHLeaves.Empty();
+    BVH.Clear();
 
     ForEachPrimitive([this](UPrimitiveComponent* Primitive)
         {
             if (Primitive->IsA(UStaticMeshComponent::GetClass()))
-                UpdateBVH(static_cast<UStaticMeshComponent*>(Primitive));
+            {
+                BVH.Update(static_cast<UStaticMeshComponent*>(Primitive));
+            }
         });
 }
 
+void UScene::UpdateBVHForActor(AActor* Actor)
+{
+    if (!Actor)
+        return;
+
+    // 부모 컴포넌트의 이동으로 위치가 바뀐 자식 메시도 갱신한다.
+    for (UActorComponent* Component : Actor->GetComponents())
+    {
+        if (Component->IsA(UStaticMeshComponent::GetClass()))
+        {
+            BVH.Update(static_cast<UStaticMeshComponent*>(Component));
+        }
+    }
+}
+
 bool UScene::RemoveComponent(
-    AActor* Actor, UActorComponent* Component)
+    AActor* Actor,
+    UActorComponent* Component)
 {
     if (!Actor || !Component)
         return false;
 
-    // 일단 메모리는 유지한다.
     if (!Actor->RemoveComponent(Component, false))
         return false;
 
     if (Component->IsA(UStaticMeshComponent::GetClass()))
-        RemoveFromBVH(static_cast<UStaticMeshComponent*>(Component));
+    {
+        BVH.Remove(static_cast<UStaticMeshComponent*>(Component));
+    }
 
     delete Component;
 
-    // 부모 컴포넌트 삭제로 자식의 월드 행렬이 바뀔 수 있다.
+    // 부모 컴포넌트 삭제로 자식 메시의 월드 변환이 바뀔 수 있다.
     UpdateBVHForActor(Actor);
     return true;
 }

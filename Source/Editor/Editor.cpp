@@ -514,7 +514,6 @@ void FEditor::SpawnStaticMesh(const FName& MeshKey, int Count)
 			// Todo: BVH
 			CurrentScene->UpdateBVH(StaticMeshComp);
 
-
 			// 기존 Rocket의 정점색 표시 정책을 유지한다.
 			if (MeshKey == "Rocket")
 			{

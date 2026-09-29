@@ -8,15 +8,13 @@
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
 #include "Engine/Component/WidgetComponent.h"
 
+// Todo: BVH
+#include "Engine/Scene/SceneBVH.h"
+
 struct FPrimitiveRenderData;
 class UCameraComponent;
 class FRenderer;
 class FArchive;
-
-
-// Todo: BVH
-class FSceneBVHNode;
-class UStaticMeshComponent;
 
 struct FCameraSaveData
 {
@@ -124,7 +122,6 @@ public:
 
 	virtual ~UScene();
 
-
 	// Todo: BVH
 	void UpdateBVH(UStaticMeshComponent* Component);
 	void UpdateBVHForActor(AActor* Actor);
@@ -132,11 +129,13 @@ public:
 	bool RemoveComponent(AActor* Actor, UActorComponent* Component);
 	void RebuildBVH();
 
-	const FSceneBVHNode* GetBVHRoot() const { return BVHRoot; }
+	const FSceneBVHNode* GetBVHRoot() const
+	{
+		return BVH.GetRoot();
+	}
 
 private:
-	FSceneBVHNode* BVHRoot = nullptr;
-	TMap<UStaticMeshComponent*, FSceneBVHNode*> BVHLeaves;
+	FSceneBVH BVH;
 
 protected:
 	void EnsureUUIDWidgets();

@@ -15,7 +15,7 @@
 #include "Editor/Util/ScopeCycleCounter.h"
 
 // Todo: BVH
-#include "Engine/Scene/SceneBVHNode.h"
+#include "Engine/Scene/SceneBVH.h"
 
 FObjectPicker::FObjectPicker(FEditor* InEditor)
 	: Editor{ InEditor }
@@ -194,25 +194,23 @@ void FObjectPicker::PickBVHNode(
 	if (!Node) return;
 
 	float Distance = 0.0f;
-	if (!RayAABBIntersect(
-		Ray, Node->GetMin(), Node->GetMax(),
-		ClosestDistance, Distance))
+	if (!RayAABBIntersect(Ray, Node->WorldMin, Node->WorldMax, ClosestDistance, Distance))
 	{
 		return;
 	}
 
-	if (Node->GetComponent())
+	if (Node->ComponentOrNull)
 	{
 		TestPrimitive(
-			Node->GetComponent(),
+			Node->ComponentOrNull,
 			Ray,
 			ClosestDistance,
 			SelectedObject);
 		return;
 	}
 
-	PickBVHNode(Node->GetLeft(), Ray, ClosestDistance, SelectedObject);
-	PickBVHNode(Node->GetRight(), Ray, ClosestDistance, SelectedObject);
+	PickBVHNode(Node->LeftChild, Ray, ClosestDistance, SelectedObject);
+	PickBVHNode(Node->RightChild, Ray, ClosestDistance, SelectedObject);
 }
 
 void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
