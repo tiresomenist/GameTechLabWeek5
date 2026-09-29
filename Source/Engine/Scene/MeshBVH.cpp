@@ -1,0 +1,175 @@
+
+#include "pch.h" 
+// Todo: BVH Mesh
+#include "MeshBVH.h"
+
+FMeshBVH::~FMeshBVH()
+{
+    Clear();
+}
+
+void FMeshBVH::Clear()
+{
+    // 이 BVH가 생성한 노드를 각각 한 번씩 해제한다.
+    {
+        for (FMeshBVHNode* Node : AllocatedNodes)
+        {
+            delete Node;
+        }
+    }
+
+    AllocatedNodes.Empty();
+    TriangleOrders.Empty();
+    RootOrNull = nullptr;
+}
+
+
+void FMeshBVH::Build(const TArray<FVector>& Positions, const TArray<uint32>& Indices)
+{
+    Clear();
+
+    TArray<FMeshTriangleInfo> TriangleInfos;
+
+    // 인덱스가 유효한 삼각형 목록인지 검사한다.
+    {
+        if (Indices.IsEmpty() || Indices.Num() % 3 != 0)
+        {
+            return;
+        }
+
+        for (uint32 VertexIndex : Indices)
+        {
+            if (VertexIndex >= static_cast<uint32>(Positions.Num()))
+            {
+                return;
+            }
+        }
+    }
+
+    // 각 삼각형의 로컬 AABB와 중심점을 계산한다.
+    const uint32 TrianglesCount = static_cast<uint32>(Indices.Num() / 3);
+    TriangleInfos.Reserve(TrianglesCount);
+
+    for (uint32 TriangleIndex = 0; TriangleIndex < TrianglesCount; ++TriangleIndex)
+    {
+        const uint32 Base = TriangleIndex * 3;
+        const FVector& A = Positions[Indices[Base]];
+        const FVector& B = Positions[Indices[Base + 1]];
+        const FVector& C = Positions[Indices[Base + 2]];
+
+        FMeshTriangleInfo Info;
+        Info.TriangleIndex = TriangleIndex;
+        Info.BoundsMin = FVector((std::min)({ A.X, B.X, C.X }), (std::min)({ A.Y, B.Y, C.Y }), (std::min)({ A.Z, B.Z, C.Z }));
+        Info.BoundsMax = FVector((std::max)({ A.X, B.X, C.X }), (std::max)({ A.Y, B.Y, C.Y }), (std::max)({ A.Z, B.Z, C.Z }));
+        Info.Centroid = (A + B + C) / 3.0f;
+
+        TriangleInfos.Add(Info);
+    }
+
+    RootOrNull = BuildNodesRecursive(TriangleInfos, 0, static_cast<uint32>(TriangleInfos.Num()));
+
+    // 리프가 사용할 수 있도록 정렬된 순서의 원본 삼각형 번호를 보관한다.
+    TriangleOrders.Reserve(TriangleInfos.Num());
+    for (uint32 i = 0; i < static_cast<uint32>(TriangleInfos.Num()); ++i)
+    {
+        TriangleOrders.Add(TriangleInfos[i].TriangleIndex);
+    }
+}
+
+FMeshBVHNode* FMeshBVH::BuildNodesRecursive(TArray<FMeshTriangleInfo>& Infos, uint32 First, uint32 Count)
+{
+    assert(Count > 0);
+    assert(First + Count <= static_cast<uint32>(Infos.Num()));
+
+    FMeshBVHNode* Node = nullptr;
+
+    // 현재 삼각형 그룹을 담당할 노드를 만들고 해제 목록에 등록한다.
+    {
+        Node = new FMeshBVHNode;
+        AllocatedNodes.Add(Node);
+    }
+
+    // 그룹에 속한 삼각형들의 AABB를 합쳐 노드 AABB를 만든다.
+    Node->LocalMin = Infos[First].BoundsMin;
+    Node->LocalMax = Infos[First].BoundsMax;
+
+    for (uint32 I = First + 1; I < First + Count; ++I)
+    {
+        const FMeshTriangleInfo& Info = Infos[I];
+
+        Node->LocalMin.X = (std::min)(Node->LocalMin.X, Info.BoundsMin.X);
+        Node->LocalMin.Y = (std::min)(Node->LocalMin.Y, Info.BoundsMin.Y);
+        Node->LocalMin.Z = (std::min)(Node->LocalMin.Z, Info.BoundsMin.Z);
+
+        Node->LocalMax.X = (std::max)(Node->LocalMax.X, Info.BoundsMax.X);
+        Node->LocalMax.Y = (std::max)(Node->LocalMax.Y, Info.BoundsMax.Y);
+        Node->LocalMax.Z = (std::max)(Node->LocalMax.Z, Info.BoundsMax.Z);
+    }
+
+    // 삼각형이 충분히 적으면 이 노드를 리프로 만든다.
+    if (Count <= MAX_TRIANGLES_PER_LEAF)
+    {
+        Node->FirstTriangleOffset = First;
+        Node->TrianglesCount = Count;
+
+        return Node;
+    }
+
+    FVector CentroidMin = Infos[First].Centroid;
+    FVector CentroidMax = Infos[First].Centroid;
+
+    // 중심점들이 각 축에서 차지하는 범위를 구한다.
+    for (uint32 I = First + 1; I < First + Count; ++I)
+    {
+        const FVector& Center = Infos[I].Centroid;
+
+        CentroidMin.X = (std::min)(CentroidMin.X, Center.X);
+        CentroidMin.Y = (std::min)(CentroidMin.Y, Center.Y);
+        CentroidMin.Z = (std::min)(CentroidMin.Z, Center.Z);
+
+        CentroidMax.X = (std::max)(CentroidMax.X, Center.X);
+        CentroidMax.Y = (std::max)(CentroidMax.Y, Center.Y);
+        CentroidMax.Z = (std::max)(CentroidMax.Z, Center.Z);
+    }
+
+    const FVector Extent = CentroidMax - CentroidMin;
+
+    // 모든 중심점이 같다면 공간적으로 나눌 수 없으므로 리프로 만든다.
+    if (Extent.X == 0.0f && Extent.Y == 0.0f && Extent.Z == 0.0f)
+    {
+        Node->FirstTriangleOffset = First;
+        Node->TrianglesCount = Count;
+        return Node;
+    }
+
+    int Axis = 0;
+
+    // 중심점이 가장 넓게 퍼진 축을 고른다.
+    if (Extent.Y > Extent[Axis])
+    {
+        Axis = 1;
+    }
+
+    if (Extent.Z > Extent[Axis])
+    {
+        Axis = 2;
+    }
+
+    // 선택한 축의 중심점 순서로 현재 범위만 정렬한다.
+    std::sort(Infos.begin() + First, Infos.begin() + First + Count,
+        [Axis](const FMeshTriangleInfo& A, const FMeshTriangleInfo& B) {
+            if (A.Centroid[Axis] == B.Centroid[Axis])
+            {
+                return A.TriangleIndex < B.TriangleIndex;
+            }
+
+            return A.Centroid[Axis] < B.Centroid[Axis];
+        }
+    );
+
+    const uint32 Middle = First + Count / 2;
+    Node->LeftChild = BuildNodesRecursive(Infos, First, Middle - First);
+    Node->RightChild = BuildNodesRecursive(Infos, Middle, First + Count - Middle);
+
+    return Node;
+}

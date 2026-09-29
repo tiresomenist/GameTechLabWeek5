@@ -518,6 +518,10 @@ FMeshResource* GResourceManager::CreateMesh(const FName& MeshName,
         Mesh->bHasBounds = true;
     }
 
+    // Todo: BVH Mesh
+    // 일반 메시의 인덱스가 삼각형 목록이면 BVH를 만든다.
+    Mesh->TriangleBVH.Build(Mesh->Positions, Mesh->indexes);
+
     if (PrimitiveCache.Add(MeshName, Mesh.get())){
         return Mesh.release();
     }
@@ -592,6 +596,10 @@ FMeshResource* GResourceManager::CreateTexturedMesh(const FName& MeshName,
         Mesh->BoundsMax.Z = (std::max)(Mesh->BoundsMax.Z, Position.Z);
     }
     Mesh->bHasBounds = true;
+
+    // Todo: BVH Mesh
+    // 텍스처 메시의 로컬 삼각형들로 BVH를 만든다.
+    Mesh->TriangleBVH.Build(Mesh->Positions, Mesh->indexes);
 
     if (PrimitiveCache.Add(MeshName, Mesh.get()))
     {
@@ -668,6 +676,10 @@ FMeshResource* GResourceManager::CreateStaticMeshResource(const FName& MeshName,
         Mesh->BoundsMax.Z = (std::max)(Mesh->BoundsMax.Z, Position.Z);
     }
     Mesh->bHasBounds = true;
+
+    // Todo: BVH Mesh
+    // CPU 메시 데이터가 준비되었으므로 삼각형 BVH를 만든다.
+    Mesh->TriangleBVH.Build(Mesh->Positions, Mesh->indexes);
 
     if (PrimitiveCache.Add(MeshName, Mesh.get()))
     {

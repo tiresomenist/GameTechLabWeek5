@@ -8,6 +8,11 @@ class UPrimitiveComponent;
 class USceneComponent;
 class UCameraComponent;
 
+// Todo: BVH Mesh
+struct FMeshBVHNode;
+struct FMeshResource;
+class FMeshBVH;
+
 struct FRay {
 	FVector Origin;
 	FVector Direction;
@@ -37,8 +42,12 @@ private:
 	void PickIcon(UScene* Scene, const UCameraComponent* Camera, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
 
 	// Todo: BVH
-	void PickBVHNode(const FSceneBVHNode* Node, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
 	void TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
+	void PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
+
+	// Todo: BVH Mesh
+	bool PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, float& ClosestDistance);
 };
+
 
 

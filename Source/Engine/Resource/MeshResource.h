@@ -7,6 +7,9 @@
 #include "Core/Core.h"
 #include "Core/Math/Vector.h"
 
+// Todo: BVH Mesh
+#include "Engine/Scene/MeshBVH.h"
+
 struct FMeshResource
 {
     friend class GResourceManager;
@@ -28,6 +31,10 @@ public:
     bool HasBounds() const { return bHasBounds; }
 
     //void AddSection(uint32 InMaterialSlot, uint32 InStartIndex, uint32 InIndexCount);
+
+    // Todo: BVH Mesh
+    const FMeshBVH& GetTriangleBVH() const { return TriangleBVH; }
+
 private:
     Microsoft::WRL::ComPtr<ID3D11Buffer> VertexBuffer = nullptr;
     Microsoft::WRL::ComPtr<ID3D11Buffer> IndexBuffer = nullptr;
@@ -42,4 +49,6 @@ private:
     FVector BoundsMax{};
     bool bHasBounds;
 
+    // Todo: BVH Mesh
+    FMeshBVH TriangleBVH;
 };

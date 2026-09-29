@@ -148,7 +148,7 @@ USceneComponent* FObjectPicker::Pick()
 	float ClosestDistance = 100000.0f;
 	
 	PickPrimitives(Scene, Ray, ClosestDistance, SelectedObject);
-	PickIcon(Scene,Camera, Ray, ClosestDistance, SelectedObject);
+	//PickIcon(Scene,Camera, Ray, ClosestDistance, SelectedObject);
 	
 	LastPickTimeMs = PickCounter.Finish();
 	TotalPickTimeMs += LastPickTimeMs;
@@ -161,17 +161,10 @@ USceneComponent* FObjectPicker::Pick()
 	return SelectedObject;
 }
 
-void FObjectPicker::PickPrimitives(
-	UScene* Scene, const FRay& Ray,
-	float& ClosestDistance,
-	USceneComponent*& SelectedObject)
+void FObjectPicker::PickPrimitives(UScene* Scene, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
 {
 	// 정적 메시
-	PickBVHNode(
-		Scene->GetBVHRoot(),
-		Ray,
-		ClosestDistance,
-		SelectedObject);
+	PickBVHNodeRecursive(Scene->GetBVHRoot(), Ray, ClosestDistance, SelectedObject);
 
 	// 이번 단계에서 BVH에 없는 텍스트·플립북
 	Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
@@ -179,17 +172,11 @@ void FObjectPicker::PickPrimitives(
 			if (Primitive->IsA(UStaticMeshComponent::GetClass()))
 				return;
 
-			TestPrimitive(
-				Primitive, Ray,
-				ClosestDistance, SelectedObject);
+			TestPrimitive(Primitive, Ray, ClosestDistance, SelectedObject);
 		});
 }
 
-void FObjectPicker::PickBVHNode(
-	const FSceneBVHNode* Node,
-	const FRay& Ray,
-	float& ClosestDistance,
-	USceneComponent*& SelectedObject)
+void FObjectPicker::PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
 {
 	if (!Node) return;
 
@@ -201,18 +188,15 @@ void FObjectPicker::PickBVHNode(
 
 	if (Node->ComponentOrNull)
 	{
-		TestPrimitive(
-			Node->ComponentOrNull,
-			Ray,
-			ClosestDistance,
-			SelectedObject);
+		TestPrimitive(Node->ComponentOrNull, Ray, ClosestDistance, SelectedObject);
 		return;
 	}
 
-	PickBVHNode(Node->LeftChild, Ray, ClosestDistance, SelectedObject);
-	PickBVHNode(Node->RightChild, Ray, ClosestDistance, SelectedObject);
+	PickBVHNodeRecursive(Node->LeftChild, Ray, ClosestDistance, SelectedObject);
+	PickBVHNodeRecursive(Node->RightChild, Ray, ClosestDistance, SelectedObject);
 }
 
+/*
 void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
 {
 	if (!Primitive || !Primitive->IsVisible())
@@ -286,6 +270,67 @@ void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ra
 			ClosestDistance = HitDistance;
 			SelectedObject = Primitive;
 		}
+	}
+}
+*/
+
+// Todo: BVH
+void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
+{
+	// 보이지 않는 프리미티브는 선택하지 않는다.
+	if (Primitive == nullptr || !Primitive->IsVisible())
+	{
+		return;
+	}
+
+	FVector BoundsMin;
+	FVector BoundsMax;
+
+	if (!Primitive->GetLocalBounds(BoundsMin, BoundsMax))
+	{
+		return;
+	}
+
+	// 월드 레이를 메시의 로컬 좌표로 변환한다.
+	const FMatrix& RenderWorld = Primitive->GetRenderWorldMatrix(Editor->GetEditorCamera());
+	FMatrix InverseWorld;
+
+	if (!RenderWorld.TryInverse(InverseWorld))
+	{
+		return;
+	}
+
+	FRay LocalRay;
+	LocalRay.Origin = FVector(FVector4(Ray.Origin, 1.0f) * InverseWorld);
+	LocalRay.Direction = FVector(FVector4(Ray.Direction, 0.0f) * InverseWorld);
+
+	// 프리미티브 전체 AABB를 빗나가면 내부 삼각형을 검사하지 않는다.
+	float AABBDistance = 0.0f;
+	if (!RayAABBIntersect(LocalRay, BoundsMin, BoundsMax, ClosestDistance, AABBDistance))
+	{
+		return;
+	}
+
+	// 텍스트·플립북처럼 AABB만으로 선택하는 프리미티브를 처리한다.
+	if (Primitive->IsAABBOnlyPickable())
+	{
+		ClosestDistance = AABBDistance;
+		SelectedObject = Primitive;
+		return;
+	}
+
+	FMeshResource* Mesh = Primitive->GetMeshResource();
+	if (Mesh == nullptr)
+	{
+		return;
+	}
+
+	const FMeshBVH& MeshBVH = Mesh->GetTriangleBVH();
+
+	// 메시 BVH를 탐색해 가장 가까운 삼각형 교차점을 찾는다.
+	if (PickMeshBVHNodeRecursive(MeshBVH.GetRoot(), MeshBVH, *Mesh, LocalRay, ClosestDistance))
+	{
+		SelectedObject = Primitive;
 	}
 }
 
@@ -395,4 +440,53 @@ void FObjectPicker::PickIcon(UScene* Scene, const UCameraComponent* Camera, cons
 				}
 			}
 		});
+}
+
+// Todo: BVH Mesh
+bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, float& ClosestDistance)
+{
+	if (Node == nullptr)
+	{
+		return false;
+	}
+
+	float EnterDistance = 0.0f;
+
+	// 레이가 노드 AABB를 빗나가면 그 아래 삼각형을 모두 건너뛴다.
+	if (RayAABBIntersect(LocalRay, Node->LocalMin, Node->LocalMax, ClosestDistance, EnterDistance) == false)
+	{
+		return false;
+	}
+
+	// 리프라면 이 노드에 배정된 삼각형만 정확히 검사한다.
+	if (Node->TrianglesCount > 0)
+	{
+		const TArray<uint32>& TriangleOrders = BVH.GetTriangleOrders();
+		const TArray<uint32>& Indices = Mesh.GetIndices();
+		const TArray<FVector>& Positions = Mesh.GetPositions();
+
+		bool bHit = false;
+		const uint32 End = Node->FirstTriangleOffset + Node->TrianglesCount;
+
+		for (uint32 i = Node->FirstTriangleOffset; i < End; ++i)
+		{
+			const uint32 TriangleIndex = TriangleOrders[i];
+			const uint32 Base = TriangleIndex * 3;
+
+			float HitDistance = 0.0f;
+			if (RayTriangleIntersect(LocalRay, Positions[Indices[Base]], Positions[Indices[Base + 1]], Positions[Indices[Base + 2]], HitDistance) && HitDistance < ClosestDistance)
+			{
+				ClosestDistance = HitDistance;
+				bHit = true;
+			}
+		}
+
+		return bHit;
+	}
+
+	// 내부 노드라면 왼쪽과 오른쪽 자식을 모두 탐색한다.
+	const bool bLeftHit = PickMeshBVHNodeRecursive(Node->LeftChild, BVH, Mesh, LocalRay, ClosestDistance);
+	const bool bRightHit = PickMeshBVHNodeRecursive(Node->RightChild, BVH, Mesh, LocalRay, ClosestDistance);
+
+	return bLeftHit || bRightHit;
 }
