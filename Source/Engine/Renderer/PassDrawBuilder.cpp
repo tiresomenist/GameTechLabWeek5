@@ -109,8 +109,13 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 		uint32 ObjectCBIdx = GetOrCreateObjectCBIndex(GizmoPrim.ObjectIndex);
 		uint32 MaterialCBIdx = GetOrCreateMaterialCBIndex(Material);
 		uint32 DepthBucket = CalculateDepthBucket(ObjDatum.SortCenterWS, ViewSnapshot.ViewMatrix);
-
-		FPipelineKey Key = MakePipelineKey(Material, PageBinding.VertexFormat, EPipelinePass::Gizmo, ViewSnapshot.ViewMode);
+		FPipelineKey Key;
+		if (GizmoPrim.Topology == D3D10_PRIMITIVE_TOPOLOGY_LINELIST) {
+			Key = MakePipelineKey(Material, PageBinding.VertexFormat, EPipelinePass::Line, ViewSnapshot.ViewMode);
+		}
+		else {
+			Key = MakePipelineKey(Material, PageBinding.VertexFormat, EPipelinePass::Gizmo, ViewSnapshot.ViewMode);
+		}
 		const FPipelineState* State = FindPipeline(Key);
 		if (!State) continue;
 
