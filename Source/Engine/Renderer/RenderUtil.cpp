@@ -189,19 +189,32 @@ void RenderUtil::SubmitLineDrawRequests(FEditor* Editor, UScene* Scene, const UC
 	Context.bShowBounds = ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Bounds);
 	Context.bShowPrimitives = ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives);
 	Context.ViewType = InViewtype;
+	const USceneComponent* Selected = Editor->GetSelectedSceneComponent();
 
-	// 각 프리미티브가 생성한 바운딩 박스 요청을 즉시 제출함
-	Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
-		{
-			if (!Primitive->IsVisible())
+	if (Context.bShowBounds) 
+	{
+		// 각 프리미티브가 생성한 바운딩 박스 요청을 즉시 제출함
+		Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
 			{
-				return;
-			}
+				if (!Primitive->IsVisible())
+				{
+					return;
+				}
 
-			Context.bSelected =	Editor->GetSelectedSceneComponent() == Primitive;
+				Context.bSelected = Selected == Primitive;
+				Primitive->SubmitLineDrawRequests(Context, Submit);
+			}
+		);
+	}
+	else if (Selected && Selected->IsA(UPrimitiveComponent::GetClass()))
+	{
+		const auto* Primitive = static_cast<const UPrimitiveComponent*>(Selected);
+		if (Primitive->IsVisible())
+		{
+			Context.bSelected = true;
 			Primitive->SubmitLineDrawRequests(Context, Submit);
 		}
-	);
+	}
 
 	// 추후 에디터-게임씬 분리시 에디터 단으로 이동해야함
 	if (Context.bShowPrimitives)

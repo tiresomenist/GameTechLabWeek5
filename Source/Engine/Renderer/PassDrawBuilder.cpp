@@ -7,7 +7,6 @@
 void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPipelineStateCache* PipelineCache, FPassDrawList& OutPassDraws)
 {
 	OutPassDraws.Clear();
-	ObjectIndexToCBIndex.Empty();
 	m_MaterialIdToCBIndex.Empty();
 	m_ReferencedMaterials.Empty();
 	ResetObjectMapping(ViewLayoutData.Objects.Num());
@@ -27,15 +26,14 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 	};
 
 	auto GetOrCreateMaterialCBIndex = [this](const FMaterial* Material) -> uint32 {
-		uint32 MatId = Material ? Material->MaterialId : InvalidRenderId;
-		auto It = m_MaterialIdToCBIndex.Find(MatId);
-		if (It != nullptr) return *It;
-
-		uint32 NewIndex = static_cast<uint32>(m_MaterialIdToCBIndex.Num());
-		m_MaterialIdToCBIndex[MatId] = NewIndex;
-		if (Material) {
-			m_ReferencedMaterials.Add(Material);
+		if (const uint32* Existing = m_MaterialIdToCBIndex.Find(Material->MaterialId))
+		{
+			return *Existing;
 		}
+		const uint32 NewIndex =	static_cast<uint32>(m_ReferencedMaterials.Num());
+		// 배열 위치와 CB 인덱스를 동일하게 유지한다.
+		m_ReferencedMaterials.Add(Material);
+		m_MaterialIdToCBIndex.Add(Material->MaterialId, NewIndex);
 		return NewIndex;
 	};
 
@@ -44,7 +42,7 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 		if (Prim.ObjectIndex >= Objects.Num()) continue;
 		const FRenderObjectData& ObjDatum = Objects[Prim.ObjectIndex];
 		const FMaterial* Material = Prim.Material;
-
+		if (!Material || Material->MaterialId == InvalidRenderId) continue;
 		FMeshPageBinding PageBinding = GResourceManager::GetInstance()->GetMeshPageBinding(Prim.Geometry.MeshPageId);
 
 		uint32 ObjectCBIdx = GetOrCreateObjectCBIndex(Prim.ObjectIndex);
@@ -96,6 +94,7 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 		}
 	}
 
+
 	// 기즈모 처리
 	for (const FPrimitiveRenderData& GizmoPrim : ViewLayoutData.Gizmos)
 	{
@@ -103,7 +102,7 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 
 		const FRenderObjectData& ObjDatum = Objects[GizmoPrim.ObjectIndex];
 		const FMaterial* Material = GizmoPrim.Material;
-
+		if (!Material || Material->MaterialId == InvalidRenderId) continue;
 		FMeshPageBinding PageBinding = GResourceManager::GetInstance()->GetMeshPageBinding(GizmoPrim.Geometry.MeshPageId);
 
 		uint32 ObjectCBIdx = GetOrCreateObjectCBIndex(GizmoPrim.ObjectIndex);
@@ -179,7 +178,7 @@ uint32 FPassDrawBuilder::GetOrCreateObjectCBIndex(uint32 ObjectIndex)
 	uint32& CBIndex = ObjectIndexToCBIndex[ObjectIndex];
 	if (CBIndex != InvalidRenderId) return CBIndex;
 	const uint32 NewIndex = static_cast<uint32>(ReferenceObjectIndices.Num());
-	ReferenceObjectIndices.Add(NewIndex);
+	ReferenceObjectIndices.Add(ObjectIndex);
 	CBIndex = NewIndex;
 	return CBIndex;
 }

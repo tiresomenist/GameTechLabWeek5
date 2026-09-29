@@ -8,7 +8,7 @@
 
 void UStaticMeshComponent::SetStaticMesh(const FName& InMeshKey)
 {
-	if ((!InMeshKey.IsNone() || CachedMesh) && InMeshKey == MeshKey) return;
+	if (InMeshKey == MeshKey && (InMeshKey.IsNone() || CachedMesh)) return;
 
 	UStaticMesh* Mesh = nullptr;
 	int32 NewSlotCount = 0;
@@ -112,6 +112,7 @@ void UStaticMeshComponent::Serialize(FArchive& Archive)
 
 void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, bool bSelected)
 {
+	if (!CachedMesh) return;
 	FMeshResource* Resource = CachedMesh->GetMeshResource();
 	if (!Resource){	return; }
 

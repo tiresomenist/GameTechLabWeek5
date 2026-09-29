@@ -404,8 +404,8 @@ void FViewRenderer::RenderView(const FViewRenderData& Data)
 
 	CBRingBuffer.BeginFrameMap(Context1.Get());
 
-	CBManager.UploadObjectConstants(Context1.Get(), &CBRingBuffer, Data, PassDrawBuilder.GetObjectCBIndexMap());
-	CBManager.UploadMaterialConstants(Context1.Get(), &CBRingBuffer, PassDrawBuilder.GetReferencedMaterials(), PassDrawBuilder.GetMaterialCBIndexMap());
+	CBManager.UploadObjectConstants(Context1.Get(), &CBRingBuffer, Data, PassDrawBuilder.GetReferenceObjectIndices());
+	CBManager.UploadMaterialConstants(Context1.Get(), &CBRingBuffer, PassDrawBuilder.GetReferencedMaterials());
 
 	CBRingBuffer.EndFrameMap(Context1.Get());
 
