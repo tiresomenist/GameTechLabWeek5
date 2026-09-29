@@ -5,6 +5,7 @@
 #include "Core/Container/Array.h"
 #include "Engine/Renderer/ViewRenderer.h"
 #include "Engine/Renderer/GPUTimer.h"
+#include "Engine/Renderer/HierarchicalZ.h"
 
 class GDevice;
 class FEditor;
@@ -37,7 +38,6 @@ public:
 	float GetGPUTimeMs() const { return GPUTimer.GetGPUTimeMs(); }
 	float GetGPUWaitMs() const { return GPUWaitMs; }
 
-
 private:
 	bool CreateSwapChain(HWND HWnd, uint32 Width, uint32 Height);
 	bool CreateFrameBuffer();
@@ -47,12 +47,18 @@ private:
 	void SetViewportAndScissor(const D3D11_VIEWPORT& Viewport);
 	void SwapBuffer();
 
+	bool CreateHZBConstantBuffer();
+	void BuildHZBMip0();
+	void BuildHZBMips();
+
 	FViewRenderer ViewRenderer;
 	Microsoft::WRL::ComPtr<IDXGISwapChain> SwapChain;
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> FrameBuffer;
 	Microsoft::WRL::ComPtr<ID3D11RenderTargetView> FrameBufferRTV;
 	Microsoft::WRL::ComPtr<ID3D11Texture2D> DepthStencilBuffer;
 	Microsoft::WRL::ComPtr<ID3D11DepthStencilView> DepthStencilView;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> DepthStencilSRV;
+	Microsoft::WRL::ComPtr<ID3D11Buffer> HZBConstantBuffer;
 
 	D3D11_VIEWPORT ViewportInfo{};
 	bool bRenderReady = false;
@@ -62,4 +68,6 @@ private:
 	FGPUTimer GPUTimer;
 	float DrawTimeMs = 0.0f;
 	float GPUWaitMs = 0.0f;
+
+	FHierarchicalZBuffer HierarchicalZBuffer;
 };

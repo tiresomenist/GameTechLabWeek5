@@ -5,6 +5,7 @@
 #include "Engine/Log.h"
 #include "Editor/Editor.h"
 #include "Editor/Window/EditorWindow.h"
+#include "Engine/Resource/ResourceManager.h"
 
 #include "ImGui/imgui.h"
 #include "ImGui/imgui_impl_dx11.h"
@@ -17,6 +18,14 @@
 #include <dxgi1_5.h>
 
 using Microsoft::WRL::ComPtr;
+
+struct FHZBConstants
+{
+	uint32 SourceWidth = 0;
+	uint32 SourceHeight = 0;
+	UINT SourceMip = 0;
+	uint32 Padding = 0;
+};
 
 void FRenderer::Create(HWND HWnd, GDevice* InDevice, uint32 Width, uint32 Height)
 {
@@ -40,9 +49,15 @@ void FRenderer::Create(HWND HWnd, GDevice* InDevice, uint32 Width, uint32 Height
 	DeviceContext = Context.GetNative();
 	D3DDevice = InDevice->GetDevice();
 	if (!CreateSwapChain(HWnd, Width, Height) || !CreateFrameBuffer() || 
-		!CreateDepthStencilBuffer(static_cast<uint32>(ViewportInfo.Width),static_cast<uint32>(ViewportInfo.Height)))
+		!CreateDepthStencilBuffer(static_cast<uint32>(ViewportInfo.Width),static_cast<uint32>(ViewportInfo.Height)) ||
+		!HierarchicalZBuffer.Create(D3DDevice, static_cast<uint32>(ViewportInfo.Width), static_cast<uint32>(ViewportInfo.Height)))
 	{
 		throw std::runtime_error("Failed to create renderer output");
+	}
+
+	if (!CreateHZBConstantBuffer())
+	{
+		throw std::runtime_error("Failed to create HZB constant buffer");
 	}
 
 	ViewRenderer.Create(D3DDevice, DeviceContext);
@@ -94,6 +109,8 @@ void FRenderer::Shutdown()
 	bImGuiWin32Initialized = false;
 	bImGuiContextCreated = false;
 
+	HZBConstantBuffer.Reset();
+	HierarchicalZBuffer.Release();
 	ReleaseDepthStencilBuffer();
 	ReleaseFrameBuffer();
 	SwapChain.Reset();
@@ -297,17 +314,18 @@ bool FRenderer::CreateDepthStencilBuffer(uint32 Width, uint32 Height)
 
 	ComPtr<ID3D11Texture2D> NewDepthBuffer;
 	ComPtr<ID3D11DepthStencilView> NewDSV;
+	ComPtr< ID3D11ShaderResourceView> NewSRV;
 
 	D3D11_TEXTURE2D_DESC DepthStencilDesc{};
 	DepthStencilDesc.Width = Width;
 	DepthStencilDesc.Height = Height;
 	DepthStencilDesc.MipLevels = 1;
 	DepthStencilDesc.ArraySize = 1;
-	DepthStencilDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	DepthStencilDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 	DepthStencilDesc.SampleDesc.Count = 1;
 	DepthStencilDesc.SampleDesc.Quality = 0;
 	DepthStencilDesc.Usage = D3D11_USAGE_DEFAULT;
-	DepthStencilDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+	DepthStencilDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
 	DepthStencilDesc.CPUAccessFlags = 0;
 	DepthStencilDesc.MiscFlags = 0;
 
@@ -316,20 +334,31 @@ bool FRenderer::CreateDepthStencilBuffer(uint32 Width, uint32 Height)
 	if (FAILED(Result)){ return false; }
 
 	D3D11_DEPTH_STENCIL_VIEW_DESC DSVDesc{};
-	DSVDesc.Format = DepthStencilDesc.Format;
+	DSVDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	DSVDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 	DSVDesc.Texture2D.MipSlice = 0;
-
-	Result = D3DDevice->CreateDepthStencilView( NewDepthBuffer.Get(),&DSVDesc, NewDSV.GetAddressOf());
-
+	Result = D3DDevice->CreateDepthStencilView(NewDepthBuffer.Get(),&DSVDesc, NewDSV.GetAddressOf());
 	if (FAILED(Result))
 	{
 		UE_LOG("[FRenderer] Failed to create depth stencil view. HRESULT: {}\n",Result);
 		return false;
 	}
 
+	D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc{};
+	SRVDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+	SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	SRVDesc.Texture2D.MostDetailedMip = 0;
+	SRVDesc.Texture2D.MipLevels = 1;
+	Result = D3DDevice->CreateShaderResourceView(NewDepthBuffer.Get(), &SRVDesc, NewSRV.GetAddressOf());
+	if (FAILED(Result))
+	{
+		UE_LOG("[FRenderer] Failed to create shader resource view. HRESULT: {}\n", Result);
+		return false;
+	}
+
 	DepthStencilBuffer = std::move(NewDepthBuffer);
 	DepthStencilView = std::move(NewDSV);
+	DepthStencilSRV = std::move(NewSRV);
 
 	return true;
 }
@@ -338,6 +367,7 @@ void FRenderer::ReleaseDepthStencilBuffer()
 {
 	DepthStencilView.Reset();
 	DepthStencilBuffer.Reset();
+	DepthStencilSRV.Reset();
 }
 
 void FRenderer::OnResize(uint32 Width, uint32 Height)
@@ -368,8 +398,10 @@ void FRenderer::OnResize(uint32 Width, uint32 Height)
 
 	ViewportInfo = {0.0f,0.0f,static_cast<float>(Width),static_cast<float>(Height),0.0f,1.0f};
 
-	if (!CreateFrameBuffer() || !CreateDepthStencilBuffer(Width, Height))
+	if (!CreateFrameBuffer() || !CreateDepthStencilBuffer(Width, Height)
+		|| !HierarchicalZBuffer.Resize(D3DDevice, Width, Height))
 	{
+		HierarchicalZBuffer.Release();
 		ReleaseFrameBuffer();
 		ReleaseDepthStencilBuffer();
 
@@ -401,8 +433,13 @@ void FRenderer::Render(float DeltaTime,FEditor* Editor,UScene* Scene)
 	const TArray<FRenderView> Views = Editor->BuildRenderViews(ViewportInfo);
 	for (const FRenderView& View : Views)
 	{
-		ViewRenderer.RenderView(Editor, Scene, View);
+		ViewRenderer.RenderView(Editor, Scene, View, HierarchicalZBuffer.GetSRV(), HierarchicalZBuffer.GetMipCount());
 	}
+
+	GContext& Context = *GContext::GetInstance();
+	Context.UnbindRenderTargets();
+	BuildHZBMip0();
+	Context.SetRenderTargets(FrameBufferRTV.Get(), DepthStencilView.Get());
 
 	SetViewportAndScissor(ViewportInfo);
 	Editor->DrawWindows(DeltaTime);
@@ -432,7 +469,7 @@ void FRenderer::Render(float DeltaTime, FEditor* Editor, UScene* Scene, const TA
 
 	for (const FRenderView& View : Views)
 	{
-		ViewRenderer.RenderView(Editor, Scene, View);
+		ViewRenderer.RenderView(Editor, Scene, View, HierarchicalZBuffer.GetSRV(), HierarchicalZBuffer.GetMipCount());
 	}
 
 	// Editor->DrawLayout() 이후에 GetRenderView()를 해야 현재 프레임 기준으로 계산이 됩니다. 지금은 한 프레임 밀리는 상태
@@ -463,4 +500,92 @@ void FRenderer::SetViewportAndScissor(const D3D11_VIEWPORT& Viewport)
 {
 
 	GContext::GetInstance()->SetViewportAndScissor(Viewport);
+}
+
+bool FRenderer::CreateHZBConstantBuffer()
+{
+	D3D11_BUFFER_DESC Desc{};
+	Desc.ByteWidth = sizeof(FHZBConstants);
+	Desc.Usage = D3D11_USAGE_DEFAULT;
+	Desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	return SUCCEEDED(D3DDevice->CreateBuffer(&Desc, nullptr, HZBConstantBuffer.GetAddressOf()));
+}
+
+void FRenderer::BuildHZBMip0()
+{
+	if (!DepthStencilSRV || !HZBConstantBuffer || HierarchicalZBuffer.GetMipCount() == 0)
+	{
+		return;
+	}
+
+	GResourceManager& Resources = *GResourceManager::GetInstance();
+	ID3D11ComputeShader* CopyDepthShader = Resources.GetComputeShader(FName("HZB.CopyDepth"));
+	ID3D11UnorderedAccessView* OutputMip = HierarchicalZBuffer.GetMipUAV(0);
+	if (!CopyDepthShader || !OutputMip) { return; }
+	
+	const FHZBConstants Constants{HierarchicalZBuffer.GetWidth(), HierarchicalZBuffer.GetHeight()};
+
+	DeviceContext->UpdateSubresource(HZBConstantBuffer.Get(), 0, nullptr, &Constants, 0, 0);
+	DeviceContext->CSSetShader(CopyDepthShader, nullptr, 0);
+	DeviceContext->CSSetConstantBuffers(0, 1, HZBConstantBuffer.GetAddressOf());
+
+	ID3D11ShaderResourceView* SourceDepth = DepthStencilSRV.Get();
+	DeviceContext->CSSetShaderResources(0, 1, &SourceDepth);
+	DeviceContext->CSSetUnorderedAccessViews(0, 1, &OutputMip, nullptr);
+
+	const uint32 GroupCountX = (HierarchicalZBuffer.GetWidth() + 7) / 8;
+	const uint32 GroupCountY = (HierarchicalZBuffer.GetHeight() + 7) / 8;
+
+	DeviceContext->Dispatch(GroupCountX, GroupCountY, 1);
+
+	ID3D11ShaderResourceView* NullSRV = nullptr;
+	ID3D11UnorderedAccessView* NullUAV = nullptr;
+	ID3D11Buffer* NullBuffer = nullptr;
+
+	DeviceContext->CSSetShaderResources(0, 1, &NullSRV);
+	DeviceContext->CSSetUnorderedAccessViews(0, 1, &NullUAV, nullptr);
+	DeviceContext->CSSetConstantBuffers(0, 1, &NullBuffer);
+	DeviceContext->CSSetShader(nullptr, nullptr, 0);
+
+	BuildHZBMips();
+}
+
+void FRenderer::BuildHZBMips()
+{
+	if (!HZBConstantBuffer || HierarchicalZBuffer.GetMipCount() <= 1) { return; }
+
+	GResourceManager& Resources = *GResourceManager::GetInstance();
+	ID3D11ComputeShader* DownsampleShader = Resources.GetComputeShader(FName("HZB.DownsampleMax"));
+	if (!DownsampleShader ) { return; }
+
+	DeviceContext->CSSetShader(DownsampleShader, nullptr, 0);
+	DeviceContext->CSSetConstantBuffers(0, 1, HZBConstantBuffer.GetAddressOf());
+
+	for (uint32 DestinationMip = 1; DestinationMip < HierarchicalZBuffer.GetMipCount(); ++DestinationMip)
+	{
+		const uint32 SourceMip = DestinationMip - 1;
+		ID3D11ShaderResourceView* SourceHiZ = HierarchicalZBuffer.GetMipSRV(SourceMip);
+		ID3D11UnorderedAccessView* DestinationUAV = HierarchicalZBuffer.GetMipUAV(DestinationMip);
+
+		const uint32 SourceWidth = (HierarchicalZBuffer.GetWidth() >> SourceMip) > 0 ? (HierarchicalZBuffer.GetWidth() >> SourceMip) : 1;
+		const uint32 SourceHeight = (HierarchicalZBuffer.GetHeight() >> SourceMip) > 0 ? (HierarchicalZBuffer.GetHeight() >> SourceMip) : 1;
+
+		const uint32 DestinationWidth = SourceWidth > 1 ? SourceWidth / 2 : 1;
+		const uint32 DestinationHeight = SourceHeight > 1 ? SourceHeight / 2 : 1;
+		const FHZBConstants Constants{ SourceWidth, SourceHeight, SourceMip, 0 };
+
+		DeviceContext->UpdateSubresource(HZBConstantBuffer.Get(), 0, nullptr, &Constants, 0, 0);
+		DeviceContext->CSSetShaderResources(0, 1, &SourceHiZ);
+		DeviceContext->CSSetUnorderedAccessViews(0, 1, &DestinationUAV, nullptr);
+		DeviceContext->Dispatch((DestinationWidth + 7) / 8, (DestinationHeight + 7) / 8, 1);
+
+		ID3D11ShaderResourceView* NullSRV = nullptr;
+		ID3D11UnorderedAccessView* NullUAV = nullptr;
+
+		DeviceContext->CSSetShaderResources(0, 1, &NullSRV);
+		DeviceContext->CSSetUnorderedAccessViews(0, 1, &NullUAV, nullptr);
+	}
+	ID3D11Buffer* NullBuffer = nullptr;
+	DeviceContext->CSSetConstantBuffers(0, 1, &NullBuffer);
+	DeviceContext->CSSetShader(nullptr, nullptr, 0);
 }

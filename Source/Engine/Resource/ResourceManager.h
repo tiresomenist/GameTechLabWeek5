@@ -91,6 +91,8 @@ public:
 	ID3D11RasterizerState* GetRasterizerState(const FName& Name) const;
 	void RegisterDepthStencilState(const FName& Name, const D3D11_DEPTH_STENCIL_DESC& Desc);
 	ID3D11DepthStencilState* GetDepthStencilState(const FName& Name) const;
+	void RegisterComputeShader(const FName& Name, const WCHAR* FilePath, const char* EntryPoint);
+	ID3D11ComputeShader* GetComputeShader(const FName& Name) const;
 
 	// 메인 스레드에서 바이너리 캐시만 미리 로딩하고 진행 상황과 취소 요청을 처리한다.
 	FStaticMeshPreloadResult PreloadCachedStaticMeshes(

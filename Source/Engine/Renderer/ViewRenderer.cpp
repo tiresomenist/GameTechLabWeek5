@@ -80,6 +80,21 @@ namespace
 		}
 		return Cells;
 	}
+
+	// GPU용 변환 배열 생성
+	TArray<FHZBCellData> BuildHZBCellData(const TArray<FOcclusionCell>& OcclusionCells)
+	{
+		TArray<FHZBCellData> Result;
+		Result.Reserve(OcclusionCells.Num());
+		for (const FOcclusionCell& Cell : OcclusionCells)
+		{
+			FHZBCellData Data{};
+			Data.BoundsMin = FVector4(Cell.Bounds.Min, 1.0f);
+			Data.BoundsMax = FVector4(Cell.Bounds.Max, 1.0f);
+			Result.Add(Data);
+		}
+		return Result;
+	}
 }
 
 void FViewRenderer::Create(ID3D11Device* InDevice, ID3D11DeviceContext* InContext)
@@ -108,6 +123,7 @@ void FViewRenderer::Shutdown()
 {
 	LineBatcher.Clear();
 	LineBatcher.Release();
+	HZBOcclusionCuller.Release();
 	ReleaseConstantBuffer();
 	ReleaseShaders();
 	ReleaseRasterizerState();
@@ -169,7 +185,6 @@ void FViewRenderer::CreateConstantBuffer()
 	constantbufferdesc.Usage = D3D11_USAGE_DYNAMIC;
 	constantbufferdesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 	constantbufferdesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-
 	CheckHR(D3DDevice->CreateBuffer(&constantbufferdesc, nullptr, TransformConstantBuffer.GetAddressOf()));
 
 	D3D11_BUFFER_DESC gridconstantbufferdesc = {};
@@ -177,14 +192,20 @@ void FViewRenderer::CreateConstantBuffer()
 	gridconstantbufferdesc.Usage = D3D11_USAGE_DYNAMIC;
 	gridconstantbufferdesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 	gridconstantbufferdesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-
 	CheckHR(D3DDevice->CreateBuffer(&gridconstantbufferdesc, nullptr, GridConstantBuffer.GetAddressOf()));
+
+	D3D11_BUFFER_DESC Desc{};
+	Desc.ByteWidth = sizeof(FHZBCullConstants);
+	Desc.Usage = D3D11_USAGE_DEFAULT;
+	Desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	CheckHR(D3DDevice->CreateBuffer(&Desc, nullptr, HZBCullConstantBuffer.GetAddressOf()));
 }
 
 void FViewRenderer::ReleaseConstantBuffer()
 {
 	TransformConstantBuffer.Reset();
 	GridConstantBuffer.Reset();
+	HZBCullConstantBuffer.Reset();
 }
 
 void FViewRenderer::CreateRasterizerState()
@@ -437,8 +458,8 @@ void FViewRenderer::RenderPrimitive(const FPrimitiveRenderData& Data, EViewModeI
 	}
 	else
 	{
-		//DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
-		DeviceContext->OMSetDepthStencilState(OcclusionDepthStencilState, 0);
+		DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
+		//DeviceContext->OMSetDepthStencilState(OcclusionDepthStencilState, 0);
 	}
 
 	DeviceContext->DrawIndexed(Data.IndexCount,Data.IndexStart,0);
@@ -452,7 +473,8 @@ void FViewRenderer::RenderPrimitive(const FPrimitiveRenderData& Data, EViewModeI
 	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
 }
 
-void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& View)
+void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& View,
+	ID3D11ShaderResourceView* PreviousHZB, uint32 HZBMipCount)
 {
 	if (!DeviceContext || !Editor || !Scene || !View.Camera ||	View.Viewport.Width <= 0.0f || View.Viewport.Height <= 0.0f)
 	{ return; }
@@ -498,13 +520,54 @@ void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& 
 	const FFrustum Frustum = FFrustum::FrustumFromViewProjection(ViewProjMatrix);
 
 	TArray<FPrimitiveRenderData> RenderList = RenderUtil::GetRenderList(Editor, Scene, Camera, &Frustum);
-	TArray<FOcclusionCell> OcclusionCells = BuildOcclusionCells(RenderList);
+	HZBOcclusionCuller.TryReadback(DeviceContext);
 
-	OcclusionCuller.UpdateQueryResults(DeviceContext);
+	TArray<FOcclusionCell> OcclusionCells = BuildOcclusionCells(RenderList);
+	TArray<FHZBCellData> HZBCellData = BuildHZBCellData(OcclusionCells);
+	HZBOcclusionCuller.UploadCells(D3DDevice, DeviceContext, HZBCellData);
+
+	if (PreviousHZB && HZBOcclusionCuller.GetCellCount() > 0 && HZBCullConstantBuffer)
+	{
+		GResourceManager& Resources = *GResourceManager::GetInstance();
+		ID3D11ComputeShader* CullShader = Resources.GetComputeShader(FName("HZB.CullCells"));
+		if (CullShader)
+		{
+			const FHZBCullConstants Constants{
+				ViewProjMatrix,
+				HZBOcclusionCuller.GetCellCount(),
+				static_cast<uint32>(View.Viewport.Width),
+				static_cast<uint32>(View.Viewport.Height),
+				HZBMipCount
+			};
+
+			DeviceContext->UpdateSubresource(HZBCullConstantBuffer.Get(), 0, nullptr, &Constants, 0, 0);
+			ID3D11ShaderResourceView* InputSRVs[] = { HZBOcclusionCuller.GetCellSRV(), PreviousHZB };
+
+			ID3D11UnorderedAccessView* VisibilityUAV = HZBOcclusionCuller.GetVisibilityUAV();
+			DeviceContext->CSSetShader(CullShader, nullptr, 0);
+			DeviceContext->CSSetConstantBuffers(1, 1, HZBCullConstantBuffer.GetAddressOf());
+			DeviceContext->CSSetShaderResources(1, 2, InputSRVs);
+			DeviceContext->CSSetUnorderedAccessViews(1, 1, &VisibilityUAV, nullptr);
+			DeviceContext->Dispatch((HZBOcclusionCuller.GetCellCount() + 63) / 64, 1, 1);
+
+			ID3D11ShaderResourceView* NullSRVs[] = { nullptr, nullptr };
+			ID3D11UnorderedAccessView* NullUAV = nullptr;
+			ID3D11Buffer* NullBuffer = nullptr;
+
+			DeviceContext->CSSetShaderResources(1, 2, NullSRVs);
+			DeviceContext->CSSetUnorderedAccessViews(1, 1, &NullUAV, nullptr);
+			DeviceContext->CSSetConstantBuffers(1, 1, &NullBuffer);
+			DeviceContext->CSSetShader(nullptr, nullptr, 0);
+
+			HZBOcclusionCuller.QueueReadback(DeviceContext, OcclusionCells);
+		}
+	}
+
+	//OcclusionCuller.UpdateQueryResults(DeviceContext);
 	const bool bShowPrimitives = ViewSettings.ShowFlags.IsEnabled(EEngineShowFlag::Primitives);
 	const EViewModeIndex ViewMode = ViewSettings.ViewMode;
 
-	for (const FPrimitiveRenderData& Item : RenderList)
+	/*for (const FPrimitiveRenderData& Item : RenderList)
 	{
 		if (Item.Material.BlendMode == EPrimitiveBlendMode::Additive)
 		{
@@ -529,13 +592,13 @@ void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& 
 		{
 			State.bQueryPending = true;
 		}
-	}
+	}*/
 
 	DeviceContext->RSSetState(DefaultRasterizerState);
 	DeviceContext->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 	DeviceContext->OMSetDepthStencilState(DefaultDepthStencilState, 0);
 
-	TMap<const FPrimitiveRenderData*, bool> VisibleItems;
+	/*TMap<const FPrimitiveRenderData*, bool> VisibleItems;
 	for (const FPrimitiveRenderData& Item : RenderList)
 	{
 		if (!Item.Owner || Item.Material.BlendMode == EPrimitiveBlendMode::Additive 
@@ -544,9 +607,29 @@ void FViewRenderer::RenderView(FEditor* Editor,UScene* Scene,const FRenderView& 
 			VisibleItems.Add(&Item, true);
 		}
 	}
+
 	for (const FOcclusionCell& Cell : OcclusionCells)
 	{
 		if (bCameraMoved || OcclusionCuller.VisibleLastFrame(Cell.Key))
+		{
+			for (const FPrimitiveRenderData* Item : Cell.Items)
+			{
+				VisibleItems.Add(Item, true);
+			}
+		}
+	}*/
+
+	TMap<const FPrimitiveRenderData*, bool> VisibleItems;
+	for (const FPrimitiveRenderData& Item : RenderList)
+	{
+		if (!Item.Owner || !Item.bHasWorldBounds || Item.isSelected || Item.Material.BlendMode == EPrimitiveBlendMode::Additive)
+		{
+			VisibleItems.Add(&Item, true);
+		}
+	}
+	for (const FOcclusionCell& Cell : OcclusionCells)
+	{
+		if (bCameraMoved || HZBOcclusionCuller.IsVisibleLastFrame(Cell.Key))
 		{
 			for (const FPrimitiveRenderData* Item : Cell.Items)
 			{

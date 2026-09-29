@@ -24,13 +24,23 @@ struct FRenderView
 	EViewportType ViewType;
 };
 
+struct FHZBCullConstants
+{
+	FMatrix ViewProjection;
+	uint32 CellCount = 0;
+	uint32 ViewportWidth = 0;
+	uint32 ViewportHeight = 0;
+	uint32 HZBMipCount = 0;
+};
+
 // 출력 타깃은 호출자가 준비한다. 각 View는 데이터를 수집한 직후 그린다.
 class FViewRenderer
 {
 public:
 	void Create(ID3D11Device* InDevice, ID3D11DeviceContext* InContext);
 	void Shutdown();
-	void RenderView(FEditor* Editor, UScene* Scene, const FRenderView& View);
+	void RenderView(FEditor* Editor, UScene* Scene, const FRenderView& View,
+		ID3D11ShaderResourceView* PreviousHZB, uint32 HZBMipCount);
 
 private:
 	bool CreateShaders();
@@ -98,8 +108,11 @@ private:
 	FLineBatcher LineBatcher;
 
 	FOcclusionCuller OcclusionCuller;
+	FHZBOcclusionCuller HZBOcclusionCuller;
 	ID3D11DepthStencilState* OcclusionDepthStencilState = nullptr;
 	ID3D11BlendState* OcclusionBlendState = nullptr;
+	Microsoft::WRL::ComPtr<ID3D11Buffer> HZBCullConstantBuffer;
+
 	FMatrix PreviousViewProjection{};
 	bool bHasPreviousViewProjection = false;
 };

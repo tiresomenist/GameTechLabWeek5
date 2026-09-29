@@ -876,6 +876,37 @@ void GResourceManager::RegisterShader(const FName& Name, const WCHAR* FilePath,
     }
 }
 
+void GResourceManager::RegisterComputeShader(const FName& Name, const WCHAR* FilePath, const char* EntryPoint)
+{
+    if (!Device || !Device->GetDevice())
+    {
+        throw std::runtime_error("Shader device is not initialized");
+    }
+    if (Name.IsNone() || !FilePath || !*FilePath || !EntryPoint || !*EntryPoint)
+    {
+        throw std::invalid_argument("Invalid compute shader registration");
+    }
+    if (ShaderCache.Contains(Name))
+    {
+        throw std::logic_error(std::format("Shader already registered: {}", Name.ToString()));
+    }
+
+    const auto ShaderBlob = CompileResourceShader(FilePath, EntryPoint, "cs_5_0");
+    FShaderResource Resource{};
+    CheckRenderResourceHR(Device->GetDevice()->CreateComputeShader(ShaderBlob->GetBufferPointer(), 
+        ShaderBlob->GetBufferSize(), nullptr, Resource.ComputeShader.GetAddressOf()), "CreateComputeShader");
+    if (!ShaderCache.Add(Name, Resource))
+    {
+        throw std::logic_error("Failed to register compute shader");
+    }
+}
+
+ID3D11ComputeShader* GResourceManager::GetComputeShader(const FName& Name) const
+{
+    const FShaderResource* Resource = GetShader(Name);
+    return Resource ? Resource->ComputeShader.Get() : nullptr;
+}
+
 const FShaderResource* GResourceManager::GetShader(const FName& Name) const
 {
     return ShaderCache.Find(Name);
@@ -1074,6 +1105,9 @@ void GResourceManager::RegisterDefaultRenderResources()
         "VS_Grid", "PS_Grid", ColorLayout);
     RegisterShader(FName("Editor.BatchLine"), L"Assets/Shaders/BatchLineShader.hlsl",
         "mainVS", "mainPS", ColorLayout);
+    RegisterComputeShader(FName("HZB.CopyDepth"), L"Assets/Shaders/HZB.hlsl", "CopyDepthCS");
+    RegisterComputeShader(FName("HZB.DownsampleMax"), L"Assets/Shaders/HZB.hlsl", "DownsampleMaxCS");
+    RegisterComputeShader(FName("HZB.CullCells"), L"Assets/Shaders/HZB.hlsl", "CullCellsCS");
 
     // 와이어프레임은 메시의 VS를 유지하고 PS만 교체하므로 별도로 소유한다.
     const auto WireframeBlob = CompileResourceShader(
