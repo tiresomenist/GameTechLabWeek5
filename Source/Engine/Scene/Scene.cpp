@@ -512,8 +512,12 @@ void UScene::BuildStaticUniformGrid() const
 			const int32 MaxCellY = static_cast<int32>(std::floor(WorldBounds.Max.Y / StaticUniformGridCellSize));
 			const int32 MaxCellZ = static_cast<int32>(std::floor(WorldBounds.Max.Z / StaticUniformGridCellSize));
 
-			// 셀을 걸치는 큰 메시는 중복 제출 또는 프러스텀 누락을 피하기 위해 개별 경로
-			if (MinCellX != MaxCellX || MinCellY != MaxCellY || MinCellZ != MaxCellZ)
+            const int32 SpanX = MaxCellX - MinCellX + 1;
+            const int32 SpanY = MaxCellY - MinCellY + 1;
+            const int32 SpanZ = MaxCellZ - MinCellZ + 1;
+
+            const bool bTooLargeForGrid = SpanX > 2 || SpanY > 2 || SpanZ > 2;
+			if (bTooLargeForGrid)
 			{
 				StaticUniformGridFallbackPrimitives.Add(Primitive);
 				return;
@@ -526,13 +530,30 @@ void UScene::BuildStaticUniformGrid() const
 			{
 				FStaticUniformGridCell NewCell{};
 				NewCell.Key = Key;
-				NewCell.Bounds = MakeStaticUniformGridBounds(CellX, CellY, CellZ);
+				NewCell.SpatialBounds = MakeStaticUniformGridBounds(CellX, CellY, CellZ);
 				StaticUniformGrid.Add(std::move(NewCell));
 				const int32 NewIndex = StaticUniformGrid.Num() - 1;
 				CellIndices.Add(Key, NewIndex);
 				CellIndex = CellIndices.Find(Key);
 			}
-			StaticUniformGrid[*CellIndex].Primitives.Add(Primitive);
+            FStaticUniformGridCell& Cell = StaticUniformGrid[*CellIndex];
+
+            if (Cell.Primitives.IsEmpty())
+            {
+                Cell.ContentBounds = WorldBounds;
+            }
+            else
+            {
+                // 이미 들어 있다면 실제 점유 영역을 확장
+                Cell.ContentBounds.Min.X = std::min(Cell.ContentBounds.Min.X, WorldBounds.Min.X);
+                Cell.ContentBounds.Min.Y = std::min(Cell.ContentBounds.Min.Y, WorldBounds.Min.Y);
+                Cell.ContentBounds.Min.Z = std::min(Cell.ContentBounds.Min.Z, WorldBounds.Min.Z);
+
+                Cell.ContentBounds.Max.X = std::max(Cell.ContentBounds.Max.X, WorldBounds.Max.X);
+                Cell.ContentBounds.Max.Y = std::max(Cell.ContentBounds.Max.Y, WorldBounds.Max.Y);
+                Cell.ContentBounds.Max.Z = std::max(Cell.ContentBounds.Max.Z, WorldBounds.Max.Z);
+            }
+            Cell.Primitives.Add(Primitive);
 		});
 	bStaticUniformGridDirty = false;
 }

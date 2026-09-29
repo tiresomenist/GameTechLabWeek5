@@ -58,8 +58,8 @@ namespace
 		for (const FVisibleGridCell& Cell : VisibleGridCells)
 		{
 			FHZBCellData Data{};
-			Data.BoundsMin = FVector4(Cell.Bounds.Min, 1.0f);
-			Data.BoundsMax = FVector4(Cell.Bounds.Max, 1.0f);
+			Data.BoundsMin = FVector4(Cell.OcclusionBounds.Min, 1.0f);
+			Data.BoundsMax = FVector4(Cell.OcclusionBounds.Max, 1.0f);
 			Result.Add(Data);
 		}
 		return Result;

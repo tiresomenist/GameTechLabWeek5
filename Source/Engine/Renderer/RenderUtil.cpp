@@ -82,10 +82,11 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 	// 정적 메시를 고정 크기 셀에 한 번만 배치하고, 매 프레임에는 셀 AABB만 먼저 Frustum과 비교
 	for (const FStaticUniformGridCell& Cell : Scene->GetStaticUniformGrid())
 	{
-		if (Frustum && !Frustum->Intersects(Cell.Bounds)) continue;
+		if (Frustum && !Frustum->Intersects(Cell.ContentBounds)) continue;
 		FVisibleGridCell VisibleCell{};
 		VisibleCell.Key = Cell.Key;
-		VisibleCell.Bounds = Cell.Bounds;
+		VisibleCell.SpatialBounds = Cell.SpatialBounds;
+		VisibleCell.OcclusionBounds = Cell.ContentBounds;
 		for (UPrimitiveComponent* Primitive : Cell.Primitives)
 		{
 			AddPrimitive(Primitive, &VisibleCell.PrimitiveIndices);

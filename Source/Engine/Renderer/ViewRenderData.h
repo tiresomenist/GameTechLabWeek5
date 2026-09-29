@@ -32,7 +32,8 @@ struct FRenderObjectData
 struct FVisibleGridCell
 {
     uint64 Key = 0;
-    FBoundingBox Bounds;
+    FBoundingBox SpatialBounds;
+    FBoundingBox OcclusionBounds;
     TArray<uint32> PrimitiveIndices;
 };
 
