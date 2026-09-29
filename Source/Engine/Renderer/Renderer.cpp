@@ -591,7 +591,7 @@ void FRenderer::Render(float DeltaTime,FEditor* Editor,UScene* Scene)
 	FinishHZBFrame();
 	GContext& Context = *GContext::GetInstance();
 	Context.UnbindRenderTargets();
-	BuildHZBMip0();
+	//BuildHZBMip0();
 	Context.SetRenderTargets(FrameBufferRTV.Get(), DepthStencilView.Get());
 
 	SetViewportAndScissor(ViewportInfo);
