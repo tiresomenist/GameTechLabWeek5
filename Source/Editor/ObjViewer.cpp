@@ -37,14 +37,14 @@ public:
 
     // 선택한 섹션의 렌더 데이터에 외곽선 표시를 요청합니다.
     // 기존 섹션 렌더 데이터를 생성하고 표시할 섹션만 남깁니다.
-    void CreateRenderData(TArray<FPrimitiveRenderData>& OutData, bool bSelected) override
+    void CreateRenderData(TArray<FPrimitiveRenderData>& OutData, const UCameraComponent* Camera, bool bSelected) override
     {
         UStaticMesh* Mesh = GetStaticMesh();
         if (!Mesh){ return; }
 
         const int32 FirstNewIndex = OutData.Num();
 
-        Super::CreateRenderData(OutData, false);
+        Super::CreateRenderData(OutData, Camera, false);
 
         const int32 EndNewIndex = OutData.Num();
         if (FirstNewIndex == EndNewIndex){ return; }

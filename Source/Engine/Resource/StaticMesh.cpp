@@ -5,7 +5,7 @@
 #include "Core/Util/File.h"
 #include "Engine/Log.h"
 #include <stdexcept>
-#include <meshoptimizer.h>
+#include "../../../ThirdParty/meshoptimizer/meshoptimizer.h"
 
 UStaticMesh::~UStaticMesh() = default;
 namespace
