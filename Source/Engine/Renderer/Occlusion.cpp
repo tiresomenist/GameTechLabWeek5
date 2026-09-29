@@ -102,15 +102,15 @@ void FHZBOcclusionCuller::Release()
     LastFrameVisibility.Empty();
 }
 
-void FHZBOcclusionCuller::QueueReadback(ID3D11DeviceContext* Context, const TArray<FOcclusionCell>& Cells)
+void FHZBOcclusionCuller::QueueReadback(ID3D11DeviceContext* Context, const TArray<uint64>& CellKeys)
 {
     if (bReadbackPending || !ReadbackBuffer || !VisibilityBuffer) return;
-    if (static_cast<uint32>(Cells.Num()) != CellCount) return;
+    if (static_cast<uint32>(CellKeys.Num()) != CellCount) return;
 
-    PendingCellKeys.SetNum(Cells.Num());
-    for (int32 Index = 0; Index < Cells.Num(); ++Index)
+    PendingCellKeys.SetNum(CellKeys.Num());
+    for (int32 Index = 0; Index < CellKeys.Num(); ++Index)
     {
-        PendingCellKeys[Index] = Cells[Index].Key;
+        PendingCellKeys[Index] = CellKeys[Index];
     }
     Context->CopyResource(ReadbackBuffer.Get(), VisibilityBuffer.Get());
     bReadbackPending = true;

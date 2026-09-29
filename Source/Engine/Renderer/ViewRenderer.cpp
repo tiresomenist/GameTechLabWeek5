@@ -51,68 +51,11 @@ namespace
 			throw std::runtime_error(std::format("D3D resource creation failed: {}", Result));
 	}
 
-	uint64 MakeOcclusionCellKey(int32 X, int32 Y, int32 Z)
-	{
-		constexpr uint64 Mask = (1ull << 21) - 1;
-		return ((static_cast<uint64>(X) & Mask) << 42) | ((static_cast<uint64>(Y) & Mask) << 21) 
-			| (static_cast<uint64>(Z) & Mask);
-	}
-
-	TArray<FOcclusionCell> BuildOcclusionCells(const FViewRenderData& Data)
-	{
-		constexpr float CellSize = 8.0f;
-		TArray<FOcclusionCell> Cells;
-		TMap<uint64, int32> CellIndices;
-		for (int32 Index = 0; Index < Data.Primitives.Num(); ++Index)
-		{
-			const FPrimitiveRenderData& Item = Data.Primitives[Index];
-			if (!Item.Material || Item.ObjectIndex >= Data.Objects.Num()) continue;
-
-			const FRenderObjectData& Object = Data.Objects[Item.ObjectIndex];
-			if (!Object.bHasWorldBounds) continue;
-			if (Item.Material->BlendMode == EPrimitiveBlendMode::Additive) continue;
-
-			// 선택 객체는 기존 컬링 코드처럼 가려져도 표시 경로를 유지한다.
-			if ((Item.Flags & Primitive_Selected) != 0) continue;
-
-			const FBoundingBox& WorldBounds = Object.WorldBounds;
-
-			const FVector Center = (WorldBounds.Min + WorldBounds.Max) * 0.5f;
-			const int32 CellX = static_cast<int32>(std::floor(Center.X / CellSize));
-			const int32 CellY = static_cast<int32>(std::floor(Center.Y / CellSize));
-			const int32 CellZ = static_cast<int32>(std::floor(Center.Z / CellSize));
-			const uint64 CellKey = MakeOcclusionCellKey(CellX, CellY, CellZ);
-			int32* CellIndex = CellIndices.Find(CellKey);
-
-			if (CellIndex == nullptr)
-			{
-				FOcclusionCell NewCell{};
-				NewCell.Key = CellKey;
-				NewCell.Bounds = WorldBounds;
-				Cells.Add(std::move(NewCell));
-				const int32 NewIndex = Cells.Num() - 1;
-				CellIndices.Add(CellKey, NewIndex);
-				CellIndex = CellIndices.Find(CellKey);
-			}
-
-			FOcclusionCell& Cell = Cells[*CellIndex];
-			Cell.Bounds.Min.X = std::min(Cell.Bounds.Min.X, WorldBounds.Min.X);
-			Cell.Bounds.Min.Y = std::min(Cell.Bounds.Min.Y, WorldBounds.Min.Y);
-			Cell.Bounds.Min.Z = std::min(Cell.Bounds.Min.Z, WorldBounds.Min.Z);
-			Cell.Bounds.Max.X = std::max(Cell.Bounds.Max.X, WorldBounds.Max.X);
-			Cell.Bounds.Max.Y = std::max(Cell.Bounds.Max.Y, WorldBounds.Max.Y);
-			Cell.Bounds.Max.Z = std::max(Cell.Bounds.Max.Z, WorldBounds.Max.Z);
-			Cell.ItemIndices.Add(static_cast<uint32>(Index));
-		}
-		return Cells;
-	}
-
-	// GPU용 변환 배열 생성
-	TArray<FHZBCellData> BuildHZBCellData(const TArray<FOcclusionCell>& OcclusionCells)
+	TArray<FHZBCellData> BuildHZBCellData(const TArray<FVisibleGridCell>& VisibleGridCells)
 	{
 		TArray<FHZBCellData> Result;
-		Result.Reserve(OcclusionCells.Num());
-		for (const FOcclusionCell& Cell : OcclusionCells)
+		Result.Reserve(VisibleGridCells.Num());
+		for (const FVisibleGridCell& Cell : VisibleGridCells)
 		{
 			FHZBCellData Data{};
 			Data.BoundsMin = FVector4(Cell.Bounds.Min, 1.0f);
@@ -122,100 +65,6 @@ namespace
 		return Result;
 	}
 }
-//void FViewRenderer::PreparePrimitiveVisibility(
-//	const FViewRenderData& Data, const FHZBViewInput& HZB)
-//{
-//	PrimitiveVisibility.SetNum(Data.Primitives.Num());
-//	for (uint32& Visible : PrimitiveVisibility) Visible = 1;
-//
-//	FHZBViewState& State = HZBViewStates[HZB.ViewId];
-//	const bool bCanUseHistory =
-//		HZB.bValid && HZB.Texture && HZB.MipCount > 0 &&
-//		State.bHasPreviousView &&
-//		State.PreviousFrameIndex + 1 == HZB.FrameIndex &&
-//		State.PreviousGeneration == HZB.Generation &&
-//		State.PreviousScene == HZB.Scene &&
-//		IsSameHZBView(State.PreviousView, Data.View);
-//
-//	State.PreviousView = Data.View;
-//	State.PreviousScene = HZB.Scene;
-//	State.PreviousFrameIndex = HZB.FrameIndex;
-//	State.PreviousGeneration = HZB.Generation;
-//	State.bHasPreviousView = true;
-//
-//	if (!bCanUseHistory)
-//	{
-//		// 카메라 변경 전의 대기 결과까지 버리고 이번 View는 모두 표시한다.
-//		State.Culler.Release();
-//		return;
-//	}
-//
-//	GResourceManager& Resources = *GResourceManager::GetInstance();
-//	ID3D11ComputeShader* Shader = Resources.GetComputeShader(FName("HZB.CullCells"));
-//	if (!Shader || !HZBCullConstantBuffer)
-//	{
-//		State.Culler.Release();
-//		return;
-//	}
-//
-//	State.Culler.TryReadback(DeviceContext);
-//	const TArray<FOcclusionCell> Cells = BuildOcclusionCells(Data);
-//
-//	// 단일 staging 버퍼의 이전 요청이 끝난 경우에만 다음 요청을 제출한다.
-//	if (!State.Culler.IsReadbackPending() && !Cells.IsEmpty())
-//	{
-//		const TArray<FHZBCellData> GPUCells = BuildHZBCellData(Cells);
-//		if (!State.Culler.UploadCells(D3DDevice, DeviceContext, GPUCells))
-//		{
-//			State.Culler.Release();
-//			return;
-//		}
-//
-//		FHZBCullConstants Constants{};
-//		Constants.ViewProjection = Data.View.ViewProjection;
-//		Constants.CellCount = State.Culler.GetCellCount();
-//		Constants.ViewportWidth = Data.View.Viewport.Width;
-//		Constants.ViewportHeight = Data.View.Viewport.Height;
-//		Constants.HZBMipCount = HZB.MipCount;
-//		Constants.ViewportTopLeftX = Data.View.Viewport.TopLeftX;
-//		Constants.ViewportTopLeftY = Data.View.Viewport.TopLeftY;
-//		DeviceContext->UpdateSubresource(
-//			HZBCullConstantBuffer.Get(), 0, nullptr, &Constants, 0, 0);
-//
-//		ID3D11Buffer* ConstantBuffer = HZBCullConstantBuffer.Get();
-//		ID3D11ShaderResourceView* SRVs[] = {
-//			State.Culler.GetCellSRV(), HZB.Texture
-//		};
-//		ID3D11UnorderedAccessView* UAV = State.Culler.GetVisibilityUAV();
-//
-//		DeviceContext->CSSetShader(Shader, nullptr, 0);
-//		DeviceContext->CSSetConstantBuffers(1, 1, &ConstantBuffer);
-//		DeviceContext->CSSetShaderResources(1, 2, SRVs);
-//		DeviceContext->CSSetUnorderedAccessViews(1, 1, &UAV, nullptr);
-//		DeviceContext->Dispatch((Constants.CellCount + 63) / 64, 1, 1);
-//
-//		// 다음 깊이 생성과 다른 패스가 자원을 다시 사용할 수 있도록 해제한다.
-//		ID3D11ShaderResourceView* NullSRVs[2] = { nullptr, nullptr };
-//		ID3D11UnorderedAccessView* NullUAV = nullptr;
-//		ID3D11Buffer* NullBuffer = nullptr;
-//		DeviceContext->CSSetShaderResources(1, 2, NullSRVs);
-//		DeviceContext->CSSetUnorderedAccessViews(1, 1, &NullUAV, nullptr);
-//		DeviceContext->CSSetConstantBuffers(1, 1, &NullBuffer);
-//		DeviceContext->CSSetShader(nullptr, nullptr, 0);
-//
-//		State.Culler.QueueReadback(DeviceContext, Cells);
-//	}
-//
-//	// 셀에 포함되지 않은 선택 객체·Additive·Bounds 없는 객체는 계속 표시한다.
-//	for (const FOcclusionCell& Cell : Cells)
-//	{
-//		if (State.Culler.IsVisibleLastFrame(Cell.Key)) continue;
-//		for (uint32 ItemIndex : Cell.ItemIndices)
-//		{
-//			PrimitiveVisibility[ItemIndex] = 0;
-//		}
-//	}
-//}
 void FViewRenderer::Create(ID3D11Device* InDevice, ID3D11DeviceContext* InContext)
 {
 	if (D3DDevice)
@@ -623,7 +472,7 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 	}
 
 	State.Culler.TryReadback(DeviceContext);
-	const TArray<FOcclusionCell> Cells = BuildOcclusionCells(Data);
+	const TArray<FVisibleGridCell>& Cells = Data.VisibleGridCells;
 	CellCount = static_cast<uint32>(Cells.Num());
 	if (Cells.IsEmpty())
 	{
@@ -673,15 +522,21 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 		DeviceContext->CSSetUnorderedAccessViews(1, 1, &NullUAV, nullptr);
 		DeviceContext->CSSetConstantBuffers(1, 1, &NullBuffer);
 		DeviceContext->CSSetShader(nullptr, nullptr, 0);
-		State.Culler.QueueReadback(DeviceContext, Cells);
+		TArray<uint64> CellKeys;
+		CellKeys.Reserve(Cells.Num());
+		for (const FVisibleGridCell& Cell : Cells)
+		{
+			CellKeys.Add(Cell.Key);
+		}
+		State.Culler.QueueReadback(DeviceContext, CellKeys);
 	}
 
 	// 선택 객체 등 셀에서 제외한 요청은 기본 가시성을 그대로 유지한다.
-	for (const FOcclusionCell& Cell : Cells)
+	for (const FVisibleGridCell& Cell : Cells)
 	{
 		if (State.Culler.IsVisibleLastFrame(Cell.Key)) continue;
 		++OccludedCellCount;
-		for (uint32 ItemIndex : Cell.ItemIndices)
+		for (uint32 ItemIndex : Cell.PrimitiveIndices)
 		{
 			PrimitiveVisibility[ItemIndex] = 0;
 			++OccludedPrimitiveCount;

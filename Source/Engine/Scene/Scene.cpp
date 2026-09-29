@@ -15,12 +15,32 @@
 #include "Engine/Component/WidgetComponent.h"
 #include "Engine/Component/Primitive/PrimitiveComponent.h"
 
+#include "Core/Container/Map.h"
+
 #include "Core/Serialization/Archive.h"
 #include "Engine/Object/ClassRegistry.h"
 #include "Engine/Log.h"
 
 namespace
 {
+	constexpr float StaticUniformGridCellSize = 4.0f;
+
+	uint64 MakeStaticUniformGridKey(int32 X, int32 Y, int32 Z)
+	{
+		constexpr uint64 Mask = (1ull << 21) - 1;
+		return ((static_cast<uint64>(X) & Mask) << 42) |
+			((static_cast<uint64>(Y) & Mask) << 21) |
+			(static_cast<uint64>(Z) & Mask);
+	}
+
+	FBoundingBox MakeStaticUniformGridBounds(int32 X, int32 Y, int32 Z)
+	{
+		const FVector Min(X * StaticUniformGridCellSize, Y * StaticUniformGridCellSize,
+			Z * StaticUniformGridCellSize);
+		return FBoundingBox(Min, Min + FVector(StaticUniformGridCellSize, StaticUniformGridCellSize,
+			StaticUniformGridCellSize));
+	}
+
 	struct FPendingActorInfo
 	{
 		AActor* Actor;
@@ -438,9 +458,83 @@ void UScene::DestroyActor(AActor* Actor)
             Actor->EndPlay();
             delete Actor;
             Actors.RemoveAt(Index);
+			InvalidateStaticUniformGrid();
             break;
         }
     }
+}
+
+void UScene::InvalidateStaticUniformGrid()
+{
+	bStaticUniformGridDirty = true;
+}
+
+const TArray<FStaticUniformGridCell>& UScene::GetStaticUniformGrid() const
+{
+	BuildStaticUniformGrid();
+	return StaticUniformGrid;
+}
+
+const TArray<UPrimitiveComponent*>& UScene::GetStaticUniformGridFallbackPrimitives() const
+{
+	BuildStaticUniformGrid();
+	return StaticUniformGridFallbackPrimitives;
+}
+
+void UScene::BuildStaticUniformGrid() const
+{
+	if (!bStaticUniformGridDirty) return;
+
+	StaticUniformGrid.Empty();
+	StaticUniformGridFallbackPrimitives.Empty();
+	TMap<uint64, int32> CellIndices;
+	ForEachPrimitive([&](UPrimitiveComponent* Primitive)
+		{
+			if (!Primitive->IsA(UStaticMeshComponent::GetClass())) return;
+
+			FVector LocalMin{};
+			FVector LocalMax{};
+			if (!Primitive->GetLocalBounds(LocalMin, LocalMax))
+			{
+				StaticUniformGridFallbackPrimitives.Add(Primitive);
+				return;
+			}
+
+			const FBoundingBox WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Primitive->GetWorldMatrix());
+			const FVector Center = (WorldBounds.Min + WorldBounds.Max) * 0.5f;
+			const int32 CellX = static_cast<int32>(std::floor(Center.X / StaticUniformGridCellSize));
+			const int32 CellY = static_cast<int32>(std::floor(Center.Y / StaticUniformGridCellSize));
+			const int32 CellZ = static_cast<int32>(std::floor(Center.Z / StaticUniformGridCellSize));
+			const int32 MinCellX = static_cast<int32>(std::floor(WorldBounds.Min.X / StaticUniformGridCellSize));
+			const int32 MinCellY = static_cast<int32>(std::floor(WorldBounds.Min.Y / StaticUniformGridCellSize));
+			const int32 MinCellZ = static_cast<int32>(std::floor(WorldBounds.Min.Z / StaticUniformGridCellSize));
+			const int32 MaxCellX = static_cast<int32>(std::floor(WorldBounds.Max.X / StaticUniformGridCellSize));
+			const int32 MaxCellY = static_cast<int32>(std::floor(WorldBounds.Max.Y / StaticUniformGridCellSize));
+			const int32 MaxCellZ = static_cast<int32>(std::floor(WorldBounds.Max.Z / StaticUniformGridCellSize));
+
+			// 셀을 걸치는 큰 메시는 중복 제출 또는 프러스텀 누락을 피하기 위해 개별 경로
+			if (MinCellX != MaxCellX || MinCellY != MaxCellY || MinCellZ != MaxCellZ)
+			{
+				StaticUniformGridFallbackPrimitives.Add(Primitive);
+				return;
+			}
+
+			const uint64 Key = MakeStaticUniformGridKey(CellX, CellY, CellZ);
+			int32* CellIndex = CellIndices.Find(Key);
+
+			if (CellIndex == nullptr)
+			{
+				FStaticUniformGridCell NewCell{};
+				NewCell.Key = Key;
+				NewCell.Bounds = MakeStaticUniformGridBounds(CellX, CellY, CellZ);
+				StaticUniformGrid.Add(std::move(NewCell));
+				const int32 NewIndex = StaticUniformGrid.Num() - 1;
+				CellIndices.Add(Key, NewIndex);
+				CellIndex = CellIndices.Find(Key);
+			}
+			StaticUniformGrid[*CellIndex].Primitives.Add(Primitive);
+		});
+	bStaticUniformGridDirty = false;
 }
 
 UScene::~UScene()

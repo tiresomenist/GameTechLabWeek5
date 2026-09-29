@@ -29,11 +29,19 @@ struct FRenderObjectData
     bool bHasWorldBounds = false;
 };
 
+struct FVisibleGridCell
+{
+    uint64 Key = 0;
+    FBoundingBox Bounds;
+    TArray<uint32> PrimitiveIndices;
+};
+
 struct FViewRenderData
 {
     FRenderViewSnapshot View;
     TArray<FRenderObjectData> Objects;
     TArray<FPrimitiveRenderData> Primitives;
+    TArray<FVisibleGridCell> VisibleGridCells;
     TArray<FPrimitiveRenderData> Gizmos;
     FLineDrawRequest Lines;
     TArray<FWorldTextItem> TextItems;
@@ -42,6 +50,7 @@ struct FViewRenderData
         View = FRenderViewSnapshot{};
         Objects.Empty();
         Primitives.Empty();
+        VisibleGridCells.Empty();
         Gizmos.Empty();
         Lines.Vertices.Empty();
         Lines.Indices.Empty();

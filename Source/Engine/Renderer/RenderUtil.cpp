@@ -30,15 +30,16 @@ namespace
 
 // 현재 View의 Bounds와 Frustum을 검사하고 객체별 렌더 요청을 수집한다.
 void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
-	TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects, const FFrustum* Frustum)
+	TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects,
+	TArray<FVisibleGridCell>& VisibleGridCells, const FFrustum* Frustum)
 {
 	RenderList.Empty();
+	VisibleGridCells.Empty();
 	if (!Editor || !Scene || !Camera) return;
 
 	const UActorComponent* SelectedComponent = Editor->GetSelectedSceneComponent();
 
-	Scene->ForEachPrimitive(
-		[&](UPrimitiveComponent* Primitive)
+	auto AddPrimitive = [&](UPrimitiveComponent* Primitive, TArray<uint32>* GridPrimitiveIndices = nullptr)
 		{
 			if (!Primitive->IsVisible())
 			{
@@ -55,7 +56,6 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 				Object.bHasWorldBounds = true;
 				Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
 
-				// 화면 밖 객체는 요청 생성 전에 제외하고, Bounds가 없으면 그대로 수집한다.
 				if (Frustum && !Frustum->Intersects(Object.WorldBounds)) return;
 			}
 
@@ -63,13 +63,46 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			Primitive->CreateRenderData(RenderList, Primitive == SelectedComponent);
 			const int32 EndIndex = RenderList.Num();
 			if (FirstIndex == EndIndex) { return; }
-			// 기존 Objects 뒤에 추가하고 이번 컴포넌트의 모든 섹션에 같은 인덱스를 부여한다.
+
 			const uint32 ObjectIndex = static_cast<uint32>(Objects.Num());
 			Objects.Add(Object);
 			for (int32 Index = FirstIndex; Index < EndIndex; ++Index)
 			{
 				RenderList[Index].ObjectIndex = ObjectIndex;
+				const FPrimitiveRenderData& Data = RenderList[Index];
+				if (GridPrimitiveIndices && Data.Material &&
+					Data.Material->BlendMode != EPrimitiveBlendMode::Additive &&
+					(Data.Flags & Primitive_Selected) == 0)
+				{
+					GridPrimitiveIndices->Add(static_cast<uint32>(Index));
+				}
 			}
+		};
+
+	// 정적 메시를 고정 크기 셀에 한 번만 배치하고, 매 프레임에는 셀 AABB만 먼저 Frustum과 비교
+	for (const FStaticUniformGridCell& Cell : Scene->GetStaticUniformGrid())
+	{
+		if (Frustum && !Frustum->Intersects(Cell.Bounds)) continue;
+		FVisibleGridCell VisibleCell{};
+		VisibleCell.Key = Cell.Key;
+		VisibleCell.Bounds = Cell.Bounds;
+		for (UPrimitiveComponent* Primitive : Cell.Primitives)
+		{
+			AddPrimitive(Primitive, &VisibleCell.PrimitiveIndices);
+		}
+		if (!VisibleCell.PrimitiveIndices.IsEmpty()) VisibleGridCells.Add(std::move(VisibleCell));
+	}
+
+	for (UPrimitiveComponent* Primitive : Scene->GetStaticUniformGridFallbackPrimitives())
+	{
+		AddPrimitive(Primitive);
+	}
+
+	// 비정적 메시에는 기존 개별 경로를 유지
+	Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
+		{
+			if (Primitive->IsA(UStaticMeshComponent::GetClass())) return;
+			AddPrimitive(Primitive);
 		});
 
 	//SpotLight를 렌더링하기위한 임시 순회, 차후에 분리 해야함.

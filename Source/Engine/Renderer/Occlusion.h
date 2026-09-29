@@ -9,13 +9,6 @@
 #include "Core/Math/Box.h"
 #include "Engine/Renderer/PrimitiveRenderData.h"
 
-struct FOcclusionCell
-{
-	uint64 Key = 0;
-	FBoundingBox Bounds;
-	TArray<uint32> ItemIndices;
-};
-
 struct FHZBCellData
 {
 	FVector4 BoundsMin;
@@ -28,7 +21,7 @@ public:
 	bool UploadCells(ID3D11Device* Device, ID3D11DeviceContext* Context, const TArray<FHZBCellData>& Cells);
 	void Release();
 
-	void QueueReadback(ID3D11DeviceContext* Context, const TArray<FOcclusionCell>& Cells);
+	void QueueReadback(ID3D11DeviceContext* Context, const TArray<uint64>& CellKeys);
 	bool TryReadback(ID3D11DeviceContext* Context);
 	bool IsVisibleLastFrame(uint64 CellKey) const;
 
