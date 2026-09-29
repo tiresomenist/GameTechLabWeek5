@@ -646,6 +646,7 @@ void UScene::RebuildBVH()
 void UScene::UpdateBVHForActor(AActor* Actor)
 {
     if (!Actor || Actor->GetScene() != this || bDeferBVHUpdates)
+    {
         return;
     }
 
