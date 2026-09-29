@@ -15,7 +15,7 @@ public:
 	const FString& GetText() const { return Text; }
 	void SetText(const FString& InText) { Text = InText; }
 
-	virtual void CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, bool bSelected = false) override { }
+	virtual void CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, const UCameraComponent* Camera, bool bSelected = false) override { }
 	virtual bool GetLocalBounds(FVector& OutMin, FVector& OutMax) const override;
 	virtual bool IsAABBOnlyPickable() const override { return true; }
 	virtual const FMatrix& GetRenderWorldMatrix(const UCameraComponent* Camera) const override;

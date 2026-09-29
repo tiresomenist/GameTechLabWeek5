@@ -44,7 +44,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			}
 			
 			const int32 FirstIndex = RenderList.Num();
-			Primitive->CreateRenderData(RenderList, Primitive == SelectedComponent);
+			Primitive->CreateRenderData(RenderList, Camera, Primitive == SelectedComponent);
 			const int32 EndIndex = RenderList.Num();
 			if (FirstIndex == EndIndex)
 			{
