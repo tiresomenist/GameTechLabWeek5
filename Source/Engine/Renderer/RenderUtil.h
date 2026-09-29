@@ -17,7 +17,8 @@ namespace RenderUtil
 {
 	void GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
 		TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects,
-		TArray<FVisibleGridCell>& VisibleGridCells, const FFrustum* Frustum = nullptr);
+		const TArray<FGridCellCandidate>& RenderGridCells, const FFrustum* Frustum = nullptr);
+
 	TArray<FPrimitiveRenderData> GetGizmoList(FEditor* Editor, UScene* Scene,
 			const UCameraComponent* Camera,	const D3D11_VIEWPORT& Viewport,
 		TArray<FRenderObjectData>& Objects);
@@ -25,4 +26,6 @@ namespace RenderUtil
 	void GetTextRenderList(UScene* Scene, const UCameraComponent* Camera, bool bShowUUIDWidgets, FViewRenderData& OutData);	
 	void SubmitLineDrawRequests(FEditor* Editor,UScene* Scene, const UCameraComponent* Camera,
 		const FViewSettings& ViewSettings, const FLineRequestConsumer& Submit, EViewportType InViewtype);
+
+	void GatherGridCellCandidates(UScene* Scene, const FFrustum* Frustum, TArray<FGridCellCandidate>& OutCandidates);
 };

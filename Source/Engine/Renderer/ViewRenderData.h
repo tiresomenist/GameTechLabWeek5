@@ -14,6 +14,7 @@
 
 class UCameraComponent;
 class UPrimitiveComponent;
+struct FStaticUniformGridCell;
 
 struct FRenderViewSnapshot
 {
@@ -33,12 +34,12 @@ struct FRenderObjectData
     const UPrimitiveComponent* SourcePrimitive = nullptr;
 };
 
-struct FVisibleGridCell
+// 아직 Primitive를 만들지 않은 cell 후보
+struct FGridCellCandidate
 {
     uint64 Key = 0;
-    FBoundingBox SpatialBounds;
     FBoundingBox OcclusionBounds;
-    TArray<uint32> PrimitiveIndices;
+    const FStaticUniformGridCell* SourceCell = nullptr;  // 그릴 때 내부 Primitive에 접근하기 위한 원본 Grid cell
 };
 
 struct FViewRenderData
@@ -46,22 +47,24 @@ struct FViewRenderData
     FRenderViewSnapshot View;
     TArray<FRenderObjectData> Objects;
     TArray<FPrimitiveRenderData> Primitives;
-    TArray<FVisibleGridCell> VisibleGridCells;
     TArray<FPrimitiveRenderData> Gizmos;
     FLineDrawRequest Lines;
     const UCameraComponent* TextCamera = nullptr;
     TArray<FTextDrawRequest> TextRequests;
+    TArray<FGridCellCandidate> GridCellCandidates;
+    uint32 HZBRenderCellCount = 0;
 
     void Reset() {
         View = FRenderViewSnapshot{};
         Objects.Empty();
         Primitives.Empty();
-        VisibleGridCells.Empty();
         Gizmos.Empty();
         Lines.Vertices.Empty();
         Lines.Indices.Empty();
         TextCamera = nullptr;
         TextRequests.Empty();
+        GridCellCandidates.Empty();
+        HZBRenderCellCount = 0;
     }
 
 };
