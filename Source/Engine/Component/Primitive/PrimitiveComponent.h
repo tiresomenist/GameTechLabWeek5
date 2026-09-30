@@ -18,7 +18,8 @@ public:
 
     virtual void Initialize() override;
 
-    virtual void CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, const UCameraComponent* Camera, bool bSelected = false) {}
+    // 현재 View의 수집 문맥으로 요청을 생성하며 참조를 저장하지 않습니다.
+    virtual void CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, const FPrimitiveRenderContext& Context, bool bSelected = false) {}
 
     // 로컬 공간 AABB. 피킹에 쓴다. 없으면 false.
     // 광선 검사(FRay)는 Editor 쪽 타입이라, 컴포넌트는 Bounds 데이터만 내준다 (Core <- Engine <- Editor)

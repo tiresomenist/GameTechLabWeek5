@@ -724,7 +724,7 @@ void UScene::UpdateStaticUniformGridForActor(AActor* Actor, TArray<uint64>& Chan
         const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
 
         const int32 CellX = static_cast<int32>(std::floor(Center.X / StaticUniformGridCellSize));
-        const int32 CellY = static_cast<int32>( std::floor(Center.Y / StaticUniformGridCellSize));
+        const int32 CellY = static_cast<int32>(std::floor(Center.Y / StaticUniformGridCellSize));
         const int32 CellZ = static_cast<int32>(std::floor(Center.Z / StaticUniformGridCellSize));
 
         const uint64 NewKey = MakeStaticUniformGridKey(CellX, CellY, CellZ);

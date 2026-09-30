@@ -8,6 +8,17 @@
 
 struct FMatrix; 
 class UPrimitiveComponent;
+class UCameraComponent;
+
+// 현재 View에서 계산한 값을 요청 생성 동안만 참조합니다. 컴포넌트에 보관하지 않습니다.
+struct FPrimitiveRenderContext
+{
+	const UCameraComponent* Camera;
+	const FMatrix& World;
+	const FVector& WorldCenter;
+	const FVector& CameraLocation;
+	bool bHasWorldBounds;
+};
 
 //struct FPrimitiveRenderData
 //{

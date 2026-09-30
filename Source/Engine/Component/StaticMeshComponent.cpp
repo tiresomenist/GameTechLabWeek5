@@ -5,7 +5,6 @@
 #include "Engine/Resource/ResourceManager.h"
 #include <stdexcept>
 #include <cassert>
-#include "Engine/Component/CameraComponent.h"
 #include "Engine/Actor/Actor.h"
 #include "Engine/Scene/Scene.h"
 #include "Engine/Log.h"
@@ -116,24 +115,24 @@ void UStaticMeshComponent::Serialize(FArchive& Archive)
 	}
 }
 
+// 수집 단계의 월드 행렬과 중심을 재사용하여 LOD 및 섹션별 요청을 생성합니다.
 void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData,
-	const UCameraComponent* Camera, bool bSelected)
+	const FPrimitiveRenderContext& Context, bool bSelected)
 {
-	if (!CachedMesh || !Camera) return;
+	if (!CachedMesh || !Context.Camera) return;
 
 	const TArray<FStaticMeshLOD>& LODs = CachedMesh->GetLODs();
 	const uint32 LODCount = static_cast<uint32>(LODs.Num());
 	if (LODCount == 0) return;
 
-	const FMatrix World = GetRenderWorldMatrix(Camera);
+	const FMatrix& World = Context.World;
 	uint32 LODIndex = 0;
 	if (LODCount > 1)
 	{
-		// Bounds getter마다 LOD를 다시 찾지 않고 LOD0 정보를 재사용합니다.
-		const FStaticMeshLOD& BaseLOD = LODs[0];
-		const FVector LocalCenter = (BaseLOD.BoundsMin + BaseLOD.BoundsMax) * 0.5f;
-		const FVector WorldCenter = World.TransformPosition(LocalCenter);
-		const FVector ToCamera = WorldCenter - Camera->GetRelativeLocation();
+		// Bounds가 수집되지 않은 경우에만 기존 LOD0 중심 계산을 수행합니다.
+		const FVector WorldCenter = Context.bHasWorldBounds ? Context.WorldCenter
+			: World.TransformPosition((LODs[0].BoundsMin + LODs[0].BoundsMax) * 0.5f);
+		const FVector ToCamera = WorldCenter - Context.CameraLocation;
 
 		const float DistanceSquared = ToCamera.LengthSquared();
 		if (DistanceSquared >= 100.0f)
@@ -184,7 +183,7 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 
 			Data.ImpostorSize = FVector4((std::max)(WorldWidth, 0.01f), (std::max)(WorldHeight, 0.01f), 0.0f, 0.0f);
 
-			Data.ImpostorCameraLocation = Camera->GetRelativeLocation();
+			Data.ImpostorCameraLocation = Context.CameraLocation;
 
 			const FVector ToCamera = (Data.ImpostorCameraLocation - CenterWS).GetNormalized();
 

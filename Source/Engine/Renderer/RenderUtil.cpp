@@ -39,6 +39,8 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 	if (!Editor || !Scene || !Camera) return;
 
 	const UActorComponent* SelectedComponent = Editor->GetSelectedSceneComponent();
+	// 기존 LOD/임포스터의 카메라 좌표 기준을 유지하며 View당 한 번만 읽습니다.
+	const FVector CameraLocation = Camera->GetRelativeLocation();
 
 	auto AddPrimitive = [&](UPrimitiveComponent* Primitive)
 		{
@@ -55,15 +57,16 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			FVector LocalMax{};
 			if (Primitive->GetLocalBounds(LocalMin, LocalMax))
 			{
-				Object.WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Object.World);
+				Object.WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Object.World, &Object.SortCenterWS);
 				Object.bHasWorldBounds = true;
-				Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
 
 				if (Frustum && !Frustum->Intersects(Object.WorldBounds)) return;
 			}
 
 			const int32 FirstIndex = RenderList.Num();
-			Primitive->CreateRenderData(RenderList, Camera, Primitive == SelectedComponent);
+			// 이번 View에서 계산한 행렬과 중심을 LOD 선택에서도 재사용합니다.
+			const FPrimitiveRenderContext Context{ Camera, Object.World, Object.SortCenterWS, CameraLocation, Object.bHasWorldBounds };
+			Primitive->CreateRenderData(RenderList, Context, Primitive == SelectedComponent);
 			const int32 EndIndex = RenderList.Num();
 			if (FirstIndex == EndIndex) { return; }
 
