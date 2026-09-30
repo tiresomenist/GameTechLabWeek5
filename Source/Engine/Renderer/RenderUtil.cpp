@@ -29,7 +29,6 @@ namespace
 	}
 }
 
-// 현재 View의 Bounds와 Frustum을 검사하고 객체별 렌더 요청을 수집한다.
 void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
 	TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects,
 	const TArray<FGridCellCandidate>& RenderGridCells, const FFrustum* Frustum)
@@ -41,167 +40,107 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 	const UActorComponent* SelectedComponent = Editor->GetSelectedSceneComponent();
 	// 기존 LOD/임포스터의 카메라 좌표 기준을 유지하며 View당 한 번만 읽습니다.
 	const FVector CameraLocation = Camera->GetRelativeLocation();
-	FDebugCpuStats& DebugStats = FDebugCpuStats::Get();
-	const bool bGatherDetail = DebugStats.IsCollectingGatherDetail();
 
-	// 상세 계측 여부는 View당 한 번 선택하고, 꺼진 경로에는 객체별 계측을 생성하지 않습니다.
-	auto GatherPrimitives = [&]<bool bDetail>()
-	{
-		FDebugGatherCounts Counts{};
-		// 연속 구간의 경계 시각을 재사용하여 객체당 시계 조회를 줄입니다.
-		auto RecordPhase = [&](EDebugCpuStat Stat, LARGE_INTEGER& Start)
+	auto AddPrimitive = [&](UPrimitiveComponent* Primitive, bool bSkipPrimitiveFrustum,
+		const FBoundingBox* CachedWorldBounds = nullptr)
 		{
-			LARGE_INTEGER End;
-			QueryPerformanceCounter(&End);
-			DebugStats.AddTime(Stat, static_cast<double>(End.QuadPart - Start.QuadPart) * DebugStats.GetMillisecondsPerTick());
-			Start = End;
-		};
-		auto AddPrimitive = [&](UPrimitiveComponent* Primitive, bool bSkipPrimitiveFrustum,
-			const FBoundingBox* CachedWorldBounds = nullptr)
+			if (!Primitive->IsVisible())
 			{
-				LARGE_INTEGER PhaseStart;
-				if constexpr (bDetail)
-				{
-					++Counts.Visited;
-					QueryPerformanceCounter(&PhaseStart);
-				}
-				if (!Primitive->IsVisible())
-				{
-					if constexpr (bDetail)
-					{
-						++Counts.Hidden;
-						RecordPhase(EDebugCpuStat::GatherPrepare, PhaseStart);
-					}
-					return;
-				}
-
-				FRenderObjectData Object{};
-				Object.SourcePrimitive = Primitive;
-				Object.World = Primitive->GetRenderWorldMatrix(Camera);
-				Object.SortCenterWS = Object.World.GetOrigin();
-				bool bHasWorldCenter = CachedWorldBounds != nullptr;
-
-				if (CachedWorldBounds)
-				{
-					Object.SortCenterWS = (CachedWorldBounds->Min + CachedWorldBounds->Max) * 0.5f;
-
-					if (!bSkipPrimitiveFrustum)
-					{
-						if (Frustum && !Frustum->Intersects(*CachedWorldBounds))
-						{
-							if constexpr (bDetail)
-							{
-								++Counts.FrustumRejected;
-								RecordPhase(EDebugCpuStat::GatherPrepare, PhaseStart);
-							}
-							return;
-						}
-					}
-				}
-				else {
-					FVector LocalMin{};
-					FVector LocalMax{};
-					const bool bHasLocalBounds = Primitive->GetLocalBounds(LocalMin, LocalMax);
-					bHasWorldCenter = bHasLocalBounds;
-
-					if (bHasLocalBounds)
-					{
-						if (bSkipPrimitiveFrustum)
-						{
-							// 셀 전체가 내부이면 객체 Bounds를 만들지 않고 LOD·정렬용 중심만 계산합니다.
-							Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
-						}
-						else
-						{
-							// 경계 셀과 개별 객체는 Bounds 변환 중 계산한 중심까지 함께 재사용합니다.
-							const FBoundingBox WorldBounds = FBoundingBox(LocalMin, LocalMax).
-								TransformBounds(Object.World, &Object.SortCenterWS);
-
-							if (Frustum && !Frustum->Intersects(WorldBounds))
-							{
-								if constexpr (bDetail)
-								{
-									++Counts.FrustumRejected;
-									RecordPhase(EDebugCpuStat::GatherPrepare, PhaseStart);
-								}
-								return;
-							}
-						}
-					}
-				}
-			
-
-				const int32 FirstIndex = RenderList.Num();
-
-				// 캐시와 직접 계산 경로 모두 중심의 유효성을 LOD 수집에 전달합니다.
-				const FPrimitiveRenderContext Context{Camera, Object.World, Object.SortCenterWS, CameraLocation, bHasWorldCenter};
-				if constexpr (bDetail) RecordPhase(EDebugCpuStat::GatherPrepare, PhaseStart);
-				Primitive->CreateRenderData(RenderList, Context, Primitive == SelectedComponent);
-				if constexpr (bDetail) RecordPhase(EDebugCpuStat::GatherCreate, PhaseStart);
-				const int32 EndIndex = RenderList.Num();
-				if (FirstIndex == EndIndex)
-				{
-					if constexpr (bDetail)
-					{
-						++Counts.Empty;
-						RecordPhase(EDebugCpuStat::GatherFinalize, PhaseStart);
-					}
-					return;
-				}
-
-				const uint32 ObjectIndex = static_cast<uint32>(Objects.Num());
-				Objects.Add(Object);
-
-				for (int32 Index = FirstIndex; Index < EndIndex; ++Index)
-				{
-					RenderList[Index].ObjectIndex = ObjectIndex;
-
-					if (RenderList[Index].bImpostor) {
-						Objects[ObjectIndex].ImpostorCenterWS = RenderList[Index].ImpostorCenterWS;
-
-						Objects[ObjectIndex].ImpostorSize = RenderList[Index].ImpostorSize;
-
-						Objects[ObjectIndex].ImpostorUV = RenderList[Index].ImpostorUV;
-
-						Objects[ObjectIndex].ImpostorCameraLocation = RenderList[Index].ImpostorCameraLocation;
-					}
-				}
-				if constexpr (bDetail)
-				{
-					++Counts.Objects;
-					Counts.Requests += static_cast<uint32>(EndIndex - FirstIndex);
-					RecordPhase(EDebugCpuStat::GatherFinalize, PhaseStart);
-				}
-			};
-
-		for (const FGridCellCandidate& Candidate : RenderGridCells)
-		{
-			const FStaticUniformGridCell* Cell = Candidate.SourceCell;
-			if (!Cell) { continue; }
-
-			for (const FUniformGridPrimitive& GridPrimitive : Cell->Primitives)
-			{
-				AddPrimitive(GridPrimitive.Primitive, Candidate.bFullyInsideFrustum, &GridPrimitive.WorldBounds);
+				return;
 			}
-		}
 
-		for (UPrimitiveComponent* Primitive : Scene->GetStaticUniformGridFallback())
+			FRenderObjectData Object{};
+			Object.SourcePrimitive = Primitive;
+			Object.World = Primitive->GetRenderWorldMatrix(Camera);
+			Object.SortCenterWS = Object.World.GetOrigin();
+			bool bHasWorldCenter = CachedWorldBounds != nullptr;
+
+			if (CachedWorldBounds)
+			{
+				Object.SortCenterWS = (CachedWorldBounds->Min + CachedWorldBounds->Max) * 0.5f;
+
+				if (!bSkipPrimitiveFrustum)
+				{
+					if (Frustum && !Frustum->Intersects(*CachedWorldBounds)) return;
+				}
+			}
+			else {
+				FVector LocalMin{};
+				FVector LocalMax{};
+				const bool bHasLocalBounds = Primitive->GetLocalBounds(LocalMin, LocalMax);
+				bHasWorldCenter = bHasLocalBounds;
+
+				if (bHasLocalBounds)
+				{
+					if (bSkipPrimitiveFrustum)
+					{
+						// 셀 전체가 내부이면 객체 Bounds를 만들지 않고 LOD·정렬용 중심만 계산합니다.
+						Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
+					}
+					else
+					{
+						// 경계 셀과 개별 객체는 Bounds 변환 중 계산한 중심까지 함께 재사용합니다.
+						const FBoundingBox WorldBounds = FBoundingBox(LocalMin, LocalMax).
+							TransformBounds(Object.World, &Object.SortCenterWS);
+
+						if (Frustum && !Frustum->Intersects(WorldBounds)) return;
+					}
+				}
+			}
+
+
+			const int32 FirstIndex = RenderList.Num();
+
+			// 캐시와 직접 계산 경로 모두 중심의 유효성을 LOD 수집에 전달합니다.
+			const FPrimitiveRenderContext Context{ Camera, Object.World, Object.SortCenterWS, CameraLocation, bHasWorldCenter };
+			Primitive->CreateRenderData(RenderList, Context, Primitive == SelectedComponent);
+			const int32 EndIndex = RenderList.Num();
+			if (FirstIndex == EndIndex) { return; }
+
+			const uint32 ObjectIndex = static_cast<uint32>(Objects.Num());
+			Objects.Add(Object);
+
+			for (int32 Index = FirstIndex; Index < EndIndex; ++Index)
+			{
+				RenderList[Index].ObjectIndex = ObjectIndex;
+			}
+
+			if (RenderList[FirstIndex].bImpostor)
+			{
+				const FPrimitiveRenderData& ImpostorData = RenderList[FirstIndex];
+
+				Objects[ObjectIndex].ImpostorCenterWS = ImpostorData.ImpostorCenterWS;
+
+				Objects[ObjectIndex].ImpostorSize = ImpostorData.ImpostorSize;
+
+				Objects[ObjectIndex].ImpostorUV = ImpostorData.ImpostorUV;
+
+				Objects[ObjectIndex].ImpostorCameraLocation = ImpostorData.ImpostorCameraLocation;
+			}
+		};
+
+	for (const FGridCellCandidate& Candidate : RenderGridCells)
+	{
+		const FStaticUniformGridCell* Cell = Candidate.SourceCell;
+		if (!Cell) { continue; }
+
+		for (const FUniformGridPrimitive& GridPrimitive : Cell->Primitives)
+		{
+			AddPrimitive(GridPrimitive.Primitive, Candidate.bFullyInsideFrustum, &GridPrimitive.WorldBounds);
+		}
+	}
+
+	for (UPrimitiveComponent* Primitive : Scene->GetStaticUniformGridFallback())
+	{
+		AddPrimitive(Primitive, false);
+	}
+
+	// 비정적 메시에는 기존 개별 경로를 유지
+	Scene->ForEachNonStaticMesh([&](UPrimitiveComponent* Primitive)
 		{
 			AddPrimitive(Primitive, false);
-		}
+		});
 
-		// 비정적 메시에는 기존 개별 경로를 유지
-		Scene->ForEachNonStaticMesh([&](UPrimitiveComponent* Primitive)
-			{
-				AddPrimitive(Primitive, false);
-			});
-		if constexpr (bDetail) DebugStats.AddGatherCounts(Counts);
-	};
-	if (bGatherDetail) GatherPrimitives.operator()<true>();
-	else GatherPrimitives.operator()<false>();
-
-	LARGE_INTEGER IconStart;
-	if (bGatherDetail) QueryPerformanceCounter(&IconStart);
 	//SpotLight를 렌더링하기위한 임시 순회, 차후에 Billborad로 확장할것임.
 	Scene->ForEachBillboardIcon([&](USpotLightComponent* SpotLight)
 		{
@@ -225,14 +164,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			RenderList.Add(Data);
 		});
 
-	if (bGatherDetail)
-	{
-		LARGE_INTEGER IconEnd;
-		QueryPerformanceCounter(&IconEnd);
-		DebugStats.AddTime(EDebugCpuStat::GatherIcons,
-			static_cast<double>(IconEnd.QuadPart - IconStart.QuadPart) * DebugStats.GetMillisecondsPerTick());
-	}
-	DebugStats.AddRequests(static_cast<uint32>(RenderList.Num()));
+	FDebugCpuStats::Get().AddRequests(static_cast<uint32>(RenderList.Num()));
 	return;
 }
 

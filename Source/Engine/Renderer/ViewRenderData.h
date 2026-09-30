@@ -4,6 +4,7 @@
 
 #include "Core/Container/Array.h"
 #include "Core/Math/Matrix.h"
+#include "Core/Math/FastMatrix.h"
 #include "Core/Math/Vector.h"
 
 #include "Engine/Renderer/ViewSettings.h"
@@ -18,8 +19,8 @@ struct FStaticUniformGridCell;
 
 struct FRenderViewSnapshot
 {
-    FMatrix ViewMatrix = FMatrix::Identity;
-    FMatrix ViewProjection = FMatrix::Identity;
+    FFastMatrix ViewMatrix = FFastMatrix::Identity;
+    FFastMatrix ViewProjection = FFastMatrix::Identity;
     D3D11_VIEWPORT Viewport{};
     EViewModeIndex ViewMode = EViewModeIndex::VMI_Unlit;
 };

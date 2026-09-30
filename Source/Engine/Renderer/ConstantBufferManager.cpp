@@ -3,42 +3,98 @@
 #include <cassert>
 void FConstantBufferManager::UploadObjectConstants(ID3D11DeviceContext* Context, FConstantBufferRing* CBRing, const FViewRenderData& ViewLayoutData, const TArray<uint32>& ObjectIndexToCBIndices)
 {
-	m_ObjectCBAllocations.SetNum(ObjectIndexToCBIndices.Num());
+	const uint32 ObjectCount =
+		static_cast<uint32>(ObjectIndexToCBIndices.Num());
 
-	const auto& Objects = ViewLayoutData.Objects;
-	const FMatrix& ViewProj = ViewLayoutData.View.ViewProjection;
+	m_ObjectCBAllocations.SetNum(ObjectCount);
 
-	for (int32 CBIndex = 0; CBIndex < ObjectIndexToCBIndices.Num(); ++CBIndex)
+	if (ObjectCount == 0)
+		return;
+
+	const TArray<FRenderObjectData>& Objects =
+		ViewLayoutData.Objects;
+
+	const FFastMatrix& ViewProj =
+		ViewLayoutData.View.ViewProjection;
+
+	const uint32 DataSize =
+		static_cast<uint32>(sizeof(FObjectConstants));
+
+	uint32 BaseOffset = 0;
+	uint32 AlignedSize = 0;
+
+	if (!CBRing->AllocateFastBatch(
+		DataSize,
+		ObjectCount,
+		BaseOffset,
+		AlignedSize))
 	{
-		const uint32 ObjectIndex = ObjectIndexToCBIndices[CBIndex];
+		return;
+	}
 
-		FObjectConstants Constants{};
-		Constants.World = Objects[ObjectIndex].World;
+	for (uint32 CBIndex = 0;
+		CBIndex < ObjectCount;
+		++CBIndex)
+	{
+		const uint32 ObjectIndex =
+			ObjectIndexToCBIndices[CBIndex];
+
+		const FRenderObjectData& Object =
+			Objects[ObjectIndex];
+
+		FObjectConstants Constants;
+
+		Constants.World = Object.World;
 		Constants.ViewProjection = ViewProj;
 
 		Constants.ImpostorCenterWS =
 			FVector4(
-				Objects[ObjectIndex].ImpostorCenterWS.X,
-				Objects[ObjectIndex].ImpostorCenterWS.Y,
-				Objects[ObjectIndex].ImpostorCenterWS.Z,
-				1.0f
-			);
+				Object.ImpostorCenterWS.X,
+				Object.ImpostorCenterWS.Y,
+				Object.ImpostorCenterWS.Z,
+				1.0f);
 
-		Constants.ImpostorSize = Objects[ObjectIndex].ImpostorSize;
+		Constants.ImpostorSize =
+			Object.ImpostorSize;
 
-		Constants.ImpostorUV = Objects[ObjectIndex].ImpostorUV;
+		Constants.ImpostorUV =
+			Object.ImpostorUV;
 
 		Constants.ImpostorCameraLocation =
 			FVector4(
-				Objects[ObjectIndex].ImpostorCameraLocation.X,
-				Objects[ObjectIndex].ImpostorCameraLocation.Y,
-				Objects[ObjectIndex].ImpostorCameraLocation.Z,
-				1.0f
-			);
+				Object.ImpostorCameraLocation.X,
+				Object.ImpostorCameraLocation.Y,
+				Object.ImpostorCameraLocation.Z,
+				1.0f);
 
-		// 드로우 요청의 ObjectConstantIndex와 같은 위치에 기록한다.
-		m_ObjectCBAllocations[CBIndex] = CBRing->AllocateAndUpload(
-			Context, &Constants, sizeof(Constants));
+		const uint32 ByteOffset =
+			BaseOffset + CBIndex * AlignedSize;
+
+		uint8_t* WritePtr =
+			CBRing->GetMappedWritePtr(ByteOffset);
+
+		std::memcpy(
+			WritePtr,
+			&Constants,
+			DataSize);
+
+		if (AlignedSize > DataSize)
+		{
+			std::memset(WritePtr + DataSize, 0, AlignedSize - DataSize);
+		}
+
+		FCBRangeAllocation& Alloc = m_ObjectCBAllocations[CBIndex];
+
+		Alloc.Buffer =
+			CBRing->GetBuffer();
+
+		Alloc.ByteOffset = ByteOffset;
+
+		Alloc.ByteSize = AlignedSize;
+
+		Alloc.FirstConstant = ByteOffset / 16;
+
+		Alloc.NumConstants = AlignedSize / 16;
 	}
 }
 

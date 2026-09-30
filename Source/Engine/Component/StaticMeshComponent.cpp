@@ -129,7 +129,6 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 	uint32 LODIndex = 0;
 	if (LODCount > 1)
 	{
-		// Bounds가 수집되지 않은 경우에만 기존 LOD0 중심 계산을 수행합니다.
 		const FVector WorldCenter = Context.bHasWorldCenter ? Context.WorldCenter
 			: World.TransformPosition((LODs[0].BoundsMin + LODs[0].BoundsMax) * 0.5f);
 		const FVector ToCamera = WorldCenter - Context.CameraLocation;
@@ -143,81 +142,138 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 			LODIndex = 3;
 	}
 
-	// 위 조건에서 실제 존재하는 LOD 인덱스만 선택합니다.
 	const FStaticMeshLOD& LOD = LODs[LODIndex];
 	if (!LOD.MeshResource) return;
 
 	const FMeshAllocation& Allocation = LOD.MeshResource->GetAllocation();
 	if (Allocation.MeshPageId == InvalidRenderId) return;
 
+	// 임포스터 정보는 Section과 무관하므로 한 번만 계산
+	FVector ImpostorCenterWS{};
+	FVector4 ImpostorSize{ 1.0f, 1.0f, 0.0f, 0.0f };
+	FVector4 ImpostorUV{ 1.0f, 1.0f, 0.0f, 0.0f };
+
+	if (LOD.bImpostor)
+	{
+		ImpostorCenterWS = World.TransformPosition(LOD.Impostor.Pivot);
+
+		const FVector WidthPointWS =
+			World.TransformPosition(
+				LOD.Impostor.Pivot +
+				FVector(LOD.Impostor.Width * 0.5f, 0.0f, 0.0f));
+
+		const FVector HeightPointWS =
+			World.TransformPosition(
+				LOD.Impostor.Pivot +
+				FVector(0.0f, 0.0f, LOD.Impostor.Height * 0.5f));
+
+		const float WorldWidth =
+			(WidthPointWS - ImpostorCenterWS).Length() * 2.0f;
+
+		const float WorldHeight =
+			(HeightPointWS - ImpostorCenterWS).Length() * 2.0f;
+
+		ImpostorSize = FVector4(
+			(std::max)(WorldWidth, 0.01f),
+			(std::max)(WorldHeight, 0.01f),
+			0.0f,
+			0.0f);
+
+		const FVector ToCamera =
+			Context.CameraLocation - ImpostorCenterWS;
+
+		const float Yaw =
+			std::atan2(ToCamera.Y, ToCamera.X);
+
+		float NomalizedYaw =
+			Yaw / (2.0f * PI);
+
+		if (NomalizedYaw < 0.0f)
+			NomalizedYaw += 1.0f;
+
+		const int32 ViewCountX =
+			static_cast<int32>(LOD.Impostor.ViewCountX);
+
+		int32 ViewX = static_cast<int32>(NomalizedYaw * static_cast<float>(ViewCountX) + 0.5f);
+
+		if (ViewX >= ViewCountX)
+			ViewX = 0;
+
+		const float Distance = ToCamera.Length();
+		const float InvDistance =
+			Distance > 0.0001f ? 1.0f / Distance : 0.0f;
+
+		const float Pitch =
+			std::asin(
+				std::clamp(
+					ToCamera.Z * InvDistance,
+					-1.0f,
+					1.0f));
+
+		constexpr float PitchMin = -60.0f * PI / 180.0f;
+		constexpr float PitchMax = 60.0f * PI / 180.0f;
+
+		const float ClampedPitch =
+			std::clamp(Pitch, PitchMin, PitchMax);
+
+		const float Pitch01 =
+			(ClampedPitch - PitchMin) /
+			(PitchMax - PitchMin);
+
+		const int32 ViewCountY =
+			static_cast<int32>(LOD.Impostor.ViewCountY);
+
+		int32 ViewY = static_cast<int32>((1.0f - Pitch01) * static_cast<float>(ViewCountY - 1) + 0.5f);
+
+		ViewY = std::clamp(ViewY, 0, ViewCountY - 1);
+
+		const float UVScaleX =
+			1.0f / static_cast<float>(ViewCountX);
+
+		const float UVScaleY =
+			1.0f / static_cast<float>(ViewCountY);
+
+		ImpostorUV = FVector4(
+			UVScaleX,
+			UVScaleY,
+			ViewX * UVScaleX,
+			ViewY * UVScaleY);
+	}
+
 	for (const FMeshSection& Section : LOD.Sections)
 	{
 		if (Section.IndexCount == 0) continue;
 
-		// Override 우선순위와 기본 머티리얼 조회 동작을 유지합니다.
-		const FMaterial* SectionMaterial = GetMaterial(Section.MaterialIndex);
+		const FMaterial* SectionMaterial =
+			GetMaterial(Section.MaterialIndex);
+
 		if (!SectionMaterial) continue;
 
 		assert(SectionMaterial->MaterialId != InvalidRenderId);
 		assert(Section.FirstIndex <= Allocation.IndexCount);
-		assert(Section.IndexCount <= Allocation.IndexCount - Section.FirstIndex);
+		assert(Section.IndexCount <=
+			Allocation.IndexCount - Section.FirstIndex);
 
 		FPrimitiveRenderData Data{};
 		Data.Geometry.MeshPageId = Allocation.MeshPageId;
-		Data.Geometry.FirstIndex = Allocation.FirstIndex + Section.FirstIndex;
+		Data.Geometry.FirstIndex =
+			Allocation.FirstIndex + Section.FirstIndex;
 		Data.Geometry.IndexCount = Section.IndexCount;
 		Data.Geometry.BaseVertex = Allocation.BaseVertex;
 		Data.Material = SectionMaterial;
 
-		if (LOD.bImpostor) {
+		if (LOD.bImpostor)
+		{
 			Data.bImpostor = true;
-
-			const FVector CenterWS = World.TransformPosition(LOD.Impostor.Pivot);
-			const FVector WidthPointWS = World.TransformPosition(LOD.Impostor.Pivot + FVector(LOD.Impostor.Width * 0.5f, 0.0f, 0.0f));
-			const FVector HeightPointWS = World.TransformPosition(LOD.Impostor.Pivot + FVector(0.0f, 0.0f, LOD.Impostor.Height * 0.5f));
-
-			const float WorldWidth = (WidthPointWS - CenterWS).Length() * 2.0f;
-			const float WorldHeight = (HeightPointWS - CenterWS).Length() * 2.0f;
-
-			Data.ImpostorCenterWS = CenterWS;
-
-			Data.ImpostorSize = FVector4((std::max)(WorldWidth, 0.01f), (std::max)(WorldHeight, 0.01f), 0.0f, 0.0f);
-
+			Data.ImpostorCenterWS = ImpostorCenterWS;
+			Data.ImpostorSize = ImpostorSize;
+			Data.ImpostorUV = ImpostorUV;
 			Data.ImpostorCameraLocation = Context.CameraLocation;
-
-			const FVector ToCamera = (Data.ImpostorCameraLocation - CenterWS).GetNormalized();
-
-			const float Yaw = std::atan2(ToCamera.Y, ToCamera.X);
-
-			float NomalizedYaw = Yaw / (2.0f * PI);
-
-			if (NomalizedYaw < 0.0f) NomalizedYaw += 1.0f;
-
-			int32 ViewX = static_cast<int32>(std::round(NomalizedYaw * static_cast<float>(LOD.Impostor.ViewCountX)));
-
-			ViewX %= static_cast<int32>(LOD.Impostor.ViewCountX);
-
-			const float Pitch = std::asin(std::clamp(ToCamera.Z, -1.0f, 1.0f));
-
-			constexpr float PitchMin = -60.0f * PI / 180.0f;
-			constexpr float PitchMax = 60.0f * PI / 180.0f;
-
-			const float ClampedPitch = std::clamp(Pitch, PitchMin, PitchMax);
-
-			const float Pitch01 = (ClampedPitch - PitchMin) / (PitchMax - PitchMin);
-
-			int32 ViewY = static_cast<int32>(std::round((1.0f - Pitch01) * static_cast<float>(LOD.Impostor.ViewCountY - 1)));
-
-			ViewY = std::clamp(ViewY, 0, static_cast<int32>(LOD.Impostor.ViewCountY - 1));
-
-			const float UVScaleX = 1.0f / static_cast<float>(LOD.Impostor.ViewCountX);
-			const float UVScaleY = 1.0f / static_cast<float>(LOD.Impostor.ViewCountY);
-
-			Data.ImpostorUV = FVector4(UVScaleX, UVScaleY, ViewX * UVScaleX, ViewY * UVScaleY);
 		}
 
 		Data.Flags = Primitive_AllowOutline;
-		if (bSelected) Data.Flags |= Primitive_Selected;
+		if (bSelected)
+			Data.Flags |= Primitive_Selected;
 
 		ComponentRenderData.Add(Data);
 	}

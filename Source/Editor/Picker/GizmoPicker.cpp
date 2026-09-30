@@ -10,7 +10,7 @@
 
 namespace
 {	//VP행렬->에디터의카메라참조 Viewport->GEngine->FRenderer 참조
-	bool WorldToPixel(const FVector& Position, const FMatrix& ViewProjection, const D3D11_VIEWPORT& Viewport, FVector& OutPixel)
+	bool WorldToPixel(const FVector& Position, const FFastMatrix& ViewProjection, const D3D11_VIEWPORT& Viewport, FVector& OutPixel)
 	{
 		const FVector4 Clip = FVector4(Position, 1.0f) * ViewProjection;
 
@@ -77,11 +77,9 @@ bool FGizmoPicker::MakeWorldRay(FRay& OutRay, D3D11_VIEWPORT InViewport) {
 
     FVector4 Near(NDCX, NDCY, 0.0f, 1.0f);
     FVector4 Far(NDCX, NDCY, 1.0f, 1.0f);
-    FMatrix Projection = Editor->GetEditorCamera()->GetProjectionMatrix();
-    FMatrix View = Editor->GetEditorCamera()->GetViewMatrix();
-
-    FMatrix VPInverse;
-    if (!(View * Projection).TryInverse(VPInverse)) {
+    FFastMatrix VPInverse;
+    if (!(Editor->GetEditorCamera()->GetViewMatrix()
+        * Editor->GetEditorCamera()->GetProjectionMatrix()).TryInverse(VPInverse)) {
         return false;
     }
 
@@ -112,7 +110,7 @@ int FGizmoPicker::Pick(UGizmo* InGizmos, D3D11_VIEWPORT InViewport)
     //현재 종횡비를 갱신하고, VP행렬을 가져온다
     auto* Camera = Editor->GetEditorCamera();
     Camera->SetAspectRatio(Viewport.Width / Viewport.Height);
-    const FMatrix VP = Camera->GetViewMatrix() * Camera->GetProjectionMatrix();
+    const FFastMatrix VP = Camera->GetViewMatrix() * Camera->GetProjectionMatrix();
     
     auto& Input = *GInputManager::GetInstance();
     //NDC좌표에서 PIXEL좌표로

@@ -92,23 +92,18 @@ void UCameraComponent::ConstrainEditorRotation()
     SetRelativeRotation(GetRelativeRotation().GetUprightCameraRotation());
 }
 
-FMatrix UCameraComponent::GetViewMatrix() const
+FFastMatrix UCameraComponent::GetViewMatrix() const
 {
-	FMatrix RotationMatrix = GetCameraRotationMatrix();
-	FMatrix InverseTranslationMatrix = FMatrix::MakeTranslationMatrix(RelativeLocation * -1.0f);
-	return (InverseTranslationMatrix) * (RotationMatrix.Transpose());
+	const FFastMatrix RotationMatrix = GetCameraRotationMatrix();
+	return FFastMatrix::MakeTranslationMatrix(RelativeLocation * -1.0f)
+		* RotationMatrix.Transpose();
 }
 
-FMatrix UCameraComponent::GetProjectionMatrix() const
+FFastMatrix UCameraComponent::GetProjectionMatrix() const
 {
-	if (bIsPerspective)
-	{
-		return GetPerspectiveProjectionMatrix();
-	}
-	else
-	{
-		return GetOrthographicProjectionMatrix();
-	}
+	return bIsPerspective
+		? GetPerspectiveProjectionMatrix()
+		: GetOrthographicProjectionMatrix();
 }
 
 
@@ -241,7 +236,7 @@ void UCameraComponent::SetOrthoHeight(float InHeight)
 	OrthoHeight = InHeight;
 }
 
-FMatrix UCameraComponent::GetOrthographicProjectionMatrix() const
+FFastMatrix UCameraComponent::GetOrthographicProjectionMatrix() const
 {
 	assert(std::isfinite(OrthoHeight) && OrthoHeight > 0.0f);
 	assert(std::isfinite(AspectRatio) && AspectRatio > 0.0f);
@@ -252,14 +247,14 @@ FMatrix UCameraComponent::GetOrthographicProjectionMatrix() const
 	const float DepthScale = 1.0f / (FarZ - NearZ);
 
 	// +X forward, +Y right, +Z up; row vectors, depth 0..1, W = 1.
-	return FMatrix(
+	return FFastMatrix(
 		0.0f, 0.0f, DepthScale, 0.0f,
 		HorizontalScale, 0.0f, 0.0f, 0.0f,
 		0.0f, VerticalScale, 0.0f, 0.0f,
 		0.0f, 0.0f, -NearZ * DepthScale, 1.0f);
 }
 
-FMatrix UCameraComponent::GetPerspectiveProjectionMatrix() const
+FFastMatrix UCameraComponent::GetPerspectiveProjectionMatrix() const
 {
 	//시야각, 가로세로 비율,  가시경계 범위 체크
 	assert(std::isfinite(FOV) && FOV > 0.0f && FOV < PI);
@@ -271,7 +266,7 @@ FMatrix UCameraComponent::GetPerspectiveProjectionMatrix() const
 	const float DepthScale = FarZ / (FarZ - NearZ);
 
 	//일반적인 투영행렬과 다른이유 : 기준 축이 달라서 축변환 적용
-	return FMatrix(
+	return FFastMatrix(
 		0.0f, 0.0f, DepthScale, 1.0f,
 		HorizontalScale, 0.0f, 0.0f, 0.0f,
 		0.0f, VerticalScale, 0.0f, 0.0f,
@@ -286,7 +281,7 @@ void UCameraComponent::MoveCamera(const float& InForward, const float& InRight, 
 	SetRelativeLocation(RelativeLocation + InVelocity * MoveSpeed * InDeltaTime);
 }
 
-FMatrix UCameraComponent::GetCameraRotationMatrix() const
+FFastMatrix UCameraComponent::GetCameraRotationMatrix() const
 {
-    return  GetRelativeRotation().ToRotationMatrix();
+    return FFastMatrix::MakeRotationMatrix(GetRelativeRotation());
 }

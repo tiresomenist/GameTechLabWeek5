@@ -27,7 +27,7 @@
 
 namespace
 {
-    constexpr float StaticUniformGridCellSize = 2.5f;
+    constexpr float StaticUniformGridCellSize = 1.95f;
 
 	uint64 MakeStaticUniformGridKey(int32 X, int32 Y, int32 Z)
 	{

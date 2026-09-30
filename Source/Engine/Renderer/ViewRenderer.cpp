@@ -59,7 +59,7 @@ namespace
 	struct FConstants
 	{
 		FMatrix World;
-		FMatrix ViewProjection;
+		FFastMatrix ViewProjection;
 	};
 
 	struct FGridConstants
@@ -545,7 +545,7 @@ void FViewRenderer::RenderView(
 	PreparePrimitiveVisibility(Data, HZB);
 	PassDrawBuilder.BuildPassDraws(
 		Data, &PipelineStateCache, PassDraws, PrimitiveVisibility);
-	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws, OpaqueSortScratch);
+	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws, OpaqueSortDrawScratch, OpaqueSortIndexScratchA, OpaqueSortIndexScratchB);
 
 	{
 		// 상수 구성, Map, 복사, Unmap을 한 구간으로 측정합니다.
@@ -632,7 +632,7 @@ void FViewRenderer::InvalidateOcclusionCells(const TArray<uint64>& CellKeys)
 	}
 }
 
-void FViewRenderer::UpdateTransformConstantBuffer(const FMatrix& World, const FMatrix& VP)
+void FViewRenderer::UpdateTransformConstantBuffer(const FMatrix& World, const FFastMatrix& VP)
 {
 	if (!DeviceContext || !TransformConstantBuffer)
 	{
@@ -719,7 +719,7 @@ void FViewRenderer::RenderGizmo(const FPrimitiveRenderData& Data)
 	DeviceContext->DrawIndexed(Data.Geometry.IndexCount, Data.Geometry.FirstIndex, Data.Geometry.BaseVertex);
 }
 
-void FViewRenderer::RenderBatchLine(const FMatrix& ViewProj)
+void FViewRenderer::RenderBatchLine(const FFastMatrix& ViewProj)
 {
 	const UINT VertexCount = LineBatcher.GetVertexCount();
 	const UINT IndexCount = LineBatcher.GetIndexCount();

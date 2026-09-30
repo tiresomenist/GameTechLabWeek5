@@ -3,6 +3,7 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 #include "Core/Math/Matrix.h"
+#include "Core/Math/FastMatrix.h"
 #include "Engine/Renderer/PrimitiveRenderData.h"
 #include "Engine/Renderer/ViewSettings.h"
 #include "Engine/Renderer/Line/LineBatcher.h"
@@ -30,7 +31,7 @@ struct FViewRenderData;
 
 struct FHZBCullConstants
 {
-	FMatrix ViewProjection;
+	FFastMatrix ViewProjection;
 	uint32 CellCount = 0;
 	float ViewportWidth = 0.0f;
 	float ViewportHeight = 0.0f;
@@ -86,7 +87,9 @@ public:
 	{
 		// 배열 용량은 유지하면서 Source와 Material 참조를 제거합니다.
 		PassDraws.Clear();
-		OpaqueSortScratch.Empty();
+		OpaqueSortDrawScratch.Empty();
+		OpaqueSortIndexScratchA.Empty();
+		OpaqueSortIndexScratchB.Empty();
 		PassDrawBuilder.ReleaseViewReferences();
 	}
 	void SetHZBOcclusionEnabled(bool bEnabled) { bEnableHZBOcclusion = bEnabled; }
@@ -108,7 +111,7 @@ private:
 	void ReleaseTextResources();
 
 	void SetViewportAndScissor(const D3D11_VIEWPORT& Viewport);
-	void UpdateTransformConstantBuffer(const FMatrix& World, const FMatrix& VP);
+	void UpdateTransformConstantBuffer(const FMatrix& World, const FFastMatrix& VP);
 	void UpdateMaterialConstants(const FPrimitiveRenderData& Data);
 	void BindShader(const FShaderResource& Shader);
 	void BindPrimitiveBuffers(const FPrimitiveRenderData& Data);
@@ -117,7 +120,7 @@ private:
 	void RenderHighlight(const FPrimitiveRenderData& Data);
 	void RenderOutline(const FPrimitiveRenderData& Data);
 	void RenderGizmo(const FPrimitiveRenderData& Data);
-	void RenderBatchLine(const FMatrix& ViewProj);
+	void RenderBatchLine(const FFastMatrix& ViewProj);
 	bool UpdateTextVertexBuffer(const TArray<FVertexTexture>& Vertices);
 	void RenderText(UINT IndexCount);
 
@@ -174,7 +177,11 @@ private:
 	FConstantBufferManager CBManager;
 	FPassExecutor PassExecutor;
 	FPassDrawList PassDraws;
-	TArray<FPreparedDraw> OpaqueSortScratch;
+
+	TArray<FPreparedDraw> OpaqueSortDrawScratch;
+	TArray<uint32> OpaqueSortIndexScratchA;
+	TArray<uint32> OpaqueSortIndexScratchB;
+
 	FRenderSubmissionStats SubmissionStats;
 
 	TArray<uint32> PrimitiveVisibility;

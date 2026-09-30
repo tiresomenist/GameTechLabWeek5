@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Math/Matrix.h"
+#include "Core/Math/FastMatrix.h"
 #include "Core/Math/Vector.h"
 
 // HLSL의 float2 크기와 float2 오프셋에 대응하는 16바이트 상수
@@ -22,7 +23,7 @@ struct FTextureUVTransform
 struct FObjectConstants
 {
     FMatrix World = FMatrix::Identity;
-    FMatrix ViewProjection = FMatrix::Identity;
+    FFastMatrix ViewProjection = FFastMatrix::Identity;
 
     FVector4 ImpostorCenterWS{};
     FVector4 ImpostorSize{ 1.0f, 1.0f, 0.0f, 0.0f };

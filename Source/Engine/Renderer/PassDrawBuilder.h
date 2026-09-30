@@ -6,6 +6,8 @@
 #include "Core/Container/Array.h"
 #include "Core/Container/Map.h"
 
+struct FFastMatrix;
+
 class FPassDrawBuilder {
 public:
 	FPassDrawBuilder() = default;
@@ -25,7 +27,7 @@ public:
 	}
 private:
 	FPipelineKey MakePipelineKey(const FMaterial* Material, EVertexFormat VertexFormat, EPipelinePass Pass, EViewModeIndex ViewMode) const;
-	uint32 CalculateDepthBucket(const FVector& SortCenterWS, const FMatrix& ViewMatrix, float NearZ = 0.1f, float FarZ = 1000.0f) const;
+	uint32 CalculateDepthBucket(const FVector& SortCenterWS, const FFastMatrix& ViewMatrix, float NearZ = 0.1f, float FarZ = 1000.0f) const;
 
 private:
 	void ResetObjectMapping(size_t ObjectCount);

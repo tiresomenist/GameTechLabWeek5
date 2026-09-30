@@ -35,11 +35,9 @@ bool FObjectPicker::MakeWorldRay(FRay& OutRay, D3D11_VIEWPORT InViewport) {
 
 	FVector4 Near(NDCX, NDCY, 0.0f, 1.0f);
 	FVector4 Far(NDCX, NDCY, 1.0f, 1.0f);
-	FMatrix Projection = Camera->GetProjectionMatrix();
-	FMatrix View = Camera->GetViewMatrix();
 
-	FMatrix VPInverse;
-	if (!(View * Projection).TryInverse(VPInverse)) {
+	FFastMatrix VPInverse;
+	if (!(Camera->GetViewMatrix() * Camera->GetProjectionMatrix()).TryInverse(VPInverse)) {
 		return false;
 	}
 
