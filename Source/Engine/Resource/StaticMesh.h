@@ -13,8 +13,8 @@
 struct FImpostorLOD {
 	FString TexturePath;
 
-	uint32 ViewCountX = 8;
-	uint32 ViewCountY = 4;
+	uint32 ViewCountX = 16;
+	uint32 ViewCountY = 8;
 
 	FVector Pivot = FVector::Zero;
 
