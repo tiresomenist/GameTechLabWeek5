@@ -534,7 +534,7 @@ void FViewRenderer::RenderView(
 	PreparePrimitiveVisibility(Data, HZB);
 	PassDrawBuilder.BuildPassDraws(
 		Data, &PipelineStateCache, PassDraws, PrimitiveVisibility);
-	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws, OpaqueSortScratch);
+	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws, OpaqueSortDrawScratch, OpaqueSortIndexScratchA, OpaqueSortIndexScratchB);
 
 	{
 		// 상수 구성, Map, 복사, Unmap을 한 구간으로 측정합니다.

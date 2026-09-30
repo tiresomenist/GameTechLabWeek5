@@ -215,6 +215,8 @@ void USceneComponent::Serialize(FArchive& Archive)
 
 bool USceneComponent::IsVisible() const
 {
+	//const AActor* Owner = GetOwner();
+	//return Owner && Owner->IsVisible() && bVisible;
     return bVisible;
 }
 
