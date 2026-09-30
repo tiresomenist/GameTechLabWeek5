@@ -593,6 +593,14 @@ void FViewRenderer::FilterGridCellCandidates(const FRenderViewSnapshot& View,
 
 }
 
+void FViewRenderer::InvalidateOcclusionCells(const TArray<uint64>& CellKeys)
+{
+	for (auto& Entry : HZBViewStates)
+	{
+		Entry.second.Culler.InvalidateCells(CellKeys);
+	}
+}
+
 void FViewRenderer::UpdateTransformConstantBuffer(const FMatrix& World, const FMatrix& VP)
 {
 	if (!DeviceContext || !TransformConstantBuffer)

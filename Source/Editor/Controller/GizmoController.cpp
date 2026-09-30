@@ -406,12 +406,13 @@ void FGizmoController::Tick()
     }
     }
 
-    // Todo: BVH
     if (bTransformChanged && Editor->GetCurrentScene())
     {
+        TArray<uint64> ChangedCellKeys;
+
         Editor->GetCurrentScene()->UpdateBVHForActor(SelectedObject->GetOwner());
-        Editor->GetCurrentScene()->InvalidateStaticUniformGrid();
-        GEngine::GetInstance()->InvalidateOcclusionHistory();
+        Editor->GetCurrentScene()->UpdateStaticUniformGridForActor(SelectedObject->GetOwner(), ChangedCellKeys);
+        GEngine::GetInstance()->InvalidateOcclusionCells(ChangedCellKeys);
     }
 
 	if (!Input.GetKey(GInputManager::EI_LMOUSE)) EndDrag();

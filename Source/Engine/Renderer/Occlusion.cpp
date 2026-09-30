@@ -154,3 +154,11 @@ bool FHZBOcclusionCuller::IsVisibleLastFrame(uint64 CellKey) const
     const bool* bVisible = LastFrameVisibility.Find(CellKey);
     return (!bVisible || *bVisible);
 }
+
+void FHZBOcclusionCuller::InvalidateCells(const TArray<uint64>& CellKeys)
+{
+    for (uint64 CellKey : CellKeys)
+    {
+        LastFrameVisibility.Remove(CellKey);
+    }
+}

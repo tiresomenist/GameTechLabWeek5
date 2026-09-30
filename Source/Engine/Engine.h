@@ -64,6 +64,10 @@ public:
 	void SetHZBOcclusionEnabled(bool bEnabled) { Renderer.SetHZBOcclusionEnabled(bEnabled); }
 	bool IsHZBOcclusionEnabled() const { return Renderer.IsHZBOcclusionEnabled(); }
 	void InvalidateOcclusionHistory() { return Renderer.InvalidateOcclusionHistory(); }
+	void InvalidateOcclusionCells(const TArray<uint64>& CellKeys)
+	{
+		Renderer.InvalidateOcclusionCells(CellKeys);
+	}
 
 private:
 	EApplicationMode ApplicationMode = EApplicationMode::Editor;
