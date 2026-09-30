@@ -395,13 +395,14 @@ void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ra
 	if (Primitive->IsAABBOnlyPickable())
 	{
 		float AABBDistance = 0.0f;
-		if (!RayAABBIntersect(LocalRay, BoundsMin, BoundsMax, ClosestDistance, AABBDistance))
+		if (RayAABBIntersect(LocalRay, BoundsMin, BoundsMax, ClosestDistance, AABBDistance) == false)
 		{
 			return;
 		}
 
 		ClosestDistance = AABBDistance;
 		SelectedObject = Primitive;
+
 		return;
 	}
 
@@ -617,6 +618,7 @@ void FObjectPicker::PickSceneBVHNodeRecursive(const FSceneBVHNode* NodeOrNull, c
 	float SecondDistance = 0.0f;
 
 	// 두 자식의 AABB를 검사하고 진입 거리를 구한다.
+	/*
 	if (FirstChild != nullptr)
 	{
 		if (HasRayAABBIntersected(Ray, Cache, FirstChild->WorldMin, FirstChild->WorldMax, ClosestCandidateDistance, FirstDistance) == false)
@@ -631,6 +633,20 @@ void FObjectPicker::PickSceneBVHNodeRecursive(const FSceneBVHNode* NodeOrNull, c
 		{
 			SecondChild = nullptr;
 		}
+	}
+	*/
+
+	assert(FirstChild != nullptr);
+	assert(SecondChild != nullptr);
+
+	if (HasRayAABBIntersected(Ray, Cache, FirstChild->WorldMin, FirstChild->WorldMax, ClosestCandidateDistance, FirstDistance) == false)
+	{
+		FirstChild = nullptr;
+	}
+
+	if (HasRayAABBIntersected(Ray, Cache, SecondChild->WorldMin, SecondChild->WorldMax, ClosestCandidateDistance, SecondDistance) == false)
+	{
+		SecondChild = nullptr;
 	}
 
 	// 교차하는 자식 중 가까운 자식을 먼저 방문하도록 순서를 정한다.
@@ -717,7 +733,7 @@ bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMe
 	{
 		if (FirstChild != nullptr)
 		{
-			if (!HasRayAABBIntersected(LocalRay, Cache, FirstChild->LocalMin, FirstChild->LocalMax, ClosestDistance, FirstDistance))
+			if (HasRayAABBIntersected(LocalRay, Cache, FirstChild->LocalMin, FirstChild->LocalMax, ClosestDistance, FirstDistance) == false)
 			{
 				FirstChild = nullptr;
 			}
@@ -725,7 +741,7 @@ bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMe
 
 		if (SecondChild != nullptr)
 		{
-			if (!HasRayAABBIntersected(LocalRay, Cache, SecondChild->LocalMin, SecondChild->LocalMax, ClosestDistance, SecondDistance))
+			if (HasRayAABBIntersected(LocalRay, Cache, SecondChild->LocalMin, SecondChild->LocalMax, ClosestDistance, SecondDistance) == false)
 			{
 				SecondChild = nullptr;
 			}
