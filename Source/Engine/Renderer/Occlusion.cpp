@@ -2,6 +2,7 @@
 #include "Core/Core.h"
 #include "Engine/Renderer/VertexSimple.h"
 #include "Occlusion.h"
+#include "ViewRenderData.h"
 
 // FHZBOcclusionCuller
 bool FHZBOcclusionCuller::UploadCells(ID3D11Device* Device, ID3D11DeviceContext* Context, const TArray<FHZBCellData>& Cells)
@@ -113,15 +114,15 @@ void FHZBOcclusionCuller::Release()
     LastFrameVisibility.Empty();
 }
 
-void FHZBOcclusionCuller::QueueReadback(ID3D11DeviceContext* Context, const TArray<uint64>& CellKeys)
+void FHZBOcclusionCuller::QueueReadback(ID3D11DeviceContext* Context, const TArray<FGridCellCandidate>& Cells)
 {
     if (bReadbackPending || !ReadbackBuffer || !VisibilityBuffer) return;
-    if (static_cast<uint32>(CellKeys.Num()) != CellCount) return;
+    if (static_cast<uint32>(Cells.Num()) != CellCount) return;
 
-    PendingCellKeys.SetNum(CellKeys.Num());
-    for (int32 Index = 0; Index < CellKeys.Num(); ++Index)
+    PendingCellKeys.SetNum(Cells.Num());
+    for (int32 Index = 0; Index < Cells.Num(); ++Index)
     {
-        PendingCellKeys[Index] = CellKeys[Index];
+        PendingCellKeys[Index] = Cells[Index].Key;
     }
     bDiscardPendingReadback = false;
     Context->CopyResource(ReadbackBuffer.Get(), VisibilityBuffer.Get());

@@ -55,6 +55,7 @@ struct FHZBViewInput
 struct FHZBViewState
 {
 	FHZBOcclusionCuller Culler;
+	TArray<FHZBCellData> CellUploadScratch;
 	FRenderViewSnapshot PreviousView{};
 	const UScene* PreviousScene = nullptr;
 	uint64 PreviousFrameIndex = 0;
@@ -184,7 +185,6 @@ private:
 
 	FRenderSubmissionStats SubmissionStats;
 
-	TArray<uint32> PrimitiveVisibility;
 	TMap<uint32, FHZBViewState> HZBViewStates;
 	Microsoft::WRL::ComPtr<ID3D11Buffer> HZBCullConstantBuffer;
 	bool bEnableHZBOcclusion = true;

@@ -21,10 +21,12 @@ private:
 	uint32 m_LastPipelineId = InvalidRenderId;
 	uint32 m_LastMeshPageId = InvalidRenderId;
 	uint32 m_LastMaterialId = InvalidRenderId;
+	uint32 m_LastMaterialConstantIndex = InvalidRenderId;
 
 	void ResetStateCache() {
 		m_LastPipelineId = InvalidRenderId;
 		m_LastMeshPageId = InvalidRenderId;
 		m_LastMaterialId = InvalidRenderId;
+		m_LastMaterialConstantIndex = InvalidRenderId;
 	}
 };

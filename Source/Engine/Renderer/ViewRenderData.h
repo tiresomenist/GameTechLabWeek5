@@ -57,6 +57,7 @@ struct FViewRenderData
     const UCameraComponent* TextCamera = nullptr;
     TArray<FTextDrawRequest> TextRequests;
     TArray<FGridCellCandidate> GridCellCandidates;
+    TArray<FGridCellCandidate> RenderGridCells;
     uint32 HZBRenderCellCount = 0;
 
     void Reset() {
@@ -69,6 +70,7 @@ struct FViewRenderData
         TextCamera = nullptr;
         TextRequests.Empty();
         GridCellCandidates.Empty();
+        RenderGridCells.Empty();
         HZBRenderCellCount = 0;
     }
 

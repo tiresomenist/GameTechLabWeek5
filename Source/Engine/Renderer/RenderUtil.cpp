@@ -47,20 +47,15 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 				return;
 			}
 
-			FRenderObjectData Object{};
-			Object.SourcePrimitive = Primitive;
-			Object.World = Primitive->GetRenderWorldMatrix(Camera);
-			Object.SortCenterWS = Object.World.GetOrigin();
+			if (CachedWorldBounds && !bSkipPrimitiveFrustum && Frustum &&
+				!Frustum->Intersects(*CachedWorldBounds)) return;
+			const FMatrix& World = Primitive->GetRenderWorldMatrix(Camera);
+			FVector SortCenterWS = World.GetOrigin();
 			bool bHasWorldCenter = CachedWorldBounds != nullptr;
 
 			if (CachedWorldBounds)
 			{
-				Object.SortCenterWS = (CachedWorldBounds->Min + CachedWorldBounds->Max) * 0.5f;
-
-				if (!bSkipPrimitiveFrustum)
-				{
-					if (Frustum && !Frustum->Intersects(*CachedWorldBounds)) return;
-				}
+				SortCenterWS = (CachedWorldBounds->Min + CachedWorldBounds->Max) * 0.5f;
 			}
 			else {
 				FVector LocalMin{};
@@ -73,13 +68,13 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 					if (bSkipPrimitiveFrustum)
 					{
 						// 셀 전체가 내부이면 객체 Bounds를 만들지 않고 LOD·정렬용 중심만 계산합니다.
-						Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
+						SortCenterWS = World.TransformPosition((LocalMin + LocalMax) * 0.5f);
 					}
 					else
 					{
 						// 경계 셀과 개별 객체는 Bounds 변환 중 계산한 중심까지 함께 재사용합니다.
 						const FBoundingBox WorldBounds = FBoundingBox(LocalMin, LocalMax).
-							TransformBounds(Object.World, &Object.SortCenterWS);
+							TransformBounds(World, &SortCenterWS);
 
 						if (Frustum && !Frustum->Intersects(WorldBounds)) return;
 					}
@@ -90,13 +85,17 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			const int32 FirstIndex = RenderList.Num();
 
 			// 캐시와 직접 계산 경로 모두 중심의 유효성을 LOD 수집에 전달합니다.
-			const FPrimitiveRenderContext Context{ Camera, Object.World, Object.SortCenterWS, CameraLocation, bHasWorldCenter };
+			const FPrimitiveRenderContext Context{ Camera, World, SortCenterWS, CameraLocation, bHasWorldCenter };
 			Primitive->CreateRenderData(RenderList, Context, Primitive == SelectedComponent);
 			const int32 EndIndex = RenderList.Num();
 			if (FirstIndex == EndIndex) { return; }
 
 			const uint32 ObjectIndex = static_cast<uint32>(Objects.Num());
-			Objects.Add(Object);
+			Objects.GetVector().emplace_back();
+			FRenderObjectData& Object = Objects.Last();
+			Object.SourcePrimitive = Primitive;
+			Object.World = World;
+			Object.SortCenterWS = SortCenterWS;
 
 			for (int32 Index = FirstIndex; Index < EndIndex; ++Index)
 			{
@@ -323,8 +322,9 @@ void RenderUtil::GatherGridCellCandidates(UScene* Scene, const FFrustum* Frustum
 		bool bFullyInsideFrustum = false;
 		if (Frustum)
 		{
-			if(!Frustum->Intersects(Cell.ContentBounds)) { continue; }
-			bFullyInsideFrustum = Frustum->Contains(Cell.ContentBounds);
+			const FFrustum::EBoxResult Result = Frustum->Classify(Cell.ContentBounds);
+			if (Result == FFrustum::EBoxResult::Outside) continue;
+			bFullyInsideFrustum = Result == FFrustum::EBoxResult::Inside;
 		}
 
 		FGridCellCandidate Candidate{};

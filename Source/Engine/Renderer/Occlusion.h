@@ -15,13 +15,15 @@ struct FHZBCellData
 	FVector4 BoundsMax;
 };
 
+struct FGridCellCandidate;
+
 class FHZBOcclusionCuller
 {
 public:
 	bool UploadCells(ID3D11Device* Device, ID3D11DeviceContext* Context, const TArray<FHZBCellData>& Cells);
 	void Release();
 
-	void QueueReadback(ID3D11DeviceContext* Context, const TArray<uint64>& CellKeys);
+	void QueueReadback(ID3D11DeviceContext* Context, const TArray<FGridCellCandidate>& Cells);
 	bool TryReadback(ID3D11DeviceContext* Context);
 	bool IsVisibleLastFrame(uint64 CellKey) const;
 	void InvalidateCells(const TArray<uint64>& CellKeys);

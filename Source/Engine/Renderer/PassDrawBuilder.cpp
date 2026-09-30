@@ -7,8 +7,7 @@
 void FPassDrawBuilder::BuildPassDraws(
 	const FViewRenderData& ViewLayoutData,
 	FPipelineStateCache* PipelineCache,
-	FPassDrawList& OutPassDraws,
-	const TArray<uint32>& PrimitiveVisibility)
+	FPassDrawList& OutPassDraws)
 {
 
 	OutPassDraws.Clear();
@@ -54,13 +53,22 @@ void FPassDrawBuilder::BuildPassDraws(
 
 	const FMaterial* LastMaterial = nullptr;
 	uint32 LastMaterialCBIndex = InvalidRenderId;
+	const FMaterial* PreviousMaterial = nullptr;
+	uint32 PreviousMaterialCBIndex = InvalidRenderId;
 
 	auto GetOrCreateMaterialCBIndex =
-		[this, &LastMaterial, &LastMaterialCBIndex]
+		[this, &LastMaterial, &LastMaterialCBIndex,
+			&PreviousMaterial, &PreviousMaterialCBIndex]
 		(const FMaterial* Material) -> uint32
 		{
 			if (Material == LastMaterial)
 				return LastMaterialCBIndex;
+			if (Material == PreviousMaterial)
+			{
+				std::swap(LastMaterial, PreviousMaterial);
+				std::swap(LastMaterialCBIndex, PreviousMaterialCBIndex);
+				return LastMaterialCBIndex;
+			}
 
 			uint32 MaterialCBIndex;
 
@@ -80,6 +88,8 @@ void FPassDrawBuilder::BuildPassDraws(
 					MaterialCBIndex);
 			}
 
+			PreviousMaterial = LastMaterial;
+			PreviousMaterialCBIndex = LastMaterialCBIndex;
 			LastMaterial = Material;
 			LastMaterialCBIndex = MaterialCBIndex;
 
@@ -103,10 +113,6 @@ void FPassDrawBuilder::BuildPassDraws(
 		Index < ViewLayoutData.Primitives.Num();
 		++Index)
 	{
-		// 페이지 조회 / CB 매핑보다 먼저 제외
-		if (PrimitiveVisibility[Index] == 0)
-			continue;
-
 		const FPrimitiveRenderData& Prim =
 			ViewLayoutData.Primitives[Index];
 
@@ -229,7 +235,9 @@ void FPassDrawBuilder::BuildPassDraws(
 		// ---------------------------------------------------------
 		// Draw 생성
 		// ---------------------------------------------------------
-		FPreparedDraw Draw;
+		FPreparedDraw& Draw = bIsTransparent
+			? OutPassDraws.AdditiveDraws.GetVector().emplace_back()
+			: OutPassDraws.OpaqueDraws.GetVector().emplace_back();
 
 		Draw.Source = &Prim;
 		Draw.PipelineId = State->PipelineId;
@@ -249,11 +257,6 @@ void FPassDrawBuilder::BuildPassDraws(
 				(static_cast<uint64>(Draw.DepthBucket) << 16) |
 				(static_cast<uint64>(Draw.MeshPageId));
 
-			OutPassDraws.OpaqueDraws.Add(Draw);
-		}
-		else
-		{
-			OutPassDraws.AdditiveDraws.Add(Draw);
 		}
 
 		// ---------------------------------------------------------

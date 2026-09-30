@@ -73,18 +73,17 @@ namespace
 			throw std::runtime_error(std::format("D3D resource creation failed: {}", Result));
 	}
 
-	TArray<FHZBCellData> BuildHZBCellData(const TArray<FGridCellCandidate>& Candidates)
+	void BuildHZBCellData(const TArray<FGridCellCandidate>& Candidates, TArray<FHZBCellData>& OutCells)
 	{
-		TArray<FHZBCellData> Result;
-		Result.Reserve(Candidates.Num());
+		OutCells.Empty();
+		OutCells.Reserve(Candidates.Num());
 		for (const FGridCellCandidate& Candidate : Candidates)
 		{
 			FHZBCellData Data{};
 			Data.BoundsMin = FVector4(Candidate.OcclusionBounds.Min, 0.0f);
 			Data.BoundsMax = FVector4(Candidate.OcclusionBounds.Max, 0.0f);
-			Result.Add(Data);
+			OutCells.Add(Data);
 		}
-		return Result;
 	}
 }
 void FViewRenderer::Create(ID3D11Device* InDevice, ID3D11DeviceContext* InContext)
@@ -125,7 +124,6 @@ void FViewRenderer::Shutdown()
 		Entry.second.Culler.Release();
 	}
 	HZBViewStates.Empty();
-	PrimitiveVisibility.Empty();
 	ReleaseConstantBuffer();
 	ReleaseShaders();
 	ReleaseRasterizerState();
@@ -409,8 +407,6 @@ void FViewRenderer::RenderPrimitive(const FPrimitiveRenderData& Data, EViewModeI
 // View별 유효한 판정으로 가시성 배열을 만들고 다음 GPU 판정을 제출한다.
 void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, const FHZBViewInput& HZB)
 {
-	PrimitiveVisibility.SetNum(Data.Primitives.Num());
-	for (uint32& Visible : PrimitiveVisibility) Visible = 1;
 	bool bDispatched = false;
 
 	if (!bEnableHZBOcclusion)
@@ -476,8 +472,8 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 	// 이전 읽기가 끝난 경우에만 단일 staging 버퍼에 새 요청을 보낸다.
 	if (!State.Culler.IsReadbackPending())
 	{
-		const TArray<FHZBCellData> GPUCells = BuildHZBCellData(HZBCells);
-		if (!State.Culler.UploadCells(D3DDevice, DeviceContext, GPUCells))
+		BuildHZBCellData(HZBCells, State.CellUploadScratch);
+		if (!State.Culler.UploadCells(D3DDevice, DeviceContext, State.CellUploadScratch))
 		{
 			State.Culler.Release();
 			SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()),
@@ -513,13 +509,7 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 		DeviceContext->CSSetUnorderedAccessViews(1, 1, &NullUAV, nullptr);
 		DeviceContext->CSSetConstantBuffers(1, 1, &NullBuffer);
 		DeviceContext->CSSetShader(nullptr, nullptr, 0);
-		TArray<uint64> CellKeys;
-		CellKeys.Reserve(HZBCells.Num());
-		for (const FGridCellCandidate& Cell : HZBCells)
-		{
-			CellKeys.Add(Cell.Key);
-		}
-		State.Culler.QueueReadback(DeviceContext, CellKeys);
+		State.Culler.QueueReadback(DeviceContext, HZBCells);
 	}
 	SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()),
 		Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
@@ -542,8 +532,7 @@ void FViewRenderer::RenderView(
 
 	// 수집 데이터의 ObjectIndex와 배열 위치는 그대로 유지한다.
 	PreparePrimitiveVisibility(Data, HZB);
-	PassDrawBuilder.BuildPassDraws(
-		Data, &PipelineStateCache, PassDraws, PrimitiveVisibility);
+	PassDrawBuilder.BuildPassDraws(Data, &PipelineStateCache, PassDraws);
 	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws, OpaqueSortDrawScratch, OpaqueSortIndexScratchA, OpaqueSortIndexScratchB);
 
 	{
@@ -886,10 +875,10 @@ void FViewRenderer::RenderVisibleText(const FViewRenderData& Data)
 	for (uint32& Visible : TextObjectVisibility) Visible = 0;
 
 	// 여러 섹션 중 하나라도 살아 있으면 해당 객체의 UUID를 표시한다.
-	for (int32 Index = 0; Index < Data.Primitives.Num(); ++Index)
+	for (const FPrimitiveRenderData& Primitive : Data.Primitives)
 	{
-		const uint32 ObjectIndex = Data.Primitives[Index].ObjectIndex;
-		if (PrimitiveVisibility[Index] != 0 && ObjectIndex < static_cast<uint32>(TextObjectVisibility.Num()))
+		const uint32 ObjectIndex = Primitive.ObjectIndex;
+		if (ObjectIndex < static_cast<uint32>(TextObjectVisibility.Num()))
 		{
 			TextObjectVisibility[ObjectIndex] = 1;
 		}

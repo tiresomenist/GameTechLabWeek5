@@ -549,12 +549,12 @@ void FRenderer::RenderOneView(FEditor* Editor, UScene* Scene, const FRenderView&
 	{
 		RenderUtil::GatherGridCellCandidates(Scene, &Frustum, ViewData.GridCellCandidates);
 
-		TArray<FGridCellCandidate> RenderGridCells;
-		ViewRenderer.FilterGridCellCandidates(ViewData.View, HZB, ViewData.GridCellCandidates, RenderGridCells);
-		ViewData.HZBRenderCellCount = static_cast<uint32>(RenderGridCells.Num());
+		ViewRenderer.FilterGridCellCandidates(ViewData.View, HZB, ViewData.GridCellCandidates,
+			ViewData.RenderGridCells);
+		ViewData.HZBRenderCellCount = static_cast<uint32>(ViewData.RenderGridCells.Num());
 
 		RenderUtil::GetRenderList(Editor, Scene, Camera, ViewData.Primitives, ViewData.Objects,
-			RenderGridCells, &Frustum);
+			ViewData.RenderGridCells, &Frustum);
 	}
 	if (View.bDrawEditorGizmos)
 	{

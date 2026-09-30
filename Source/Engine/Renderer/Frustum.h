@@ -24,6 +24,7 @@ struct FPlane
 
 struct FFrustum
 {
+	enum class EBoxResult : std::uint8_t { Outside, Intersecting, Inside };
 	FPlane Left;
 	FPlane Right;
 	FPlane Bottom;
@@ -122,32 +123,23 @@ struct FFrustum
 		return true;
 	}
 
-	bool Contains(const FBoundingBox& Bounds) const
+	EBoxResult Classify(const FBoundingBox& Bounds) const
 	{
-		const FPlane Planes[6] =
-		{
-			Left,
-			Right,
-			Bottom,
-			Top,
-			Near,
-			Far
-		};
-
+		const FPlane Planes[6] = { Left, Right, Bottom, Top, Near, Far };
+		bool bFullyInside = true;
 		for (const FPlane& Plane : Planes)
 		{
-			FVector NegativeVertex;
-			NegativeVertex.X = Plane.A >= 0.0f ? Bounds.Min.X : Bounds.Max.X;
-			NegativeVertex.Y = Plane.B >= 0.0f ? Bounds.Min.Y : Bounds.Max.Y;
-			NegativeVertex.Z = Plane.C >= 0.0f ? Bounds.Min.Z : Bounds.Max.Z;
-
-			// 경계 근처는 기존 개별 검사 경로 이용
-			if (Plane.Distance(NegativeVertex) < 1.0e-4f)
-			{
-				return false;
-			}
+			const FVector Positive(
+				Plane.A >= 0.0f ? Bounds.Max.X : Bounds.Min.X,
+				Plane.B >= 0.0f ? Bounds.Max.Y : Bounds.Min.Y,
+				Plane.C >= 0.0f ? Bounds.Max.Z : Bounds.Min.Z);
+			if (Plane.Distance(Positive) < 0.0f) return EBoxResult::Outside;
+			const FVector Negative(
+				Plane.A >= 0.0f ? Bounds.Min.X : Bounds.Max.X,
+				Plane.B >= 0.0f ? Bounds.Min.Y : Bounds.Max.Y,
+				Plane.C >= 0.0f ? Bounds.Min.Z : Bounds.Max.Z);
+			bFullyInside &= Plane.Distance(Negative) >= 1.0e-4f;
 		}
-
-		return true;
+		return bFullyInside ? EBoxResult::Inside : EBoxResult::Intersecting;
 	}
 };

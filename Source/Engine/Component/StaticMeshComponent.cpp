@@ -254,7 +254,7 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 		assert(Section.IndexCount <=
 			Allocation.IndexCount - Section.FirstIndex);
 
-		FPrimitiveRenderData Data{};
+		FPrimitiveRenderData& Data = ComponentRenderData.GetVector().emplace_back();
 		Data.Geometry.MeshPageId = Allocation.MeshPageId;
 		Data.Geometry.FirstIndex =
 			Allocation.FirstIndex + Section.FirstIndex;
@@ -275,7 +275,6 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 		if (bSelected)
 			Data.Flags |= Primitive_Selected;
 
-		ComponentRenderData.Add(Data);
 	}
 }
 

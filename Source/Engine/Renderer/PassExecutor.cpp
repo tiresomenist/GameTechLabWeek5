@@ -77,18 +77,23 @@ void FPassExecutor::ExecutePass(ID3D11DeviceContext1* Context1, const TArray<FPr
 			m_LastMaterialId = Draw.MaterialId;
 		}
 
-		// 4. Constant Buffer Ranges 바인딩 (D3D11.1 Context1 API 핵심)
+		// Object b0는 매 draw마다 바뀌지만 Material b1은 재질이 바뀔 때만 다시 묶는다.
 		const FCBRangeAllocation& ObjCBAlloc = CBManager.GetObjectCBRange(Draw.ObjectConstantIndex);
-		const FCBRangeAllocation& MatCBAlloc = CBManager.GetMaterialCBRange(Draw.MaterialConstantIndex);
+		ID3D11Buffer* ObjectBuffer = ObjCBAlloc.Buffer;
+		UINT ObjectFirst = ObjCBAlloc.FirstConstant;
+		UINT ObjectCount = ObjCBAlloc.NumConstants;
+		Context1->VSSetConstantBuffers1(0, 1, &ObjectBuffer, &ObjectFirst, &ObjectCount);
 
-		// b0 (Object) & b1 (Material) 슬롯 Range 배열 구성
-		ID3D11Buffer* CBBuffers[2] = { ObjCBAlloc.Buffer, MatCBAlloc.Buffer };
-		UINT FirstConstants[2] = { ObjCBAlloc.FirstConstant, MatCBAlloc.FirstConstant };
-		UINT NumConstants[2] = { ObjCBAlloc.NumConstants, MatCBAlloc.NumConstants };
-
-		// D3D11.1 Partial Constant Buffer Updates 바인딩
-		Context1->VSSetConstantBuffers1(0, 2, CBBuffers, FirstConstants, NumConstants);
-		Context1->PSSetConstantBuffers1(0, 2, CBBuffers, FirstConstants, NumConstants);
+		if (Draw.MaterialConstantIndex != m_LastMaterialConstantIndex)
+		{
+			const FCBRangeAllocation& MatCBAlloc = CBManager.GetMaterialCBRange(Draw.MaterialConstantIndex);
+			ID3D11Buffer* MaterialBuffer = MatCBAlloc.Buffer;
+			UINT MaterialFirst = MatCBAlloc.FirstConstant;
+			UINT MaterialCount = MatCBAlloc.NumConstants;
+			Context1->VSSetConstantBuffers1(1, 1, &MaterialBuffer, &MaterialFirst, &MaterialCount);
+			Context1->PSSetConstantBuffers1(1, 1, &MaterialBuffer, &MaterialFirst, &MaterialCount);
+			m_LastMaterialConstantIndex = Draw.MaterialConstantIndex;
+		}
 
 		// 5. DrawIndexed 실행
 		const auto& Geo = Draw.Source->Geometry;
