@@ -26,7 +26,7 @@
 
 namespace
 {
-	constexpr float StaticUniformGridCellSize = 4.0f;
+    constexpr float StaticUniformGridCellSize = 3.0f;
 
 	uint64 MakeStaticUniformGridKey(int32 X, int32 Y, int32 Z)
 	{
@@ -483,7 +483,7 @@ void UScene::ClearActors()
     BVH.Clear();
     // 그리드가 보관한 컴포넌트 참조도 객체 삭제 전에 해제합니다.
     StaticUniformGrid.Empty();
-    StaticUniformGridFallbackPrimitives.Empty();
+    StaticUniformGridFallback.Empty();
     InvalidateStaticUniformGrid();
     PrimitiveComponents.Empty();
     NonStaticMeshComponents.Empty();
@@ -518,10 +518,10 @@ const TArray<FStaticUniformGridCell>& UScene::GetStaticUniformGrid() const
 	return StaticUniformGrid;
 }
 
-const TArray<UPrimitiveComponent*>& UScene::GetStaticUniformGridFallbackPrimitives() const
+const TArray<UPrimitiveComponent*>& UScene::GetStaticUniformGridFallback() const
 {
 	BuildStaticUniformGrid();
-	return StaticUniformGridFallbackPrimitives;
+	return StaticUniformGridFallback;
 }
 
 void UScene::BuildStaticUniformGrid() const
@@ -529,8 +529,10 @@ void UScene::BuildStaticUniformGrid() const
 	if (!bStaticUniformGridDirty) return;
 
 	StaticUniformGrid.Empty();
-	StaticUniformGridFallbackPrimitives.Empty();
-	TMap<uint64, int32> CellIndices;
+	StaticUniformGridFallback.Empty();
+    StaticUniformGridCellIndices.Empty();
+    StaticMeshCellKeys.Empty();
+
 	ForEachPrimitive([&](UPrimitiveComponent* Primitive)
 		{
 			if (!Primitive->IsA(UStaticMeshComponent::GetClass())) return;
@@ -539,7 +541,7 @@ void UScene::BuildStaticUniformGrid() const
 			FVector LocalMax{};
 			if (!Primitive->GetLocalBounds(LocalMin, LocalMax))
 			{
-				StaticUniformGridFallbackPrimitives.Add(Primitive);
+				StaticUniformGridFallback.Add(Primitive);
 				return;
 			}
 
@@ -562,12 +564,12 @@ void UScene::BuildStaticUniformGrid() const
             const bool bTooLargeForGrid = SpanX > 2 || SpanY > 2 || SpanZ > 2;
 			if (bTooLargeForGrid)
 			{
-				StaticUniformGridFallbackPrimitives.Add(Primitive);
+				StaticUniformGridFallback.Add(Primitive);
 				return;
 			}
 
 			const uint64 Key = MakeStaticUniformGridKey(CellX, CellY, CellZ);
-			int32* CellIndex = CellIndices.Find(Key);
+			int32* CellIndex = StaticUniformGridCellIndices.Find(Key);
 
 			if (CellIndex == nullptr)
 			{
@@ -576,8 +578,8 @@ void UScene::BuildStaticUniformGrid() const
 				NewCell.SpatialBounds = MakeStaticUniformGridBounds(CellX, CellY, CellZ);
 				StaticUniformGrid.Add(std::move(NewCell));
 				const int32 NewIndex = StaticUniformGrid.Num() - 1;
-				CellIndices.Add(Key, NewIndex);
-				CellIndex = CellIndices.Find(Key);
+                StaticUniformGridCellIndices.Add(Key, NewIndex);
+				CellIndex = StaticUniformGridCellIndices.Find(Key);
 			}
             FStaticUniformGridCell& Cell = StaticUniformGrid[*CellIndex];
 
@@ -591,14 +593,135 @@ void UScene::BuildStaticUniformGrid() const
                 Cell.ContentBounds.Min.X = std::min(Cell.ContentBounds.Min.X, WorldBounds.Min.X);
                 Cell.ContentBounds.Min.Y = std::min(Cell.ContentBounds.Min.Y, WorldBounds.Min.Y);
                 Cell.ContentBounds.Min.Z = std::min(Cell.ContentBounds.Min.Z, WorldBounds.Min.Z);
-
                 Cell.ContentBounds.Max.X = std::max(Cell.ContentBounds.Max.X, WorldBounds.Max.X);
                 Cell.ContentBounds.Max.Y = std::max(Cell.ContentBounds.Max.Y, WorldBounds.Max.Y);
                 Cell.ContentBounds.Max.Z = std::max(Cell.ContentBounds.Max.Z, WorldBounds.Max.Z);
             }
             Cell.Primitives.Add(Primitive);
+            StaticMeshCellKeys.Add(static_cast<UStaticMeshComponent*>(Primitive), Key);
 		});
 	bStaticUniformGridDirty = false;
+}
+
+void UScene::RebuildCellContentBounds(FStaticUniformGridCell& Cell) const
+{
+    bool bFirst = true;
+
+    for (UPrimitiveComponent* Primitive : Cell.Primitives)
+    {
+        FVector LocalMin{};
+        FVector LocalMax{};
+
+        if (!Primitive->GetLocalBounds(LocalMin, LocalMax))
+        {
+            continue;
+        }
+
+        const FBoundingBox Bounds =  FBoundingBox(LocalMin, LocalMax).TransformBounds(Primitive->GetWorldMatrix());
+
+        if (bFirst)
+        {
+            Cell.ContentBounds = Bounds;
+            bFirst = false;
+            continue;
+        }
+
+        Cell.ContentBounds.Min.X = std::min(Cell.ContentBounds.Min.X, Bounds.Min.X);
+        Cell.ContentBounds.Min.Y = std::min(Cell.ContentBounds.Min.Y, Bounds.Min.Y);
+        Cell.ContentBounds.Min.Z = std::min(Cell.ContentBounds.Min.Z, Bounds.Min.Z);
+        Cell.ContentBounds.Max.X = std::max(Cell.ContentBounds.Max.X, Bounds.Max.X);
+        Cell.ContentBounds.Max.Y = std::max(Cell.ContentBounds.Max.Y, Bounds.Max.Y);
+        Cell.ContentBounds.Max.Z = std::max(Cell.ContentBounds.Max.Z, Bounds.Max.Z);
+    }
+}
+
+void UScene::UpdateStaticUniformGridForActor(AActor* Actor, TArray<uint64>& ChangedCellKeys)
+{
+    ChangedCellKeys.Empty();
+
+    if (!Actor || StaticMeshCellKeys.IsEmpty())
+    {
+        return;
+    }
+
+    for (UActorComponent* Component : Actor->GetComponents())
+    {
+        if (!Component->IsA(UStaticMeshComponent::GetClass()))
+        {
+            continue;
+        }
+        UStaticMeshComponent* StaticMesh = static_cast<UStaticMeshComponent*>(Component);
+
+        uint64* OldKey = StaticMeshCellKeys.Find(StaticMesh);
+        if (!OldKey)
+        {
+            bStaticUniformGridDirty = true;
+            continue;
+        }
+        
+        const uint64 PreviousKey = *OldKey;
+        int32* OldCellIndex = StaticUniformGridCellIndices.Find(PreviousKey);
+        if(!OldCellIndex)
+        {
+            bStaticUniformGridDirty = true;
+            continue;
+        }
+
+        FStaticUniformGridCell& OldCell = StaticUniformGrid[*OldCellIndex];
+        OldCell.Primitives.Remove(StaticMesh);
+
+        RebuildCellContentBounds(OldCell);
+        ChangedCellKeys.Add(PreviousKey);
+
+        FVector LocalMin{};
+        FVector LocalMax{};
+
+        const FBoundingBox Bounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(StaticMesh->GetWorldMatrix());
+        const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
+
+        const int32 CellX = static_cast<int32>(std::floor(Center.X / StaticUniformGridCellSize));
+        const int32 CellY = static_cast<int32>( std::floor(Center.Y / StaticUniformGridCellSize));
+        const int32 CellZ = static_cast<int32>(std::floor(Center.Z / StaticUniformGridCellSize));
+
+        const uint64 NewKey = MakeStaticUniformGridKey(CellX, CellY, CellZ);
+
+        int32* NewCellIndex = StaticUniformGridCellIndices.Find(NewKey);
+        if (!NewCellIndex)
+        {
+            FStaticUniformGridCell NewCell{};
+            NewCell.Key = NewKey;
+            NewCell.SpatialBounds = MakeStaticUniformGridBounds(CellX, CellY, CellZ);
+            NewCell.ContentBounds = Bounds;
+
+            StaticUniformGrid.Add(std::move(NewCell));
+
+            const int32 NewIndex = StaticUniformGrid.Num() - 1; 
+            StaticUniformGridCellIndices.Add(NewKey, NewIndex);
+            NewCellIndex = StaticUniformGridCellIndices.Find(NewKey);
+        }
+
+        FStaticUniformGridCell& NewCell = StaticUniformGrid[*NewCellIndex];
+
+        if (NewCell.Primitives.IsEmpty())
+        {
+            NewCell.ContentBounds = Bounds;
+        }
+        else
+        {
+            NewCell.ContentBounds.Min.X = std::min(NewCell.ContentBounds.Min.X, Bounds.Min.X);
+            NewCell.ContentBounds.Min.Y = std::min(NewCell.ContentBounds.Min.Y, Bounds.Min.Y);
+            NewCell.ContentBounds.Min.Z = std::min(NewCell.ContentBounds.Min.Z, Bounds.Min.Z);
+            NewCell.ContentBounds.Max.X = std::max(NewCell.ContentBounds.Max.X, Bounds.Max.X);
+            NewCell.ContentBounds.Max.Y =  std::max(NewCell.ContentBounds.Max.Y, Bounds.Max.Y);
+            NewCell.ContentBounds.Max.Z = std::max(NewCell.ContentBounds.Max.Z, Bounds.Max.Z);
+        }
+        NewCell.Primitives.Add(StaticMesh);
+
+        StaticMeshCellKeys[StaticMesh] = NewKey;
+        ChangedCellKeys.Add(NewKey);
+    }
+
+    bStaticUniformGridDirty = false;
 }
 
 UScene::~UScene()
@@ -759,4 +882,5 @@ void UScene::UnregisterComponent(UActorComponent* Component)
     if (MainCamera == Component)
         MainCamera = nullptr;
 }
+
 

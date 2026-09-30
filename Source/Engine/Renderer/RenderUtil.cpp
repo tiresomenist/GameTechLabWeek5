@@ -95,7 +95,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 		}
 	}
 
-	for (UPrimitiveComponent* Primitive : Scene->GetStaticUniformGridFallbackPrimitives())
+	for (UPrimitiveComponent* Primitive : Scene->GetStaticUniformGridFallback())
 	{
 		AddPrimitive(Primitive);
 	}
