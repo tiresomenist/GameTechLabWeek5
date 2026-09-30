@@ -18,6 +18,8 @@ struct FRay {
 	FVector Direction;
 };
 
+struct FRayAABBCache;
+
 
 // Todo: BVH
 class FSceneBVHNode;
@@ -43,13 +45,14 @@ private:
 
 	// Todo: BVH
 	void TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
+	bool RayAABBIntersectCached(const FRay& Ray, const FRayAABBCache& Cache, const FVector& BoundsMin, const FVector& BoundsMax, float MaxDistance, float& OutDistance);
 	//void PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
 
 	// Todo: BVH Mesh
 	//bool PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, float& ClosestDistance);
 
-	void PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject, float EnterDistance = -1.0f);
-	bool PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, float& ClosestDistance, float EnterDistance = -1.0f);
+	void PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, const FRayAABBCache& Cache, float& ClosestDistance, USceneComponent*& SelectedObject, float EnterDistance = -1.0f);
+	bool PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, const FRayAABBCache& Cache, float& ClosestDistance, float EnterDistance = -1.0f);
 };
 
 

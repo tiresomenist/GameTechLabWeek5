@@ -17,6 +17,19 @@
 // Todo: BVH
 #include "Engine/Scene/SceneBVH.h"
 
+struct FRayAABBCache
+{
+	explicit FRayAABBCache(const FRay& Ray)
+		: InverseDirection(
+			Ray.Direction.X != 0.0f ? 1.0f / Ray.Direction.X : 0.0f,
+			Ray.Direction.Y != 0.0f ? 1.0f / Ray.Direction.Y : 0.0f,
+			Ray.Direction.Z != 0.0f ? 1.0f / Ray.Direction.Z : 0.0f)
+	{
+	}
+
+	FVector InverseDirection;
+};
+
 FObjectPicker::FObjectPicker(FEditor* InEditor)
 	: Editor{ InEditor }
 {
@@ -121,6 +134,49 @@ bool FObjectPicker::RayAABBIntersect(const FRay& Ray,const FVector& BoundsMin,co
 	return true;
 }
 
+bool FObjectPicker::RayAABBIntersectCached(const FRay& Ray, const FRayAABBCache& Cache, const FVector& BoundsMin, const FVector& BoundsMax, float MaxDistance, float& OutDistance)
+{
+	float Enter = 0.0f;
+	float Exit = MaxDistance;
+
+	auto TestAxis = [&](float Origin, float Direction, float InverseDirection, float Min, float Max) -> bool
+		{
+			if (Direction == 0.0f)
+				return Origin >= Min && Origin <= Max;
+
+			float T0;
+			float T1;
+			if (std::isfinite(InverseDirection))
+			{
+				T0 = (Min - Origin) * InverseDirection;
+				T1 = (Max - Origin) * InverseDirection;
+			}
+			else
+			{
+				// 극히 작은 방향 성분의 역수가 무한대라면 기존 나눗셈을 사용한다.
+				T0 = (Min - Origin) / Direction;
+				T1 = (Max - Origin) / Direction;
+			}
+
+			if (T0 > T1)
+				std::swap(T0, T1);
+
+			Enter = (std::max)(Enter, T0);
+			Exit = (std::min)(Exit, T1);
+			return Enter <= Exit;
+		};
+
+	if (!TestAxis(Ray.Origin.X, Ray.Direction.X, Cache.InverseDirection.X, BoundsMin.X, BoundsMax.X))
+		return false;
+	if (!TestAxis(Ray.Origin.Y, Ray.Direction.Y, Cache.InverseDirection.Y, BoundsMin.Y, BoundsMax.Y))
+		return false;
+	if (!TestAxis(Ray.Origin.Z, Ray.Direction.Z, Cache.InverseDirection.Z, BoundsMin.Z, BoundsMax.Z))
+		return false;
+
+	OutDistance = Enter;
+	return true;
+}
+
 // 피킹 시간 계산 로직 추가
 USceneComponent* FObjectPicker::Pick()
 {
@@ -164,7 +220,8 @@ USceneComponent* FObjectPicker::Pick()
 void FObjectPicker::PickPrimitives(UScene* Scene, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
 {
 	// 정적 메시
-	PickBVHNodeRecursive(Scene->GetBVHRoot(), Ray, ClosestDistance, SelectedObject);
+	const FRayAABBCache WorldCache(Ray);
+	PickBVHNodeRecursive(Scene->GetBVHRoot(), Ray, WorldCache, ClosestDistance, SelectedObject);
 
 	// 이번 단계에서 BVH에 없는 텍스트·플립북
 	Scene->ForEachNonStaticMesh([&](UPrimitiveComponent* Primitive)
@@ -324,9 +381,10 @@ void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ra
 	}
 
 	const FMeshBVH& MeshBVH = Mesh->GetTriangleBVH();
+	const FRayAABBCache LocalCache(LocalRay);
 
 	// 메시 BVH를 탐색해 가장 가까운 삼각형 교차점을 찾는다.
-	if (PickMeshBVHNodeRecursive(MeshBVH.GetRoot(), MeshBVH, *Mesh, LocalRay, ClosestDistance))
+	if (PickMeshBVHNodeRecursive(MeshBVH.GetRoot(), MeshBVH, *Mesh, LocalRay, LocalCache, ClosestDistance))
 	{
 		SelectedObject = Primitive;
 	}
@@ -491,7 +549,7 @@ bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMe
 }
 */
 
-void FObjectPicker::PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject, float EnterDistance)
+void FObjectPicker::PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, const FRayAABBCache& Cache, float& ClosestDistance, USceneComponent*& SelectedObject, float EnterDistance)
 {
 	if (Node == nullptr)
 	{
@@ -501,7 +559,7 @@ void FObjectPicker::PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& 
 	// 아직 검사하지 않은 루트 노드의 AABB를 검사한다.
 	if (EnterDistance < 0.0f)
 	{
-		if (!RayAABBIntersect(Ray, Node->WorldMin, Node->WorldMax, ClosestDistance, EnterDistance))
+		if (!RayAABBIntersectCached(Ray, Cache, Node->WorldMin, Node->WorldMax, ClosestDistance, EnterDistance))
 		{
 			return;
 		}
@@ -530,7 +588,7 @@ void FObjectPicker::PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& 
 	{
 		if (FirstChild != nullptr)
 		{
-			if (!RayAABBIntersect(Ray, FirstChild->WorldMin, FirstChild->WorldMax, ClosestDistance, FirstDistance))
+			if (!RayAABBIntersectCached(Ray, Cache, FirstChild->WorldMin, FirstChild->WorldMax, ClosestDistance, FirstDistance))
 			{
 				FirstChild = nullptr;
 			}
@@ -538,7 +596,7 @@ void FObjectPicker::PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& 
 
 		if (SecondChild != nullptr)
 		{
-			if (!RayAABBIntersect(Ray, SecondChild->WorldMin, SecondChild->WorldMax, ClosestDistance, SecondDistance))
+			if (!RayAABBIntersectCached(Ray, Cache, SecondChild->WorldMin, SecondChild->WorldMax, ClosestDistance, SecondDistance))
 			{
 				SecondChild = nullptr;
 			}
@@ -562,17 +620,17 @@ void FObjectPicker::PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& 
 	// 가까운 자식을 탐색해 최단 교차 거리를 먼저 갱신한다.
 	if (FirstChild != nullptr)
 	{
-		PickBVHNodeRecursive(FirstChild, Ray, ClosestDistance, SelectedObject, FirstDistance);
+		PickBVHNodeRecursive(FirstChild, Ray, Cache, ClosestDistance, SelectedObject, FirstDistance);
 	}
 
 	// 갱신된 최단 거리 안에 있는 경우에만 먼 자식을 탐색한다.
 	if (SecondChild != nullptr && SecondDistance <= ClosestDistance)
 	{
-		PickBVHNodeRecursive(SecondChild, Ray, ClosestDistance, SelectedObject, SecondDistance);
+		PickBVHNodeRecursive(SecondChild, Ray, Cache, ClosestDistance, SelectedObject, SecondDistance);
 	}
 }
 
-bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, float& ClosestDistance, float EnterDistance)
+bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, const FRayAABBCache& Cache, float& ClosestDistance, float EnterDistance)
 {
 	if (Node == nullptr)
 	{
@@ -582,7 +640,7 @@ bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMe
 	// 아직 검사하지 않은 루트 노드의 AABB를 검사한다.
 	if (EnterDistance < 0.0f)
 	{
-		if (!RayAABBIntersect(LocalRay, Node->LocalMin, Node->LocalMax, ClosestDistance, EnterDistance))
+		if (!RayAABBIntersectCached(LocalRay, Cache, Node->LocalMin, Node->LocalMax, ClosestDistance, EnterDistance))
 		{
 			return false;
 		}
@@ -631,7 +689,7 @@ bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMe
 	{
 		if (FirstChild != nullptr)
 		{
-			if (!RayAABBIntersect(LocalRay, FirstChild->LocalMin, FirstChild->LocalMax, ClosestDistance, FirstDistance))
+			if (!RayAABBIntersectCached(LocalRay, Cache, FirstChild->LocalMin, FirstChild->LocalMax, ClosestDistance, FirstDistance))
 			{
 				FirstChild = nullptr;
 			}
@@ -639,7 +697,7 @@ bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMe
 
 		if (SecondChild != nullptr)
 		{
-			if (!RayAABBIntersect(LocalRay, SecondChild->LocalMin, SecondChild->LocalMax, ClosestDistance, SecondDistance))
+			if (!RayAABBIntersectCached(LocalRay, Cache, SecondChild->LocalMin, SecondChild->LocalMax, ClosestDistance, SecondDistance))
 			{
 				SecondChild = nullptr;
 			}
@@ -665,13 +723,13 @@ bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMe
 	// 가까운 자식의 삼각형부터 검사한다.
 	if (FirstChild != nullptr)
 	{
-		bHit = PickMeshBVHNodeRecursive(FirstChild, BVH, Mesh, LocalRay, ClosestDistance, FirstDistance);
+		bHit = PickMeshBVHNodeRecursive(FirstChild, BVH, Mesh, LocalRay, Cache, ClosestDistance, FirstDistance);
 	}
 
 	// 더 가까운 교차점이 있을 수 있는 경우에만 먼 자식을 탐색한다.
 	if (SecondChild != nullptr && SecondDistance <= ClosestDistance)
 	{
-		if (PickMeshBVHNodeRecursive(SecondChild, BVH, Mesh, LocalRay, ClosestDistance, SecondDistance))
+		if (PickMeshBVHNodeRecursive(SecondChild, BVH, Mesh, LocalRay, Cache, ClosestDistance, SecondDistance))
 		{
 			bHit = true;
 		}
