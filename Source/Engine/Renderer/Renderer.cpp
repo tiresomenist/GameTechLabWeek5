@@ -767,7 +767,9 @@ void FRenderer::FinishHZBFrame()
 	Context.UnbindRenderTargets();
 
 	// 생성 경로가 실패하면 다음 프레임은 Hi-Z로 객체를 숨기지 않는다.
-	bHZBValid = BuildHZBMip0();
+	//bHZBValid = BuildHZBMip0();
+	const bool bMip0Built = BuildHZBMip0();
+	bHZBValid = bMip0Built && BuildHZBMips();
 
 	Context.SetRenderTargets(FrameBufferRTV.Get(), DepthStencilView.Get());
 }

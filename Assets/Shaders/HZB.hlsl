@@ -31,13 +31,30 @@ void DownsampleMaxCS(uint3 DispatchThreadID : SV_DispatchThreadID)
     {
         return;
     }
-    const uint2 SourceCoordinate = DispatchThreadID.xy * 2;
-    const uint2 LastSourceCoordinate = SourceSize - uint2(1, 1);
-    const float Depth00 = SourceDepth.Load(int3(min(SourceCoordinate, LastSourceCoordinate), 0));
-    const float Depth10 = SourceDepth.Load(int3(min(SourceCoordinate + uint2(1, 0), LastSourceCoordinate), 0));
-    const float Depth01 = SourceDepth.Load(int3(min(SourceCoordinate + uint2(0, 1), LastSourceCoordinate), 0));
-    const float Depth11 = SourceDepth.Load(int3(min(SourceCoordinate + uint2(1, 1), LastSourceCoordinate), 0));
-    OutputHiZ[DispatchThreadID.xy] = max(max(Depth00, Depth10), max(Depth01, Depth11));
+    
+    const uint2 LastSource = SourceSize - uint2(1, 1);
+    const uint2 SourceBegin = DispatchThreadID.xy * 2;
+    
+    uint2 SourceEnd = min(SourceBegin + uint2(1, 1), LastSource);
+
+    if ((SourceSize.x & 1u) && DispatchThreadID.x == DestinationSize.x - 1)
+    {
+        SourceEnd.x = LastSource.x;
+    }
+    if ((SourceSize.y & 1u) && DispatchThreadID.y == DestinationSize.y - 1)
+    {
+        SourceEnd.y = LastSource.y;
+    }
+
+    float MaxDepth = 0.0f;
+    for (uint Y = SourceBegin.y; Y <= SourceEnd.y; ++Y)
+    {
+        for (uint X = SourceBegin.x; X <= SourceEnd.x; ++X)
+        {
+            MaxDepth = max(MaxDepth, SourceDepth.Load(int3(X, Y, 0)));
+        }
+    }
+    OutputHiZ[DispatchThreadID.xy] = MaxDepth;
 }
 
 struct FHZBCellData
@@ -119,7 +136,7 @@ void CullCellsCS(uint3 DispatchThreadID : SV_DispatchThreadID)
     const float2 ScreenMax = ViewportOffset + float2((NdcMax.x + 1.0f) * 0.5f * ViewportWidth, (1.0f - NdcMin.y) * 0.5f * ViewportHeight);
     const float LargestExtent = max(max(ScreenMax.x - ScreenMin.x, ScreenMax.y - ScreenMin.y), 1.0f);
     
-    const uint MipLevel = min((uint)floor(log2(LargestExtent)), HZBMipCount - 1u);
+    const uint MipLevel = min((uint) ceil(log2(LargestExtent)), HZBMipCount - 1u);
     uint MipWidth;
     uint MipHeight;
     uint MipLevels;
