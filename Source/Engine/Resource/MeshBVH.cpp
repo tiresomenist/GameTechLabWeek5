@@ -84,13 +84,6 @@ FMeshBVHNode* FMeshBVH::BuildNodesIterative(TArray<FMeshTriangleInfo>& TriangleI
     assert(Count > 0);
     assert(StartIndex + Count <= static_cast<uint32>(TriangleInfos.Num()));
 
-    struct FBuildTask
-    {
-        FMeshBVHNode* Node;
-        uint32 StartIndex;
-        uint32 Count;
-    };
-
     FMeshBVHNode* Root = new FMeshBVHNode;
     AllocatedNodes.Add(Root);
 

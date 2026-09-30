@@ -55,6 +55,14 @@ public:
     void Build(const TArray<UStaticMeshComponent*>& Components);
 
 private:
+    struct FBuildTask
+    {
+        FSceneBVHNode* Node;
+        uint32 First;
+        uint32 Count;
+        bool bFinalize;
+    };
+
     bool CalculateWorldBounds(UStaticMeshComponent* Component, FVector& OutMin, FVector& OutMax);
     bool Contains(const FSceneBVHNode* Node, const FVector& Min, const FVector& Max);
 

@@ -348,14 +348,6 @@ FSceneBVHNode* FSceneBVH::BuildNodesIterative(TArray<FBuildItem>& Items, uint32 
     assert(Count > 0);
     assert(First + Count <= static_cast<uint32>(Items.Num()));
 
-    struct FBuildTask
-    {
-        FSceneBVHNode* Node;
-        uint32 First;
-        uint32 Count;
-        bool bFinalize;
-    };
-
     FSceneBVHNode* Root = new FSceneBVHNode;
     TArray<FBuildTask> Stack;
     Stack.Add({ Root, First, Count, false });

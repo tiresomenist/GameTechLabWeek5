@@ -21,6 +21,8 @@
 #include <cstddef>
 #include <vector>
 
+
+
 namespace
 {
     // 보통의 BVH 깊이는 호출 스택에서 처리하고, 더 깊은 트리만 동적 배열을 사용한다.
@@ -245,6 +247,7 @@ bool FObjectPicker::HasRayAABBIntersected(const FRay& Ray, const FRayAABBCache& 
 		if (Enter > Exit) return false;
 
 		OutIntersectedDistance = Enter;
+
 		return true;
 	}
 
@@ -371,28 +374,6 @@ void FObjectPicker::PickPrimitives(UScene* Scene, const FRay& Ray, float& Closes
 		{
 			TestPrimitive(Primitive, Ray, ClosestDistance, SelectedObject);
 		});
-}
-*/
-
-/*
-void FObjectPicker::PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
-{
-	if (!Node) return;
-
-	float Distance = 0.0f;
-	if (!RayAABBIntersect(Ray, Node->WorldMin, Node->WorldMax, ClosestDistance, Distance))
-	{
-		return;
-	}
-
-	if (Node->ComponentOrNull)
-	{
-		TestPrimitive(Node->ComponentOrNull, Ray, ClosestDistance, SelectedObject);
-		return;
-	}
-
-	PickBVHNodeRecursive(Node->LeftChild, Ray, ClosestDistance, SelectedObject);
-	PickBVHNodeRecursive(Node->RightChild, Ray, ClosestDistance, SelectedObject);
 }
 */
 
@@ -533,68 +514,6 @@ void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ra
 	}
 }
 
-// Todo: BVH
-// 프리미티브 피킹 부분, 추가적으로 최적화해야함.
-/*
-void FObjectPicker::PickPrimitives(UScene* Scene, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
-{
-	Scene->ForEachPrimitive([&](UPrimitiveComponent* Primitive)
-		{
-			// Visible 끈 오브젝트는 피킹되지 않음
-			if (!Primitive) return;
-			if (!Primitive->IsVisible()) return;
-			FVector BoundsMin;
-			FVector BoundsMax;
-			if (!Primitive->GetLocalBounds(BoundsMin, BoundsMax)) return;
-
-			FMatrix InverseWorld;
-			const FMatrix& RenderWorldMatrix = Primitive->GetRenderWorldMatrix(Editor->GetEditorCamera());
-			if (!RenderWorldMatrix.TryInverse(InverseWorld)) return;
-			FRay LocalRay;
-			LocalRay.Origin = FVector(FVector4(Ray.Origin, 1.0f) * InverseWorld);
-			LocalRay.Direction = FVector(FVector4(Ray.Direction, 0.0f) * InverseWorld);
-
-
-			//AABB로 후보 선택.
-			float AABBDistance = 0.0f;
-			if (!RayAABBIntersect(LocalRay, BoundsMin, BoundsMax, ClosestDistance, AABBDistance)) return;
-			if (Primitive->IsAABBOnlyPickable())
-			{
-				ClosestDistance = AABBDistance;
-				SelectedObject = Primitive;
-				return;
-			}
-
-			//뮐러-트럼보어로 실제 피킹 처리
-			FMeshResource* Mesh = Primitive->GetMeshResource();
-			if (!Mesh) return;
-			const size_t Count = Mesh->GetIndices().Num();
-			const size_t VertexCount = Mesh->GetPositions().Num();
-			if (Count != Mesh->GetIndexCount() || Count % 3 != 0) return;
-			for (size_t Index = 0; Index < Count; Index += 3)
-			{
-				const uint32 I0 = Mesh->GetIndices()[Index];
-				const uint32 I1 = Mesh->GetIndices()[Index + 1];
-				const uint32 I2 = Mesh->GetIndices()[Index + 2];
-				if (I0 >= VertexCount || I1 >= VertexCount || I2 >= VertexCount) continue;
-				const FVector& A = Mesh->GetPositions()[I0];
-				const FVector& B = Mesh->GetPositions()[I1];
-				const FVector& C = Mesh->GetPositions()[I2];
-				float T;
-				if (RayTriangleIntersect(LocalRay, A, B, C, T))
-				{
-					if (T < ClosestDistance)
-					{
-						ClosestDistance = T;
-						SelectedObject = Primitive;
-					}
-				}
-			}
-		});
-}
-
-*/
-
 // 현재는 Spotlight Icon만 검사중. 장기적으로 구조를 바꿔서 모든 메쉬없는 아이콘에 대해 피킹되도록 해야함
 // UBillboardComponent를 하나 파서, 해당 아이콘이 광원/카메라 등의 메쉬없는 컴포넌트에 연결되도록 하는 형태로 바꾸면 될듯함.
 //void FObjectPicker::PickIcon(UScene* Scene, const UCameraComponent* Camera, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject)
@@ -641,57 +560,6 @@ void FObjectPicker::PickPrimitives(UScene* Scene, const FRay& Ray, float& Closes
 //		});
 //}
 
-/*
-// Todo: BVH Mesh
-bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, float& ClosestDistance)
-{
-	if (Node == nullptr)
-	{
-		return false;
-	}
-
-	float EnterDistance = 0.0f;
-
-	// 레이가 노드 AABB를 빗나가면 그 아래 삼각형을 모두 건너뛴다.
-	if (RayAABBIntersect(LocalRay, Node->LocalMin, Node->LocalMax, ClosestDistance, EnterDistance) == false)
-	{
-		return false;
-	}
-
-	// 리프라면 이 노드에 배정된 삼각형만 정확히 검사한다.
-	if (Node->TrianglesCount > 0)
-	{
-		const TArray<uint32>& TriangleOrders = BVH.GetTriangleOrders();
-		const TArray<uint32>& Indices = Mesh.GetIndices();
-		const TArray<FVector>& Positions = Mesh.GetPositions();
-
-		bool bHit = false;
-		const uint32 End = Node->FirstTriangleOffset + Node->TrianglesCount;
-
-		for (uint32 i = Node->FirstTriangleOffset; i < End; ++i)
-		{
-			const uint32 TriangleIndex = TriangleOrders[i];
-			const uint32 Base = TriangleIndex * 3;
-
-			float HitDistance = 0.0f;
-			if (RayTriangleIntersect(LocalRay, Positions[Indices[Base]], Positions[Indices[Base + 1]], Positions[Indices[Base + 2]], HitDistance) && HitDistance < ClosestDistance)
-			{
-				ClosestDistance = HitDistance;
-				bHit = true;
-			}
-		}
-
-		return bHit;
-	}
-
-	// 내부 노드라면 왼쪽과 오른쪽 자식을 모두 탐색한다.
-	const bool bLeftHit = PickMeshBVHNodeRecursive(Node->LeftChild, BVH, Mesh, LocalRay, ClosestDistance);
-	const bool bRightHit = PickMeshBVHNodeRecursive(Node->RightChild, BVH, Mesh, LocalRay, ClosestDistance);
-
-	return bLeftHit || bRightHit;
-}
-*/
-
 void FObjectPicker::PickSceneBVHNodeIterative(const FSceneBVHNode* Root, const FRay& Ray, const FRayAABBCache& Cache, float& ClosestCandidateDistance, USceneComponent*& SelectedObject)
 {
 	if (Root == nullptr)
@@ -705,13 +573,7 @@ void FObjectPicker::PickSceneBVHNodeIterative(const FSceneBVHNode* Root, const F
 		return;
 	}
 
-	struct FVisit
-	{
-		const FSceneBVHNode* Node;
-		float EntryDistance;
-	};
-
-	TInlineBVHStack<FVisit> Stack;
+	TInlineBVHStack<FSceneVisit> Stack;
 	const FSceneBVHNode* Current = Root;
 
 	while (true)
@@ -759,7 +621,7 @@ void FObjectPicker::PickSceneBVHNodeIterative(const FSceneBVHNode* Root, const F
 		}
 
 		// 보류한 먼 노드만 갱신된 최단 거리로 걸러낸다.
-		FVisit Deferred;
+		FSceneVisit Deferred;
 		do
 		{
 			if (Stack.IsEmpty())
@@ -785,14 +647,8 @@ bool FObjectPicker::PickMeshBVHNodeIterative(const FMeshBVHNode* Root, const FMe
 		return false;
 	}
 
-	struct FVisit
-	{
-		const FMeshBVHNode* Node;
-		float EntryDistance;
-	};
-
 	// 중앙 분할 메시 BVH의 깊이는 uint32 삼각형 개수 기준 32보다 작다.
-	FVisit Stack[32];
+	FMeshVisit Stack[32];
 	uint32 StackCount = 0;
 	const FMeshBVHNode* Current = Root;
 	bool bHit = false;
@@ -854,7 +710,7 @@ bool FObjectPicker::PickMeshBVHNodeIterative(const FMeshBVHNode* Root, const FMe
 		}
 
 		// 보류한 먼 노드만 갱신된 최단 거리로 걸러낸다.
-		FVisit Deferred;
+		FMeshVisit Deferred;
 		do
 		{
 			if (StackCount == 0)

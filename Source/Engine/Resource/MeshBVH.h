@@ -50,6 +50,13 @@ public:
     const TArray<FMeshPickTriangle>& GetPickTriangles() const;
     
 private:
+    struct FBuildTask
+    {
+        FMeshBVHNode* Node;
+        uint32 StartIndex;
+        uint32 Count;
+    };
+
     void Clear();
     FMeshBVHNode* BuildNodesIterative(TArray<FMeshTriangleInfo>& TriangleInfos, uint32 StartIndex, uint32 Count);
 

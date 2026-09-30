@@ -20,7 +20,6 @@ struct FRay {
 
 struct FRayAABBCache;
 
-
 // Todo: BVH
 class FSceneBVHNode;
 
@@ -39,6 +38,18 @@ public:
 	double GetAveragePickTimeMs() const { return TotalPickCount ? TotalPickTimeMs / TotalPickCount : 0.0; }
 
 private:
+	struct FSceneVisit
+	{
+		const FSceneBVHNode* Node;
+		float EntryDistance;
+	};
+
+	struct FMeshVisit
+	{
+		const FMeshBVHNode* Node;
+		float EntryDistance;
+	};
+
 	void PickPrimitives(UScene* Scene, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
 	void PickIcon(UScene* Scene, const UCameraComponent* Camera, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
 
