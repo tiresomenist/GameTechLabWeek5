@@ -108,19 +108,41 @@ struct FFrustum
 		{
 			// Plane normal 방향으로 가장 멀리 있는 AABB 정점
 			FVector positiveVertex;
+			positiveVertex.X = plane.A >= 0.0f ? bounds.Max.X : bounds.Min.X;
+			positiveVertex.Y = plane.B >= 0.0f ? bounds.Max.Y : bounds.Min.Y;
+			positiveVertex.Z = plane.C >= 0.0f ? bounds.Max.Z : bounds.Min.Z;
 
-			positiveVertex.X =
-				plane.A >= 0.0f ? bounds.Max.X : bounds.Min.X;
-
-			positiveVertex.Y =
-				plane.B >= 0.0f ? bounds.Max.Y : bounds.Min.Y;
-
-			positiveVertex.Z =
-				plane.C >= 0.0f ? bounds.Max.Z : bounds.Min.Z;
-
-			// Plane 방향으로 가장 멀리 있는 점조차 바깥이면
-			// AABB 전체가 Frustum 밖
+			// Plane 방향으로 가장 멀리 있는 점조차 바깥이면 AABB 전체가 Frustum 밖
 			if (plane.Distance(positiveVertex) < 0.0f)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	bool Contains(const FBoundingBox& Bounds) const
+	{
+		const FPlane Planes[6] =
+		{
+			Left,
+			Right,
+			Bottom,
+			Top,
+			Near,
+			Far
+		};
+
+		for (const FPlane& Plane : Planes)
+		{
+			FVector NegativeVertex;
+			NegativeVertex.X = Plane.A >= 0.0f ? Bounds.Min.X : Bounds.Max.X;
+			NegativeVertex.Y = Plane.B >= 0.0f ? Bounds.Min.Y : Bounds.Max.Y;
+			NegativeVertex.Z = Plane.C >= 0.0f ? Bounds.Min.Z : Bounds.Max.Z;
+
+			// 경계 근처는 기존 개별 검사 경로 이용
+			if (Plane.Distance(NegativeVertex) < 1.0e-4f)
 			{
 				return false;
 			}

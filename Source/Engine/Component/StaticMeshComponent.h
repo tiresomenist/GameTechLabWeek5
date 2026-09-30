@@ -27,7 +27,7 @@ public:
 
     virtual bool GetLocalBounds(FVector& OutMin, FVector& OutMax) const override;
 
-    virtual void CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, const UCameraComponent* Camera, bool bSelected) override;
+    virtual void CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, const FPrimitiveRenderContext& Context, bool bSelected) override;
 
     virtual FMeshResource* GetMeshResource() const override;
 

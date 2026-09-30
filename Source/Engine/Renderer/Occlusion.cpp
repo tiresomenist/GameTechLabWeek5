@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "Core/Core.h"
 #include "Engine/Renderer/VertexSimple.h"
 #include "Occlusion.h"
@@ -124,7 +125,12 @@ bool FHZBOcclusionCuller::TryReadback(ID3D11DeviceContext* Context)
     }
 
     D3D11_MAPPED_SUBRESOURCE Mapped{};
-    const HRESULT Result = Context->Map(ReadbackBuffer.Get(), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &Mapped);
+    HRESULT Result;
+    {
+        // 복사와 결과 해석을 제외한 Map 호출의 경과 시간입니다.
+        FScopedDebugCpuTime CpuTime(EDebugCpuStat::Readback);
+        Result = Context->Map(ReadbackBuffer.Get(), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &Mapped);
+    }
     if (Result == DXGI_ERROR_WAS_STILL_DRAWING) return false;
     if (FAILED(Result))
     {
@@ -147,4 +153,12 @@ bool FHZBOcclusionCuller::IsVisibleLastFrame(uint64 CellKey) const
 {
     const bool* bVisible = LastFrameVisibility.Find(CellKey);
     return (!bVisible || *bVisible);
+}
+
+void FHZBOcclusionCuller::InvalidateCells(const TArray<uint64>& CellKeys)
+{
+    for (uint64 CellKey : CellKeys)
+    {
+        LastFrameVisibility.Remove(CellKey);
+    }
 }

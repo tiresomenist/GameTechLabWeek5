@@ -88,6 +88,7 @@ private:
 	float DrawStatFPS(ImDrawList* DrawList, float X, float Y);
 	float DrawStatUnit(ImDrawList* DrawList, float X, float Y);
 	float DrawStatMemory(ImDrawList* DrawList, float X, float Y);
+	void DrawDebugStatOverlay();
 	void ApplyPendingSceneCamera();
 
 	// 등록된 Property·Outliner 창에서 진행 중인 이름 편집을 취소한다.
@@ -217,6 +218,8 @@ public:
 	void ShowAllStats() { bShowStatFPS = bShowStatUnit = bShowStatMemory = true; }
 
 	void DrawStatOverlay();
+	bool IsShowingDebugStats() const;
+	void ToggleDebugStats();
 
 	// 씬 렌더링 전에 메뉴와 화면 배치를 구성합니다.
 	virtual void DrawMenu();

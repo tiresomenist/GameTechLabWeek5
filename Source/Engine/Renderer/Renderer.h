@@ -44,13 +44,19 @@ public:
 	{
 		return ViewRenderer.GetSubmissionCounts();
 	}
+
 	void InvalidateOcclusionHistory()
 	{
 		bHZBValid = false;
 		++HZBGeneration;
 	}
+
 	void SetHZBOcclusionEnabled(bool bEnabled) { ViewRenderer.SetHZBOcclusionEnabled(bEnabled); }
 	bool IsHZBOcclusionEnabled() const { return ViewRenderer.IsHZBOcclusionEnabled(); }
+	void InvalidateOcclusionCells(const TArray<uint64>& CellKeys)
+	{
+		ViewRenderer.InvalidateOcclusionCells(CellKeys);
+	}
 
 private:
 	bool CreateSwapChain(HWND HWnd, uint32 Width, uint32 Height);

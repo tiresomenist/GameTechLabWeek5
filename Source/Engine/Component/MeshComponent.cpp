@@ -123,7 +123,8 @@ const FMaterial* UMeshComponent::GetMaterial(uint32 MaterialSlot) const
 		return nullptr;
 }
 
-void UMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, const UCameraComponent* Camera, bool bSelected)
+// 기본 메시 컴포넌트는 별도 렌더 요청을 생성하지 않습니다.
+void UMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& ComponentRenderData, const FPrimitiveRenderContext& Context, bool bSelected)
 {
 	return;
 }

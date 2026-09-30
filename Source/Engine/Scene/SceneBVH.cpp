@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "SceneBVH.h"
 
 #include "Core/Math/Matrix.h"
@@ -16,6 +17,7 @@ FSceneBVH::~FSceneBVH()
 
 void FSceneBVH::Update(UStaticMeshComponent* Component)
 {
+    FScopedDebugCpuTime CpuTime(EDebugCpuStat::BVHUpdate);
     if (!Component)
     {
         return;
@@ -289,6 +291,7 @@ void FSceneBVH::DeleteNodesRecursive(FSceneBVHNode* NodeOrNull)
 
 void FSceneBVH::Build(const TArray<UStaticMeshComponent*>& Components)
 {
+    FScopedDebugCpuTime CpuTime(EDebugCpuStat::BVHBuild);
     Clear();
 
     TArray<FBuildItem> Items;

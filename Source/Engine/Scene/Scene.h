@@ -12,13 +12,20 @@
 // Todo: BVH
 #include "Engine/Scene/SceneBVH.h"
 
-// 실제 Render Data를 만든 뒤, Primitive index가 채워진 cell
+// 정적 grid 안에서 primitive와 현재 world AABB를 보관
+struct FUniformGridPrimitive
+{
+	UPrimitiveComponent* Primitive = nullptr;
+	FBoundingBox WorldBounds;
+};
+
+// 실제 Render Data를 만든 뒤, index가 채워진 cell
 struct FStaticUniformGridCell
 {
 	uint64 Key = 0;
-	FBoundingBox SpatialBounds;  // 고정 4x4
+	FBoundingBox SpatialBounds;  // 고정 nxn
 	FBoundingBox ContentBounds;  // world AABB 합집합
-	TArray<UPrimitiveComponent*> Primitives;
+	TArray<FUniformGridPrimitive> Primitives;
 };
 
 struct FPrimitiveRenderData;
@@ -77,7 +84,7 @@ public:
 	void Destroy(UObject* Object);
 	void DestroyActor(AActor* Actor);
 	const TArray<FStaticUniformGridCell>& GetStaticUniformGrid() const;
-	const TArray<UPrimitiveComponent*>& GetStaticUniformGridFallbackPrimitives() const;
+	const TArray<UPrimitiveComponent*>& GetStaticUniformGridFallback() const;
 	void InvalidateStaticUniformGrid();
 
 	//외부에서 Primitive 접근 제공
@@ -161,6 +168,8 @@ public:
 	// 소속 Component의 Tick 설정을 활성 목록에 반영합니다.
 	void RefreshComponentTick(UActorComponent* Component);
 
+	void UpdateStaticUniformGridForActor(AActor* Actor, TArray<uint64>& ChangedCellKeys);
+
 private:
 	FSceneBVH BVH;
 	// 생성이 끝난 Actor를 이 Scene에 연결하고 기존 컴포넌트를 등록합니다.
@@ -209,10 +218,15 @@ protected:
 	/// 저장/불러오기 시에 사용하는 Scene의 메인 Perspective 카메라의 정보
 	/// </summary>
 	FCameraSaveData MainCameraSaveData{};
+
 	mutable bool bStaticUniformGridDirty = true;
 	mutable TArray<FStaticUniformGridCell> StaticUniformGrid;
-	mutable TArray<UPrimitiveComponent*> StaticUniformGridFallbackPrimitives;
+	mutable TArray<UPrimitiveComponent*> StaticUniformGridFallback;
+	mutable TMap<uint64, int32> StaticUniformGridCellIndices;
+	mutable TMap<UStaticMeshComponent*, uint64> StaticMeshCellKeys;
+
 	void BuildStaticUniformGrid() const;
+	void RebuildCellContentBounds(FStaticUniformGridCell& Cell) const;
 
 public:
 	friend void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
