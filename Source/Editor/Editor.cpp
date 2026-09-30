@@ -497,7 +497,9 @@ void FEditor::SpawnStaticMesh(const FName& MeshKey, int Count)
 	if (!CurrentScene || MeshKey.IsNone() || Count <= 0) return;
 	
 	NotifyOutlinerRowsChanged();
-	
+	const bool bBatchBVH = Count > 1;
+	if (bBatchBVH) CurrentScene->BeginBVHBatchUpdate();
+
 	for (int i = 0; i < Count; ++i)
 	{
 		AActor* Actor = nullptr;
@@ -512,8 +514,6 @@ void FEditor::SpawnStaticMesh(const FName& MeshKey, int Count)
 			if (!StaticMeshComp) throw std::runtime_error("Failed to create a static mesh component.");
 
 			StaticMeshComp->SetStaticMesh(MeshKey);
-			// Todo: BVH
-			CurrentScene->UpdateBVH(StaticMeshComp);
 
 			// 기존 Rocket의 정점색 표시 정책을 유지한다.
 			if (MeshKey == "Rocket")
@@ -522,19 +522,19 @@ void FEditor::SpawnStaticMesh(const FName& MeshKey, int Count)
 			}
 
 			Actor->CreateComponent(UWidgetComponent::GetClass());
+			// 구성이 완료된 Actor만 선택 대상으로 공개한다.
+			SetSelectedActor(Actor);
 		}
 		catch (const std::exception& Error)
 		{
 			// 씬이 소유한 Actor는 씬의 제거 함수로 정리한다.
 			if (Actor) CurrentScene->DestroyActor(Actor);
+			if (bBatchBVH) CurrentScene->EndBVHBatchUpdate();
 			UE_LOG("[Editor] Static mesh spawn failed: {}", Error.what());
 			return;
 		}
-
-		// 구성이 완료된 Actor만 선택 대상으로 공개한다.
-		SetSelectedActor(Actor);
-
 	}
+	if (bBatchBVH) CurrentScene->EndBVHBatchUpdate();
 }
 
 void FEditor::SpawnComponent(FClassType* ComponentClass, int Count)

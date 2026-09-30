@@ -155,6 +155,8 @@ public:
 	void RemoveFromBVH(UStaticMeshComponent* Component);
 	bool RemoveComponent(AActor* Actor, UActorComponent* Component);
 	void RebuildBVH();
+	void BeginBVHBatchUpdate();
+	void EndBVHBatchUpdate();
 
 	const FSceneBVHNode* GetBVHRoot() const
 	{
@@ -199,6 +201,7 @@ private:
 
 	// 역직렬화 중에는 BVH 갱신을 모으고, 복원이 끝나면 재구축합니다.
 	bool bDeferBVHUpdates = false;
+	uint32 BVHBatchDepth = 0;
 
 	friend class AActor;
 protected:

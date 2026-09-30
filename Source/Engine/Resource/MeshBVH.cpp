@@ -19,7 +19,7 @@ void FMeshBVH::Clear()
     }
 
     AllocatedNodes.Empty();
-    TriangleOrders.Empty();
+    PickTriangles.Empty();
     RootOrNull = nullptr;
 }
 
@@ -67,11 +67,15 @@ void FMeshBVH::Build(const TArray<FVector>& Positions, const TArray<uint32>& Ind
 
     RootOrNull = BuildNodesIterative(TriangleInfos, 0, static_cast<uint32>(TriangleInfos.Num()));
 
-    // 리프가 사용할 수 있도록 정렬된 순서의 원본 삼각형 번호를 보관한다.
-    TriangleOrders.Reserve(TriangleInfos.Num());
+    // 리프 순서로 정점과 두 변을 한 번만 계산해 보관한다.
+    PickTriangles.Reserve(TriangleInfos.Num());
     for (uint32 i = 0; i < static_cast<uint32>(TriangleInfos.Num()); ++i)
     {
-        TriangleOrders.Add(TriangleInfos[i].TriangleIndex);
+        const uint32 Base = TriangleInfos[i].TriangleIndex * 3;
+        const FVector& A = Positions[Indices[Base]];
+        const FVector& B = Positions[Indices[Base + 1]];
+        const FVector& C = Positions[Indices[Base + 2]];
+        PickTriangles.Add({ A, B - A, C - A });
     }
 }
 

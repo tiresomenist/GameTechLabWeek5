@@ -51,7 +51,7 @@ private:
 	//bool PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, float& ClosestDistance);
 
 	void PickSceneBVHNodeIterative(const FSceneBVHNode* Root, const FRay& Ray, const FRayAABBCache& Cache, float& ClosestDistance, USceneComponent*& SelectedObject);
-	bool PickMeshBVHNodeIterative(const FMeshBVHNode* Root, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, const FRayAABBCache& Cache, float& ClosestDistance);
+	bool PickMeshBVHNodeIterative(const FMeshBVHNode* Root, const FMeshBVH& BVH, const FRay& LocalRay, const FRayAABBCache& Cache, float& ClosestDistance);
 
 private:
 	//static constexpr float CLOSEST_DISTANCE = 100000.0f;

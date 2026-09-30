@@ -792,7 +792,7 @@ void UScene::UpdateBVH(UStaticMeshComponent* Component)
 
     // 등록과 Bounds 변경은 BVH 갱신 보류 중에도 그리드에 반영해야 합니다.
     InvalidateStaticUniformGrid();
-    if (bDeferBVHUpdates) return;
+    if (bDeferBVHUpdates || BVHBatchDepth > 0) return;
 
     // Bounds가 없으면 FSceneBVH::Update가 기존 리프를 제거합니다.
     BVH.Update(Component);
@@ -823,9 +823,25 @@ void UScene::RebuildBVH()
     BVH.Build(Components);
 }
 
+void UScene::BeginBVHBatchUpdate()
+{
+    ++BVHBatchDepth;
+}
+
+void UScene::EndBVHBatchUpdate()
+{
+    if (BVHBatchDepth == 0) return;
+
+    --BVHBatchDepth;
+    if (BVHBatchDepth == 0 && !bDeferBVHUpdates)
+    {
+        RebuildBVH();
+    }
+}
+
 void UScene::UpdateBVHForActor(AActor* Actor)
 {
-    if (!Actor || Actor->GetScene() != this || bDeferBVHUpdates)
+    if (!Actor || Actor->GetScene() != this || bDeferBVHUpdates || BVHBatchDepth > 0)
     {
         return;
     }

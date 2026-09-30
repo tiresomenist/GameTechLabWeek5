@@ -16,6 +16,7 @@
 
 // Todo: BVH
 #include "Engine/Scene/SceneBVH.h"
+#include "Engine/Resource/MeshBVH.h"
 
 #include <cstddef>
 #include <vector>
@@ -26,10 +27,13 @@ namespace
     template <typename T, std::size_t InlineCapacity = 128>
     class TInlineBVHStack
     {
+        static_assert(InlineCapacity > 0);
+
     public:
         void Add(const T& Entry)
         {
-            if (Overflow.empty() && InlineCount < InlineCapacity)
+            // Overflow는 인라인 영역이 가득 찬 뒤에만 사용하고 먼저 비운다.
+            if (InlineCount < InlineCapacity)
             {
                 Inline[InlineCount++] = Entry;
             }
@@ -53,7 +57,7 @@ namespace
 
         bool IsEmpty() const
         {
-            return InlineCount == 0 && Overflow.empty();
+            return InlineCount == 0;
         }
 
     private:
@@ -124,13 +128,16 @@ bool FObjectPicker::MakeWorldRay(FRay& OutRay, D3D11_VIEWPORT InViewport) {
 	return true;
 }
 
-bool FObjectPicker::RayTriangleIntersect(const FRay& Ray, const FVector& A, const FVector& B, const FVector& C, float& OutDistance) {
-	const float Edge1X = B.X - A.X;
-	const float Edge1Y = B.Y - A.Y;
-	const float Edge1Z = B.Z - A.Z;
-	const float Edge2X = C.X - A.X;
-	const float Edge2Y = C.Y - A.Y;
-	const float Edge2Z = C.Z - A.Z;
+namespace
+{
+bool RayTriangleIntersectPrepared(const FRay& Ray, const FMeshPickTriangle& Triangle, float& OutDistance) {
+	const FVector& A = Triangle.A;
+	const float Edge1X = Triangle.Edge1.X;
+	const float Edge1Y = Triangle.Edge1.Y;
+	const float Edge1Z = Triangle.Edge1.Z;
+	const float Edge2X = Triangle.Edge2.X;
+	const float Edge2Y = Triangle.Edge2.Y;
+	const float Edge2Z = Triangle.Edge2.Z;
 
 	const float PX = Ray.Direction.Y * Edge2Z - Ray.Direction.Z * Edge2Y;
 	const float PY = Ray.Direction.Z * Edge2X - Ray.Direction.X * Edge2Z;
@@ -158,6 +165,17 @@ bool FObjectPicker::RayTriangleIntersect(const FRay& Ray, const FVector& A, cons
 
 	OutDistance = (Edge2X * QX + Edge2Y * QY + Edge2Z * QZ) * InverseDeterminant;
 	return OutDistance > 1.0e-6f;
+}
+}
+
+bool FObjectPicker::RayTriangleIntersect(const FRay& Ray, const FVector& A, const FVector& B, const FVector& C, float& OutDistance)
+{
+	const FMeshPickTriangle Triangle{
+		A,
+		FVector(B.X - A.X, B.Y - A.Y, B.Z - A.Z),
+		FVector(C.X - A.X, C.Y - A.Y, C.Z - A.Z)
+	};
+	return RayTriangleIntersectPrepared(Ray, Triangle, OutDistance);
 }
 
 bool FObjectPicker::RayAABBIntersect(const FRay& Ray,const FVector& BoundsMin,const FVector& BoundsMax,float MaxDistance,float& OutDistance)
@@ -509,7 +527,7 @@ void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ra
 	const FRayAABBCache LocalCache(LocalRay);
 
 	// 메시 BVH를 탐색해 가장 가까운 삼각형 교차점을 찾는다.
-	if (PickMeshBVHNodeIterative(MeshBVH.GetRoot(), MeshBVH, *Mesh, LocalRay, LocalCache, ClosestDistance))
+	if (PickMeshBVHNodeIterative(MeshBVH.GetRoot(), MeshBVH, LocalRay, LocalCache, ClosestDistance))
 	{
 		SelectedObject = Primitive;
 	}
@@ -694,64 +712,67 @@ void FObjectPicker::PickSceneBVHNodeIterative(const FSceneBVHNode* Root, const F
 	};
 
 	TInlineBVHStack<FVisit> Stack;
-	FVisit Current{ Root, RootDistance };
+	const FSceneBVHNode* Current = Root;
 
 	while (true)
 	{
-		if (Current.EntryDistance <= ClosestCandidateDistance)
+		const FSceneBVHNode* NodeOrNull = Current;
+
+		// 리프에 도달하면 해당 메시를 정확히 검사한다.
+		if (NodeOrNull->ComponentOrNull != nullptr)
 		{
-			const FSceneBVHNode* NodeOrNull = Current.Node;
+			TestPrimitive(NodeOrNull->ComponentOrNull, Ray, ClosestCandidateDistance, SelectedObject);
+		}
+		else
+		{
+			const FSceneBVHNode* Left = NodeOrNull->LeftChild;
+			const FSceneBVHNode* Right = NodeOrNull->RightChild;
+			float LeftDistance = 0.0f;
+			float RightDistance = 0.0f;
+			const bool bLeftHit = HasRayAABBIntersected(Ray, Cache, Left->WorldMin, Left->WorldMax, ClosestCandidateDistance, LeftDistance);
+			const bool bRightHit = HasRayAABBIntersected(Ray, Cache, Right->WorldMin, Right->WorldMax, ClosestCandidateDistance, RightDistance);
 
-			// 리프에 도달하면 해당 메시를 정확히 검사한다.
-			if (NodeOrNull->ComponentOrNull != nullptr)
+			if (bLeftHit && bRightHit)
 			{
-				TestPrimitive(NodeOrNull->ComponentOrNull, Ray, ClosestCandidateDistance, SelectedObject);
+				if (LeftDistance <= RightDistance)
+				{
+					Stack.Add({ Right, RightDistance });
+					Current = Left;
+				}
+				else
+				{
+					Stack.Add({ Left, LeftDistance });
+					Current = Right;
+				}
+				continue;
 			}
-			else
+			if (bLeftHit)
 			{
-				const FSceneBVHNode* Left = NodeOrNull->LeftChild;
-				const FSceneBVHNode* Right = NodeOrNull->RightChild;
-				float LeftDistance = 0.0f;
-				float RightDistance = 0.0f;
-				const bool bLeftHit = HasRayAABBIntersected(Ray, Cache, Left->WorldMin, Left->WorldMax, ClosestCandidateDistance, LeftDistance);
-				const bool bRightHit = HasRayAABBIntersected(Ray, Cache, Right->WorldMin, Right->WorldMax, ClosestCandidateDistance, RightDistance);
-
-				if (bLeftHit && bRightHit)
-				{
-					if (LeftDistance <= RightDistance)
-					{
-						Stack.Add({ Right, RightDistance });
-						Current = { Left, LeftDistance };
-					}
-					else
-					{
-						Stack.Add({ Left, LeftDistance });
-						Current = { Right, RightDistance };
-					}
-					continue;
-				}
-				if (bLeftHit)
-				{
-					Current = { Left, LeftDistance };
-					continue;
-				}
-				if (bRightHit)
-				{
-					Current = { Right, RightDistance };
-					continue;
-				}
+				Current = Left;
+				continue;
+			}
+			if (bRightHit)
+			{
+				Current = Right;
+				continue;
 			}
 		}
 
-		if (Stack.IsEmpty())
+		// 보류한 먼 노드만 갱신된 최단 거리로 걸러낸다.
+		FVisit Deferred;
+		do
 		{
-			break;
-		}
-		Current = Stack.Pop();
+			if (Stack.IsEmpty())
+			{
+				return;
+			}
+			Deferred = Stack.Pop();
+		} while (Deferred.EntryDistance > ClosestCandidateDistance);
+		Current = Deferred.Node;
 	}
 }
 
-bool FObjectPicker::PickMeshBVHNodeIterative(const FMeshBVHNode* Root, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, const FRayAABBCache& Cache, float& ClosestDistance)
+bool FObjectPicker::PickMeshBVHNodeIterative(const FMeshBVHNode* Root, const FMeshBVH& BVH, const FRay& LocalRay, const FRayAABBCache& Cache, float& ClosestDistance)
 {
 	if (Root == nullptr)
 	{
@@ -773,80 +794,75 @@ bool FObjectPicker::PickMeshBVHNodeIterative(const FMeshBVHNode* Root, const FMe
 	// 중앙 분할 메시 BVH의 깊이는 uint32 삼각형 개수 기준 32보다 작다.
 	FVisit Stack[32];
 	uint32 StackCount = 0;
-	FVisit Current{ Root, RootDistance };
+	const FMeshBVHNode* Current = Root;
 	bool bHit = false;
-	const uint32* TriangleOrders = BVH.GetTriangleOrders().GetData();
-	const uint32* Indices = Mesh.GetIndices().GetData();
-	const FVector* Positions = Mesh.GetPositions().GetData();
+	const FMeshPickTriangle* Triangles = BVH.GetPickTriangles().GetData();
 
 	while (true)
 	{
-		if (Current.EntryDistance <= ClosestDistance)
+		const FMeshBVHNode* Node = Current;
+
+		// 리프에 배정된 삼각형만 정확히 검사한다.
+		if (Node->TrianglesCount > 0)
 		{
-			const FMeshBVHNode* Node = Current.Node;
+			const uint32 End = Node->FirstTriangleOffset + Node->TrianglesCount;
 
-			// 리프에 배정된 삼각형만 정확히 검사한다.
-			if (Node->TrianglesCount > 0)
+			for (uint32 Index = Node->FirstTriangleOffset; Index < End; ++Index)
 			{
-				const uint32 End = Node->FirstTriangleOffset + Node->TrianglesCount;
+				float HitDistance = 0.0f;
 
-				for (uint32 Index = Node->FirstTriangleOffset; Index < End; ++Index)
+				if (RayTriangleIntersectPrepared(LocalRay, Triangles[Index], HitDistance) && HitDistance < ClosestDistance)
 				{
-					const uint32 TriangleIndex = TriangleOrders[Index];
-					const uint32 Base = TriangleIndex * 3;
-
-					float HitDistance = 0.0f;
-
-					if (RayTriangleIntersect(LocalRay, Positions[Indices[Base]], Positions[Indices[Base + 1]], Positions[Indices[Base + 2]], HitDistance) && HitDistance < ClosestDistance)
-					{
-						ClosestDistance = HitDistance;
-						bHit = true;
-					}
-				}
-
-			}
-			else
-			{
-				const FMeshBVHNode* Left = Node->LeftChild;
-				const FMeshBVHNode* Right = Node->RightChild;
-				float LeftDistance = 0.0f;
-				float RightDistance = 0.0f;
-				const bool bLeftHit = HasRayAABBIntersected(LocalRay, Cache, Left->LocalMin, Left->LocalMax, ClosestDistance, LeftDistance);
-				const bool bRightHit = HasRayAABBIntersected(LocalRay, Cache, Right->LocalMin, Right->LocalMax, ClosestDistance, RightDistance);
-
-				if (bLeftHit && bRightHit)
-				{
-					if (LeftDistance <= RightDistance)
-					{
-						Stack[StackCount++] = { Right, RightDistance };
-						Current = { Left, LeftDistance };
-					}
-					else
-					{
-						Stack[StackCount++] = { Left, LeftDistance };
-						Current = { Right, RightDistance };
-					}
-					continue;
-				}
-				if (bLeftHit)
-				{
-					Current = { Left, LeftDistance };
-					continue;
-				}
-				if (bRightHit)
-				{
-					Current = { Right, RightDistance };
-					continue;
+					ClosestDistance = HitDistance;
+					bHit = true;
 				}
 			}
 		}
-
-		if (StackCount == 0)
+		else
 		{
-			break;
+			const FMeshBVHNode* Left = Node->LeftChild;
+			const FMeshBVHNode* Right = Node->RightChild;
+			float LeftDistance = 0.0f;
+			float RightDistance = 0.0f;
+			const bool bLeftHit = HasRayAABBIntersected(LocalRay, Cache, Left->LocalMin, Left->LocalMax, ClosestDistance, LeftDistance);
+			const bool bRightHit = HasRayAABBIntersected(LocalRay, Cache, Right->LocalMin, Right->LocalMax, ClosestDistance, RightDistance);
+
+			if (bLeftHit && bRightHit)
+			{
+				if (LeftDistance <= RightDistance)
+				{
+					Stack[StackCount++] = { Right, RightDistance };
+					Current = Left;
+				}
+				else
+				{
+					Stack[StackCount++] = { Left, LeftDistance };
+					Current = Right;
+				}
+				continue;
+			}
+			if (bLeftHit)
+			{
+				Current = Left;
+				continue;
+			}
+			if (bRightHit)
+			{
+				Current = Right;
+				continue;
+			}
 		}
-		Current = Stack[--StackCount];
+
+		// 보류한 먼 노드만 갱신된 최단 거리로 걸러낸다.
+		FVisit Deferred;
+		do
+		{
+			if (StackCount == 0)
+			{
+				return bHit;
+			}
+			Deferred = Stack[--StackCount];
+		} while (Deferred.EntryDistance > ClosestDistance);
+		Current = Deferred.Node;
 	}
-
-	return bHit;
 }
