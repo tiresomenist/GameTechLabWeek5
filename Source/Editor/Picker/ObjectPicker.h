@@ -29,7 +29,7 @@ class FObjectPicker
 public:
 	FObjectPicker(FEditor* InEditor);
 	bool MakeWorldRay(FRay& OutRay, D3D11_VIEWPORT InViewport);
-	bool RayTriangleIntersect(const FRay& Ray, FVector A, FVector B, FVector C, float& OutDistance);
+	bool RayTriangleIntersect(const FRay& Ray, const FVector& A, const FVector& B, const FVector& C, float& OutDistance);
 	bool RayAABBIntersect(const FRay& Ray, const FVector& BoundsMin, const FVector& BoundsMax, float MaxDistance, float& OutDistance);
 	USceneComponent* Pick();
 	// 기존 로그와 같은 누적 피킹 값을 읽기 전용으로 제공합니다.
@@ -50,8 +50,8 @@ private:
 	// Todo: BVH Mesh
 	//bool PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, float& ClosestDistance);
 
-	void PickSceneBVHNodeRecursive(const FSceneBVHNode* NodeOrNull, const FRay& Ray, const FRayAABBCache& Cache, float& ClosestCandidateDistance, USceneComponent*& SelectedObject, float AABBEntryDistance);
-	bool PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, const FRayAABBCache& Cache, float& ClosestDistance, float EnterDistance = -1.0f);
+	void PickSceneBVHNodeIterative(const FSceneBVHNode* Root, const FRay& Ray, const FRayAABBCache& Cache, float& ClosestDistance, USceneComponent*& SelectedObject);
+	bool PickMeshBVHNodeIterative(const FMeshBVHNode* Root, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, const FRayAABBCache& Cache, float& ClosestDistance);
 
 private:
 	//static constexpr float CLOSEST_DISTANCE = 100000.0f;

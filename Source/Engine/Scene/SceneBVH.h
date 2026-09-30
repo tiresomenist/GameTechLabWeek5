@@ -61,12 +61,12 @@ private:
     float GetJoinedBoundingBoxSurfaceArea(const FSceneBVHNode* First, const FSceneBVHNode* Second);
 
     void RefitParents(FSceneBVHNode* StartParentNode);
-    void DeleteNodesRecursive(FSceneBVHNode* NodeOrNull);
+    void DeleteNodesIterative(FSceneBVHNode* NodeOrNull);
 
     void Insert(FSceneBVHNode* Leaf);
     void Detach(FSceneBVHNode* Leaf);
 
-    FSceneBVHNode* BuildNodesRecursive(TArray<FBuildItem>& Items, uint32 First, uint32 Count);
+    FSceneBVHNode* BuildNodesIterative(TArray<FBuildItem>& Items, uint32 First, uint32 Count);
 
 private:
     static constexpr float FAT_LENGTH = 0.25f;

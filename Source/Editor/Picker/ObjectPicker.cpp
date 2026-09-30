@@ -17,6 +17,52 @@
 // Todo: BVH
 #include "Engine/Scene/SceneBVH.h"
 
+#include <cstddef>
+#include <vector>
+
+namespace
+{
+    // 보통의 BVH 깊이는 호출 스택에서 처리하고, 더 깊은 트리만 동적 배열을 사용한다.
+    template <typename T, std::size_t InlineCapacity = 128>
+    class TInlineBVHStack
+    {
+    public:
+        void Add(const T& Entry)
+        {
+            if (Overflow.empty() && InlineCount < InlineCapacity)
+            {
+                Inline[InlineCount++] = Entry;
+            }
+            else
+            {
+                Overflow.push_back(Entry);
+            }
+        }
+
+        T Pop()
+        {
+            if (!Overflow.empty())
+            {
+                T Entry = Overflow.back();
+                Overflow.pop_back();
+                return Entry;
+            }
+
+            return Inline[--InlineCount];
+        }
+
+        bool IsEmpty() const
+        {
+            return InlineCount == 0 && Overflow.empty();
+        }
+
+    private:
+        T Inline[InlineCapacity];
+        std::size_t InlineCount = 0;
+        std::vector<T> Overflow;
+    };
+}
+
 struct FRayAABBCache
 {
 	explicit FRayAABBCache(const FRay& Ray)
@@ -25,9 +71,18 @@ struct FRayAABBCache
 			Ray.Direction.Y != 0.0f ? 1.0f / Ray.Direction.Y : 0.0f,
 			Ray.Direction.Z != 0.0f ? 1.0f / Ray.Direction.Z : 0.0f)
 	{
+		bDivideX = !std::isfinite(InverseDirection.X);
+		bDivideY = !std::isfinite(InverseDirection.Y);
+		bDivideZ = !std::isfinite(InverseDirection.Z);
+		bFastPath = Ray.Direction.X != 0.0f && Ray.Direction.Y != 0.0f && Ray.Direction.Z != 0.0f
+			&& !bDivideX && !bDivideY && !bDivideZ;
 	}
 
 	FVector InverseDirection;
+	bool bDivideX = false;
+	bool bDivideY = false;
+	bool bDivideZ = false;
+	bool bFastPath = false;
 };
 
 FObjectPicker::FObjectPicker(FEditor* InEditor)
@@ -69,29 +124,39 @@ bool FObjectPicker::MakeWorldRay(FRay& OutRay, D3D11_VIEWPORT InViewport) {
 	return true;
 }
 
-bool FObjectPicker::RayTriangleIntersect(const FRay& Ray,FVector A, FVector B, FVector C ,float& OutDistance ) {
-	const FVector Edge1 = B - A;
-	const FVector Edge2 = C - A;
+bool FObjectPicker::RayTriangleIntersect(const FRay& Ray, const FVector& A, const FVector& B, const FVector& C, float& OutDistance) {
+	const float Edge1X = B.X - A.X;
+	const float Edge1Y = B.Y - A.Y;
+	const float Edge1Z = B.Z - A.Z;
+	const float Edge2X = C.X - A.X;
+	const float Edge2Y = C.Y - A.Y;
+	const float Edge2Z = C.Z - A.Z;
 
-	const FVector P = Ray.Direction.Cross(Edge2);
-	const float Determinant = Edge1.Dot(P);
+	const float PX = Ray.Direction.Y * Edge2Z - Ray.Direction.Z * Edge2Y;
+	const float PY = Ray.Direction.Z * Edge2X - Ray.Direction.X * Edge2Z;
+	const float PZ = Ray.Direction.X * Edge2Y - Ray.Direction.Y * Edge2X;
+	const float Determinant = Edge1X * PX + Edge1Y * PY + Edge1Z * PZ;
 
 	if (std::fabs(Determinant) < 1.0e-6f)
 		return false; // 평행 또는 퇴화 삼각형
 
 	const float InverseDeterminant = 1.0f / Determinant;
 
-	const FVector T = Ray.Origin - A;
-	const float U = T.Dot(P) * InverseDeterminant;
+	const float TX = Ray.Origin.X - A.X;
+	const float TY = Ray.Origin.Y - A.Y;
+	const float TZ = Ray.Origin.Z - A.Z;
+	const float U = (TX * PX + TY * PY + TZ * PZ) * InverseDeterminant;
 	if (U < 0.0f || U > 1.0f)
 		return false;
 
-	const FVector Q = T.Cross(Edge1);
-	const float V = Ray.Direction.Dot(Q) * InverseDeterminant;
+	const float QX = TY * Edge1Z - TZ * Edge1Y;
+	const float QY = TZ * Edge1X - TX * Edge1Z;
+	const float QZ = TX * Edge1Y - TY * Edge1X;
+	const float V = (Ray.Direction.X * QX + Ray.Direction.Y * QY + Ray.Direction.Z * QZ) * InverseDeterminant;
 	if (V < 0.0f || U + V > 1.0f)
 		return false;
 
-	OutDistance = Edge2.Dot(Q) * InverseDeterminant;
+	OutDistance = (Edge2X * QX + Edge2Y * QY + Edge2Z * QZ) * InverseDeterminant;
 	return OutDistance > 1.0e-6f;
 }
 
@@ -138,57 +203,88 @@ bool FObjectPicker::HasRayAABBIntersected(const FRay& Ray, const FRayAABBCache& 
 {
 	float Enter = 0.0f;
 	float Exit = MaxDistance;
-
-	// Todo: Change name
-	auto TestAxis = [&](float Origin, float Direction, float InverseDirection, float Min, float Max) -> bool
-		{
-			if (Direction == 0.0f)
-			{
-				return Origin >= Min && Origin <= Max;
-			}
-
-			float T0;
-			float T1;
-			if (std::isfinite(InverseDirection))
-			{
-				T0 = (Min - Origin) * InverseDirection;
-				T1 = (Max - Origin) * InverseDirection;
-			}
-			else
-			{
-				// 극히 작은 방향 성분의 역수가 무한대라면 기존 나눗셈을 사용한다.
-				T0 = (Min - Origin) / Direction;
-				T1 = (Max - Origin) / Direction;
-			}
-
-			if (T0 > T1)
-			{
-				std::swap(T0, T1);
-			}
-
-			Enter = std::max(Enter, T0);
-			Exit = std::min(Exit, T1);
-
-			return Enter <= Exit;
-		};
-
-	if (!TestAxis(Ray.Origin.X, Ray.Direction.X, Cache.InverseDirection.X, BoundsMin.X, BoundsMax.X))
+	if (Cache.bFastPath)
 	{
-		return false;
+		float Near = (BoundsMin.X - Ray.Origin.X) * Cache.InverseDirection.X;
+		float Far = (BoundsMax.X - Ray.Origin.X) * Cache.InverseDirection.X;
+		if (Near > Far) { const float Temp = Near; Near = Far; Far = Temp; }
+		if (Near > Enter) Enter = Near;
+		if (Far < Exit) Exit = Far;
+		if (Enter > Exit) return false;
+
+		Near = (BoundsMin.Y - Ray.Origin.Y) * Cache.InverseDirection.Y;
+		Far = (BoundsMax.Y - Ray.Origin.Y) * Cache.InverseDirection.Y;
+		if (Near > Far) { const float Temp = Near; Near = Far; Far = Temp; }
+		if (Near > Enter) Enter = Near;
+		if (Far < Exit) Exit = Far;
+		if (Enter > Exit) return false;
+
+		Near = (BoundsMin.Z - Ray.Origin.Z) * Cache.InverseDirection.Z;
+		Far = (BoundsMax.Z - Ray.Origin.Z) * Cache.InverseDirection.Z;
+		if (Near > Far) { const float Temp = Near; Near = Far; Far = Temp; }
+		if (Near > Enter) Enter = Near;
+		if (Far < Exit) Exit = Far;
+		if (Enter > Exit) return false;
+
+		OutIntersectedDistance = Enter;
+		return true;
 	}
 
-	if (!TestAxis(Ray.Origin.Y, Ray.Direction.Y, Cache.InverseDirection.Y, BoundsMin.Y, BoundsMax.Y))
+	if (Ray.Direction.X == 0.0f)
 	{
-		return false;
+		if (Ray.Origin.X < BoundsMin.X || Ray.Origin.X > BoundsMax.X) return false;
+	}
+	else
+	{
+		float Near = Cache.bDivideX
+			? (BoundsMin.X - Ray.Origin.X) / Ray.Direction.X
+			: (BoundsMin.X - Ray.Origin.X) * Cache.InverseDirection.X;
+		float Far = Cache.bDivideX
+			? (BoundsMax.X - Ray.Origin.X) / Ray.Direction.X
+			: (BoundsMax.X - Ray.Origin.X) * Cache.InverseDirection.X;
+		if (Near > Far) { const float Temp = Near; Near = Far; Far = Temp; }
+		if (Near > Enter) Enter = Near;
+		if (Far < Exit) Exit = Far;
+		if (Enter > Exit) return false;
 	}
 
-	if (!TestAxis(Ray.Origin.Z, Ray.Direction.Z, Cache.InverseDirection.Z, BoundsMin.Z, BoundsMax.Z))
+	if (Ray.Direction.Y == 0.0f)
 	{
-		return false;
+		if (Ray.Origin.Y < BoundsMin.Y || Ray.Origin.Y > BoundsMax.Y) return false;
+	}
+	else
+	{
+		float Near = Cache.bDivideY
+			? (BoundsMin.Y - Ray.Origin.Y) / Ray.Direction.Y
+			: (BoundsMin.Y - Ray.Origin.Y) * Cache.InverseDirection.Y;
+		float Far = Cache.bDivideY
+			? (BoundsMax.Y - Ray.Origin.Y) / Ray.Direction.Y
+			: (BoundsMax.Y - Ray.Origin.Y) * Cache.InverseDirection.Y;
+		if (Near > Far) { const float Temp = Near; Near = Far; Far = Temp; }
+		if (Near > Enter) Enter = Near;
+		if (Far < Exit) Exit = Far;
+		if (Enter > Exit) return false;
+	}
+
+	if (Ray.Direction.Z == 0.0f)
+	{
+		if (Ray.Origin.Z < BoundsMin.Z || Ray.Origin.Z > BoundsMax.Z) return false;
+	}
+	else
+	{
+		float Near = Cache.bDivideZ
+			? (BoundsMin.Z - Ray.Origin.Z) / Ray.Direction.Z
+			: (BoundsMin.Z - Ray.Origin.Z) * Cache.InverseDirection.Z;
+		float Far = Cache.bDivideZ
+			? (BoundsMax.Z - Ray.Origin.Z) / Ray.Direction.Z
+			: (BoundsMax.Z - Ray.Origin.Z) * Cache.InverseDirection.Z;
+		if (Near > Far) { const float Temp = Near; Near = Far; Far = Temp; }
+		if (Near > Enter) Enter = Near;
+		if (Far < Exit) Exit = Far;
+		if (Enter > Exit) return false;
 	}
 
 	OutIntersectedDistance = Enter;
-
 	return true;
 }
 
@@ -224,7 +320,7 @@ USceneComponent* FObjectPicker::Pick()
 	// Pick primitive
 	{
 		const FRayAABBCache WorldCache(Ray);
-		PickSceneBVHNodeRecursive(Scene->GetBVHRoot(), Ray, WorldCache, ClosestDistance, SelectedObject, -1.f);
+		PickSceneBVHNodeIterative(Scene->GetBVHRoot(), Ray, WorldCache, ClosestDistance, SelectedObject);
 
 		// Todo: 함수 포인터 사용하지 말아보자
 		// 이번 단계에서 BVH에 없는 텍스트·플립북
@@ -369,16 +465,6 @@ void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ra
 		return;
 	}
 
-	FVector BoundsMin;
-	FVector BoundsMax;
-
-	/*
-	if (!Primitive->GetLocalBounds(BoundsMin, BoundsMax))
-	{
-		return;
-	}
-	*/
-
 	//Todo: Picking cache
 	// 월드 레이를 프리미티브의 로컬 좌표로 변환한다.
 	FMatrix InverseWorld;
@@ -394,6 +480,13 @@ void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ra
 	// 텍스트·플립북처럼 AABB만으로 선택하는 프리미티브를 처리한다.
 	if (Primitive->IsAABBOnlyPickable())
 	{
+		FVector BoundsMin;
+		FVector BoundsMax;
+		if (!Primitive->GetLocalBounds(BoundsMin, BoundsMax))
+		{
+			return;
+		}
+
 		float AABBDistance = 0.0f;
 		if (RayAABBIntersect(LocalRay, BoundsMin, BoundsMax, ClosestDistance, AABBDistance) == false)
 		{
@@ -416,7 +509,7 @@ void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ra
 	const FRayAABBCache LocalCache(LocalRay);
 
 	// 메시 BVH를 탐색해 가장 가까운 삼각형 교차점을 찾는다.
-	if (PickMeshBVHNodeRecursive(MeshBVH.GetRoot(), MeshBVH, *Mesh, LocalRay, LocalCache, ClosestDistance))
+	if (PickMeshBVHNodeIterative(MeshBVH.GetRoot(), MeshBVH, *Mesh, LocalRay, LocalCache, ClosestDistance))
 	{
 		SelectedObject = Primitive;
 	}
@@ -581,202 +674,178 @@ bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMe
 }
 */
 
-void FObjectPicker::PickSceneBVHNodeRecursive(const FSceneBVHNode* NodeOrNull, const FRay& Ray, const FRayAABBCache& Cache, float& ClosestCandidateDistance, USceneComponent*& SelectedObject, float AABBEntryDistance)
+void FObjectPicker::PickSceneBVHNodeIterative(const FSceneBVHNode* Root, const FRay& Ray, const FRayAABBCache& Cache, float& ClosestCandidateDistance, USceneComponent*& SelectedObject)
 {
-	if (NodeOrNull == nullptr)
+	if (Root == nullptr)
 	{
 		return;
 	}
 
-	// 아직 검사하지 않은 루트 노드의 AABB를 검사한다.
-	if (AABBEntryDistance < 0.f)
-	{
-		if (HasRayAABBIntersected(Ray, Cache, NodeOrNull->WorldMin, NodeOrNull->WorldMax, ClosestCandidateDistance, AABBEntryDistance) == false)
-		{
-			return;
-		}
-	}
-
-	// 앞선 탐색에서 더 가까운 교차점을 찾았다면 이 노드를 제외한다.
-	if (AABBEntryDistance > ClosestCandidateDistance)
+	float RootDistance = 0.0f;
+	if (HasRayAABBIntersected(Ray, Cache, Root->WorldMin, Root->WorldMax, ClosestCandidateDistance, RootDistance) == false)
 	{
 		return;
 	}
 
-	// 리프에 도달하면 해당 메시를 정확히 검사한다.
-	if (NodeOrNull->ComponentOrNull != nullptr)
+	struct FVisit
 	{
-		TestPrimitive(NodeOrNull->ComponentOrNull, Ray, ClosestCandidateDistance, SelectedObject);
+		const FSceneBVHNode* Node;
+		float EntryDistance;
+	};
 
-		return;
-	}
+	TInlineBVHStack<FVisit> Stack;
+	FVisit Current{ Root, RootDistance };
 
-	const FSceneBVHNode* FirstChild = NodeOrNull->LeftChild;
-	const FSceneBVHNode* SecondChild = NodeOrNull->RightChild;
-
-	float FirstDistance = 0.0f;
-	float SecondDistance = 0.0f;
-
-	// 두 자식의 AABB를 검사하고 진입 거리를 구한다.
-	/*
-	if (FirstChild != nullptr)
+	while (true)
 	{
-		if (HasRayAABBIntersected(Ray, Cache, FirstChild->WorldMin, FirstChild->WorldMax, ClosestCandidateDistance, FirstDistance) == false)
+		if (Current.EntryDistance <= ClosestCandidateDistance)
 		{
-			FirstChild = nullptr;
-		}
-	}
+			const FSceneBVHNode* NodeOrNull = Current.Node;
 
-	if (SecondChild != nullptr)
-	{
-		if (HasRayAABBIntersected(Ray, Cache, SecondChild->WorldMin, SecondChild->WorldMax, ClosestCandidateDistance, SecondDistance) == false)
+			// 리프에 도달하면 해당 메시를 정확히 검사한다.
+			if (NodeOrNull->ComponentOrNull != nullptr)
+			{
+				TestPrimitive(NodeOrNull->ComponentOrNull, Ray, ClosestCandidateDistance, SelectedObject);
+			}
+			else
+			{
+				const FSceneBVHNode* Left = NodeOrNull->LeftChild;
+				const FSceneBVHNode* Right = NodeOrNull->RightChild;
+				float LeftDistance = 0.0f;
+				float RightDistance = 0.0f;
+				const bool bLeftHit = HasRayAABBIntersected(Ray, Cache, Left->WorldMin, Left->WorldMax, ClosestCandidateDistance, LeftDistance);
+				const bool bRightHit = HasRayAABBIntersected(Ray, Cache, Right->WorldMin, Right->WorldMax, ClosestCandidateDistance, RightDistance);
+
+				if (bLeftHit && bRightHit)
+				{
+					if (LeftDistance <= RightDistance)
+					{
+						Stack.Add({ Right, RightDistance });
+						Current = { Left, LeftDistance };
+					}
+					else
+					{
+						Stack.Add({ Left, LeftDistance });
+						Current = { Right, RightDistance };
+					}
+					continue;
+				}
+				if (bLeftHit)
+				{
+					Current = { Left, LeftDistance };
+					continue;
+				}
+				if (bRightHit)
+				{
+					Current = { Right, RightDistance };
+					continue;
+				}
+			}
+		}
+
+		if (Stack.IsEmpty())
 		{
-			SecondChild = nullptr;
+			break;
 		}
-	}
-	*/
-
-	assert(FirstChild != nullptr);
-	assert(SecondChild != nullptr);
-
-	if (HasRayAABBIntersected(Ray, Cache, FirstChild->WorldMin, FirstChild->WorldMax, ClosestCandidateDistance, FirstDistance) == false)
-	{
-		FirstChild = nullptr;
-	}
-
-	if (HasRayAABBIntersected(Ray, Cache, SecondChild->WorldMin, SecondChild->WorldMax, ClosestCandidateDistance, SecondDistance) == false)
-	{
-		SecondChild = nullptr;
-	}
-
-	// 교차하는 자식 중 가까운 자식을 먼저 방문하도록 순서를 정한다.
-	if (SecondChild != nullptr && (FirstChild == nullptr || SecondDistance < FirstDistance))
-	{
-		const FSceneBVHNode* TempChild = FirstChild;
-		FirstChild = SecondChild;
-		SecondChild = TempChild;
-
-		const float TempDistance = FirstDistance;
-		FirstDistance = SecondDistance;
-		SecondDistance = TempDistance;
-	}
-
-	// 가까운 자식을 탐색해 최단 교차 거리를 먼저 갱신한다.
-	if (FirstChild != nullptr)
-	{
-		PickSceneBVHNodeRecursive(FirstChild, Ray, Cache, ClosestCandidateDistance, SelectedObject, FirstDistance);
-	}
-
-	// 갱신된 최단 거리 안에 있는 경우에만 먼 자식을 탐색한다.
-	if (SecondChild != nullptr && SecondDistance <= ClosestCandidateDistance)
-	{
-		PickSceneBVHNodeRecursive(SecondChild, Ray, Cache, ClosestCandidateDistance, SelectedObject, SecondDistance);
+		Current = Stack.Pop();
 	}
 }
 
-bool FObjectPicker::PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, const FRayAABBCache& Cache, float& ClosestDistance, float EnterDistance)
+bool FObjectPicker::PickMeshBVHNodeIterative(const FMeshBVHNode* Root, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, const FRayAABBCache& Cache, float& ClosestDistance)
 {
-	if (Node == nullptr)
+	if (Root == nullptr)
 	{
 		return false;
 	}
 
-	// 아직 검사하지 않은 루트 노드의 AABB를 검사한다.
-	if (EnterDistance < 0.0f)
-	{
-		if (!HasRayAABBIntersected(LocalRay, Cache, Node->LocalMin, Node->LocalMax, ClosestDistance, EnterDistance))
-		{
-			return false;
-		}
-	}
-
-	// 앞선 탐색에서 더 가까운 교차점을 찾았다면 이 노드를 제외한다.
-	if (EnterDistance > ClosestDistance)
+	float RootDistance = 0.0f;
+	if (HasRayAABBIntersected(LocalRay, Cache, Root->LocalMin, Root->LocalMax, ClosestDistance, RootDistance) == false)
 	{
 		return false;
 	}
 
-	// 리프에 배정된 삼각형만 정확히 검사한다.
-	if (Node->TrianglesCount > 0)
+	struct FVisit
 	{
-		const TArray<uint32>& TriangleOrders = BVH.GetTriangleOrders();
-		const TArray<uint32>& Indices = Mesh.GetIndices();
-		const TArray<FVector>& Positions = Mesh.GetPositions();
+		const FMeshBVHNode* Node;
+		float EntryDistance;
+	};
 
-		bool bHit = false;
-		const uint32 End = Node->FirstTriangleOffset + Node->TrianglesCount;
-
-		for (uint32 Index = Node->FirstTriangleOffset; Index < End; ++Index)
-		{
-			const uint32 TriangleIndex = TriangleOrders[Index];
-			const uint32 Base = TriangleIndex * 3;
-
-			float HitDistance = 0.0f;
-
-			if (RayTriangleIntersect(LocalRay, Positions[Indices[Base]], Positions[Indices[Base + 1]], Positions[Indices[Base + 2]], HitDistance) && HitDistance < ClosestDistance)
-			{
-				ClosestDistance = HitDistance;
-				bHit = true;
-			}
-		}
-
-		return bHit;
-	}
-
-	const FMeshBVHNode* FirstChild = Node->LeftChild;
-	const FMeshBVHNode* SecondChild = Node->RightChild;
-
-	float FirstDistance = 0.0f;
-	float SecondDistance = 0.0f;
-
-	// 두 자식의 AABB를 검사하고 진입 거리를 구한다.
-	{
-		if (FirstChild != nullptr)
-		{
-			if (HasRayAABBIntersected(LocalRay, Cache, FirstChild->LocalMin, FirstChild->LocalMax, ClosestDistance, FirstDistance) == false)
-			{
-				FirstChild = nullptr;
-			}
-		}
-
-		if (SecondChild != nullptr)
-		{
-			if (HasRayAABBIntersected(LocalRay, Cache, SecondChild->LocalMin, SecondChild->LocalMax, ClosestDistance, SecondDistance) == false)
-			{
-				SecondChild = nullptr;
-			}
-		}
-	}
-
-	// 교차하는 자식 중 가까운 자식을 먼저 방문하도록 순서를 정한다.
-	{
-		if (SecondChild != nullptr && (FirstChild == nullptr || SecondDistance < FirstDistance))
-		{
-			const FMeshBVHNode* TempChild = FirstChild;
-			FirstChild = SecondChild;
-			SecondChild = TempChild;
-
-			const float TempDistance = FirstDistance;
-			FirstDistance = SecondDistance;
-			SecondDistance = TempDistance;
-		}
-	}
-
+	// 중앙 분할 메시 BVH의 깊이는 uint32 삼각형 개수 기준 32보다 작다.
+	FVisit Stack[32];
+	uint32 StackCount = 0;
+	FVisit Current{ Root, RootDistance };
 	bool bHit = false;
+	const uint32* TriangleOrders = BVH.GetTriangleOrders().GetData();
+	const uint32* Indices = Mesh.GetIndices().GetData();
+	const FVector* Positions = Mesh.GetPositions().GetData();
 
-	// 가까운 자식의 삼각형부터 검사한다.
-	if (FirstChild != nullptr)
+	while (true)
 	{
-		bHit = PickMeshBVHNodeRecursive(FirstChild, BVH, Mesh, LocalRay, Cache, ClosestDistance, FirstDistance);
-	}
-
-	// 더 가까운 교차점이 있을 수 있는 경우에만 먼 자식을 탐색한다.
-	if (SecondChild != nullptr && SecondDistance <= ClosestDistance)
-	{
-		if (PickMeshBVHNodeRecursive(SecondChild, BVH, Mesh, LocalRay, Cache, ClosestDistance, SecondDistance))
+		if (Current.EntryDistance <= ClosestDistance)
 		{
-			bHit = true;
+			const FMeshBVHNode* Node = Current.Node;
+
+			// 리프에 배정된 삼각형만 정확히 검사한다.
+			if (Node->TrianglesCount > 0)
+			{
+				const uint32 End = Node->FirstTriangleOffset + Node->TrianglesCount;
+
+				for (uint32 Index = Node->FirstTriangleOffset; Index < End; ++Index)
+				{
+					const uint32 TriangleIndex = TriangleOrders[Index];
+					const uint32 Base = TriangleIndex * 3;
+
+					float HitDistance = 0.0f;
+
+					if (RayTriangleIntersect(LocalRay, Positions[Indices[Base]], Positions[Indices[Base + 1]], Positions[Indices[Base + 2]], HitDistance) && HitDistance < ClosestDistance)
+					{
+						ClosestDistance = HitDistance;
+						bHit = true;
+					}
+				}
+
+			}
+			else
+			{
+				const FMeshBVHNode* Left = Node->LeftChild;
+				const FMeshBVHNode* Right = Node->RightChild;
+				float LeftDistance = 0.0f;
+				float RightDistance = 0.0f;
+				const bool bLeftHit = HasRayAABBIntersected(LocalRay, Cache, Left->LocalMin, Left->LocalMax, ClosestDistance, LeftDistance);
+				const bool bRightHit = HasRayAABBIntersected(LocalRay, Cache, Right->LocalMin, Right->LocalMax, ClosestDistance, RightDistance);
+
+				if (bLeftHit && bRightHit)
+				{
+					if (LeftDistance <= RightDistance)
+					{
+						Stack[StackCount++] = { Right, RightDistance };
+						Current = { Left, LeftDistance };
+					}
+					else
+					{
+						Stack[StackCount++] = { Left, LeftDistance };
+						Current = { Right, RightDistance };
+					}
+					continue;
+				}
+				if (bLeftHit)
+				{
+					Current = { Left, LeftDistance };
+					continue;
+				}
+				if (bRightHit)
+				{
+					Current = { Right, RightDistance };
+					continue;
+				}
+			}
 		}
+
+		if (StackCount == 0)
+		{
+			break;
+		}
+		Current = Stack[--StackCount];
 	}
 
 	return bHit;
