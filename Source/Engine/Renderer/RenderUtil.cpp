@@ -38,7 +38,8 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 
 	const UActorComponent* SelectedComponent = Editor->GetSelectedSceneComponent();
 
-	auto AddPrimitive = [&](UPrimitiveComponent* Primitive, bool bSkipPrimitiveFrustum)
+	auto AddPrimitive = [&](UPrimitiveComponent* Primitive, bool bSkipPrimitiveFrustum,
+		const FBoundingBox* CachedWorldBounds = nullptr)
 		{
 			if (!Primitive->IsVisible())
 			{
@@ -50,17 +51,29 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			Object.World = Primitive->GetRenderWorldMatrix(Camera);
 			Object.SortCenterWS = Object.World.GetOrigin();
 
-			FVector LocalMin{};
-			FVector LocalMax{};
-			if (Primitive->GetLocalBounds(LocalMin, LocalMax))
+			if (CachedWorldBounds)
 			{
-				Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
+				Object.SortCenterWS = (CachedWorldBounds->Min + CachedWorldBounds->Max) * 0.5f;
 
 				if (!bSkipPrimitiveFrustum)
 				{
-					Object.WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Object.World);
-					Object.bHasWorldBounds = true;
-					if (Frustum && !Frustum->Intersects(Object.WorldBounds)) return;
+					if (Frustum && !Frustum->Intersects(*CachedWorldBounds)) return;
+				}
+			}
+			else
+			{
+				FVector LocalMin{};
+				FVector LocalMax{};
+				if (Primitive->GetLocalBounds(LocalMin, LocalMax))
+				{
+					Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
+
+					if (!bSkipPrimitiveFrustum)
+					{
+						Object.WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Object.World);
+						Object.bHasWorldBounds = true;
+						if (Frustum && !Frustum->Intersects(Object.WorldBounds)) return;
+					}
 				}
 			}
 
@@ -93,9 +106,10 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 		const FStaticUniformGridCell* Cell = Candidate.SourceCell;
 		if (!Cell) { continue; }
 
-		for (UPrimitiveComponent* Primitive : Cell->Primitives)
+		for (const FStaticUniformGridPrimitive& GridPrimitive : Cell->Primitives)
 		{
-			AddPrimitive(Primitive, Candidate.bFullyInsideFrustum);
+			AddPrimitive(GridPrimitive.Primitive, Candidate.bFullyInsideFrustum,
+				&GridPrimitive.WorldBounds);
 		}
 	}
 

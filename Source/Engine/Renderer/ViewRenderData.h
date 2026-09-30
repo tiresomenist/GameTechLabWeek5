@@ -28,8 +28,6 @@ struct FRenderObjectData
 {
     FMatrix World = FMatrix::Identity;
     FVector SortCenterWS{};
-    FBoundingBox WorldBounds{};
-    bool bHasWorldBounds = false;
 
     //Impostor
     FVector ImpostorCenterWS{};
