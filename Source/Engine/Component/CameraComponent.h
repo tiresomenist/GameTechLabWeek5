@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Math/Matrix.h"
+#include "Core/Math/FastMatrix.h"
 #include "Core/Core.h"
 #include "Engine/Component/SceneComponent.h"
 
@@ -18,10 +19,10 @@ public:
     void RemoveRoll();
     void ConstrainEditorRotation();
 
-    FMatrix GetViewMatrix() const;
-    FMatrix GetProjectionMatrix() const;
-    FMatrix GetOrthographicProjectionMatrix() const;
-    FMatrix GetPerspectiveProjectionMatrix() const;
+    FFastMatrix GetViewMatrix() const;
+    FFastMatrix GetProjectionMatrix() const;
+    FFastMatrix GetOrthographicProjectionMatrix() const;
+    FFastMatrix GetPerspectiveProjectionMatrix() const;
     void MoveCamera(const float& InForward, const float& InRight, const float& InUp, const float& InDeltaTime);
     float GetOrthoHeight() const;
     void SetOrthoHeight(float InHeight);
@@ -53,7 +54,7 @@ public:
 
     bool TrySetProjection(float InFOV, float InNearZ, float InFarZ);
 private:
-    FMatrix GetCameraRotationMatrix() const;
+    FFastMatrix GetCameraRotationMatrix() const;
 
     bool bIsPerspective = true;
     float FOV = 60.0f * PI / 180.0f;   //세로 시야각. 저장단위 라디안

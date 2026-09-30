@@ -59,7 +59,7 @@ namespace
 	struct FConstants
 	{
 		FMatrix World;
-		FMatrix ViewProjection;
+		FFastMatrix ViewProjection;
 	};
 
 	struct FGridConstants
@@ -619,7 +619,7 @@ void FViewRenderer::InvalidateOcclusionCells(const TArray<uint64>& CellKeys)
 	}
 }
 
-void FViewRenderer::UpdateTransformConstantBuffer(const FMatrix& World, const FMatrix& VP)
+void FViewRenderer::UpdateTransformConstantBuffer(const FMatrix& World, const FFastMatrix& VP)
 {
 	if (!DeviceContext || !TransformConstantBuffer)
 	{
@@ -706,7 +706,7 @@ void FViewRenderer::RenderGizmo(const FPrimitiveRenderData& Data)
 	DeviceContext->DrawIndexed(Data.Geometry.IndexCount, Data.Geometry.FirstIndex, Data.Geometry.BaseVertex);
 }
 
-void FViewRenderer::RenderBatchLine(const FMatrix& ViewProj)
+void FViewRenderer::RenderBatchLine(const FFastMatrix& ViewProj)
 {
 	const UINT VertexCount = LineBatcher.GetVertexCount();
 	const UINT IndexCount = LineBatcher.GetIndexCount();

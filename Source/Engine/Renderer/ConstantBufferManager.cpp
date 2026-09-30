@@ -6,7 +6,7 @@ void FConstantBufferManager::UploadObjectConstants(ID3D11DeviceContext* Context,
 	m_ObjectCBAllocations.SetNum(ObjectIndexToCBIndices.Num());
 
 	const auto& Objects = ViewLayoutData.Objects;
-	const FMatrix& ViewProj = ViewLayoutData.View.ViewProjection;
+	const FFastMatrix& ViewProj = ViewLayoutData.View.ViewProjection;
 
 	for (int32 CBIndex = 0; CBIndex < ObjectIndexToCBIndices.Num(); ++CBIndex)
 	{
