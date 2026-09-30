@@ -1,12 +1,12 @@
 #pragma once
 
+#include "Core/Container/Array.h"
 #include "Core/Container/Map.h"
 #include "Core/Math/Vector.h"
 
-class FSceneBVHNode;
 class UStaticMeshComponent;
 
-struct FSceneBVHNode final
+struct FSceneBVHNode
 {
     FVector WorldMin{};
     FVector WorldMax{};
@@ -17,6 +17,17 @@ struct FSceneBVHNode final
 
     // 리프에서만 사용하며, 컴포넌트를 소유하지는 않는다.
     UStaticMeshComponent* ComponentOrNull = nullptr;
+};
+
+// Todo: Change name
+// 일괄 빌드 중에만 사용하는 객체의 월드 공간 정보
+struct FBuildItem
+{
+    FVector BoundsMin{};
+    FVector BoundsMax{};
+    FVector Centroid{};
+
+    UStaticMeshComponent* Component = nullptr;
 };
 
 class FSceneBVH final
@@ -34,17 +45,21 @@ public:
 
     const FSceneBVHNode* GetRoot() const;
 
-private:
-    static bool CalculateWorldBounds(UStaticMeshComponent* Component, FVector& OutMin, FVector& OutMax);
-    static bool Contains(const FSceneBVHNode* Node, const FVector& Min, const FVector& Max);
+    void Build(const TArray<UStaticMeshComponent*>& Components);
 
-    static float GetJoinedBoundingBoxSurfaceArea(const FSceneBVHNode* First, const FSceneBVHNode* Second);
+private:
+    bool CalculateWorldBounds(UStaticMeshComponent* Component, FVector& OutMin, FVector& OutMax);
+    bool Contains(const FSceneBVHNode* Node, const FVector& Min, const FVector& Max);
+
+    float GetJoinedBoundingBoxSurfaceArea(const FSceneBVHNode* First, const FSceneBVHNode* Second);
 
     void RefitParents(FSceneBVHNode* StartParentNode);
     void DeleteNodesRecursive(FSceneBVHNode* NodeOrNull);
 
     void Insert(FSceneBVHNode* Leaf);
     void Detach(FSceneBVHNode* Leaf);
+
+    FSceneBVHNode* BuildNodesRecursive(TArray<FBuildItem>& Items, uint32 First, uint32 Count);
 
 private:
     static constexpr float FAT_LENGTH = 0.25f;

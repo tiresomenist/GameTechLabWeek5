@@ -22,7 +22,7 @@ public:
     void SetFramesPerSecond(float Value);
     void SetPlayRate(float Value);
     void SetLooping(bool Value) { bLoop = Value; }
-    void SetPlaying(bool Value) { bPlaying = Value; }
+    void SetPlaying(bool Value);
     void SetCurrentFrame(int32 Value);
     void Restart();
     virtual const FMatrix& GetRenderWorldMatrix(const UCameraComponent* Camera) const override;
@@ -61,5 +61,5 @@ private:
     double FramePosition = 0.0;
 
     mutable FMatrix BillboardWorldMatrix;
-
+    void RefreshPlaybackTick();
 };

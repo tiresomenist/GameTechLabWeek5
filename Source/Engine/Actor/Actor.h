@@ -2,6 +2,7 @@
 
 #include "Core/Container/Array.h"
 #include "Engine/Component/ActorComponent.h"
+#include "Engine/Scene/Tick.h"
 
 class USceneComponent;
 struct FClassType;
@@ -38,6 +39,14 @@ public:
 
     ~AActor() override;
     UScene* GetScene()const { return Scene; }
+
+    // Actor 자체 Tick의 활성 상태를 변경합니다.
+    void SetActorTickEnabled(bool bEnabled);
+
+    // Actor 자체 Tick의 실행 그룹을 변경합니다.
+    void SetActorTickGroup(ETickGroup Group);
+protected:
+    FTickSettings PrimaryActorTick;
 private:
     void ReleaseComponents();
     void DetachChildren();
@@ -48,7 +57,6 @@ private:
     TArray<AActor*> ChildActors;
     bool bHasBegunPlay = false;
     bool bVisible = true;
-
     UScene* Scene = nullptr;
     friend class UScene;
 };

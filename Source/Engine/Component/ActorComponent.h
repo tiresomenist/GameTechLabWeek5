@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Object/Object.h"
+#include "Engine/Scene/Tick.h"
 
 class AActor;
 class UScene;
@@ -22,6 +23,15 @@ public:
     virtual void BeginPlay() {}
     virtual void Tick(float DeltaTime) {}
     virtual void EndPlay() {}
+
+    // Component Tick의 활성 상태를 변경합니다.
+    void SetComponentTickEnabled(bool bEnabled);
+
+    // Component Tick의 실행 그룹을 변경합니다.
+    void SetComponentTickGroup(ETickGroup Group);
+
+protected:
+    FTickSettings PrimaryComponentTick;
 
 private:
     AActor* Owner = nullptr;

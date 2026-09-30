@@ -9,7 +9,7 @@
 #include "Engine/Renderer/RenderDataTypes.h"
 
 // Todo: BVH Mesh
-#include "Engine/Scene/MeshBVH.h"
+#include "Engine/Resource/MeshBVH.h"
 
 struct FMeshResource
 {

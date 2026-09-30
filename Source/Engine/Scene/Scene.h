@@ -154,6 +154,13 @@ public:
 		return BVH.GetRoot();
 	}
 
+
+	// 소속 Actor의 Tick 설정을 활성 목록에 반영합니다.
+	void RefreshActorTick(AActor* Actor);
+
+	// 소속 Component의 Tick 설정을 활성 목록에 반영합니다.
+	void RefreshComponentTick(UActorComponent* Component);
+
 	void UpdateStaticUniformGridForActor(AActor* Actor, TArray<uint64>& ChangedCellKeys);
 
 private:
@@ -179,6 +186,9 @@ private:
 	TArray<UPrimitiveComponent*>NonStaticMeshComponents;
 	// TODO: 공통 아이콘 구조 도입 후 SpotLight 전용 타입을 일반화합니다.
 	TArray<USpotLightComponent*> BillboardIcons;
+
+	TTickRegistry<AActor> ActorTicks;
+	TTickRegistry<UActorComponent> ComponentTicks;
 
 	// 역직렬화 중에는 BVH 갱신을 모으고, 복원이 끝나면 재구축합니다.
 	bool bDeferBVHUpdates = false;

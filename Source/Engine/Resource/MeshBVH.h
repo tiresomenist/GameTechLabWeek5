@@ -43,7 +43,7 @@ public:
     
 private:
     void Clear();
-    FMeshBVHNode* BuildNodesRecursive(TArray<FMeshTriangleInfo>& TriangleInfos, uint32 First, uint32 Count);
+    FMeshBVHNode* BuildNodesRecursive(TArray<FMeshTriangleInfo>& TriangleInfos, uint32 StartIndex, uint32 Count);
 
 private:
     static const uint32 MAX_TRIANGLES_PER_LEAF = 6;

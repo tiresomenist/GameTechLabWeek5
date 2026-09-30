@@ -102,15 +102,41 @@ void UScene::BeginPlay()
         Actor->BeginPlay();
     }
 }
-
+// 활성화된 Actor와 Component를 그룹 순서대로 실행합니다.
 void UScene::Tick(float DeltaTime)
 {
-    for (AActor* Actor : Actors)
+    // 두 목록 모두 먼저 범위를 고정하여 신규 등록은 다음 프레임에 실행합니다.
+    ActorTicks.BeginTick();
+    ComponentTicks.BeginTick();
+
+    for (uint32 Index = 0; Index < TickGroupCount; ++Index)
     {
-        Actor->Tick(DeltaTime);
+        const ETickGroup Group = static_cast<ETickGroup>(Index);
+        ActorTicks.TickGroup(Group, DeltaTime);
+        ComponentTicks.TickGroup(Group, DeltaTime);
     }
+
+    ActorTicks.EndTick();
+    ComponentTicks.EndTick();
 }
 
+// 이 Scene에 속한 Actor의 활성 목록을 갱신합니다.
+void UScene::RefreshActorTick(AActor* Actor)
+{
+    if (!Actor || Actor->GetScene() != this) return;
+    ActorTicks.Refresh(Actor, Actor->PrimaryActorTick, true);
+}
+
+// Component의 Scene 등록 상태까지 확인하여 활성 목록을 갱신합니다.
+void UScene::RefreshComponentTick(UActorComponent* Component)
+{
+    if (!Component) return;
+    AActor* Owner = Component->GetOwner();
+    if (!Owner || Owner->GetScene() != this) return;
+
+    ComponentTicks.Refresh(
+        Component, Component->PrimaryComponentTick, Component->bRegisteredWithScene);
+}
 void UScene::EndPlay()
 {
     for (AActor* Actor : Actors)
@@ -479,8 +505,13 @@ void UScene::ClearActors()
     // 종료 처리는 아직 Scene과 컴포넌트가 연결된 상태에서 수행합니다.
     EndPlay();
 
+    ActorTicks.Clear();
+    ComponentTicks.Clear();
+
     // 전체 삭제에서는 컴포넌트마다 배열을 검색하여 제거하지 않습니다.
     BVH.Clear();
+
+
     // 그리드가 보관한 컴포넌트 참조도 객체 삭제 전에 해제합니다.
     StaticUniformGrid.Empty();
     StaticUniformGridFallback.Empty();
@@ -495,9 +526,12 @@ void UScene::ClearActors()
     // 모든 Actor의 연결을 먼저 끊어 삭제 중 BVH 재등록을 막습니다.
     for (AActor* Actor : Actors)
     {
+        Actor->PrimaryActorTick.RegisteredGroup = ETickGroup::Count;
         for (UActorComponent* Component : Actor->GetComponents())
+        {
             Component->bRegisteredWithScene = false;
-
+            Component->PrimaryComponentTick.RegisteredGroup = ETickGroup::Count;
+        }
         Actor->Scene = nullptr;
     }
 
@@ -761,22 +795,27 @@ void UScene::RemoveFromBVH(UStaticMeshComponent* Component)
 
 void UScene::RebuildBVH()
 {
-    if (bDeferBVHUpdates) return;
-    BVH.Clear();
+    TArray<UStaticMeshComponent*> Components;
 
+    // Scene BVH에 들어갈 정적 메시를 먼저 모두 수집한다.
     ForEachPrimitive([&](UPrimitiveComponent* Primitive)
         {
             if (Primitive->IsA(UStaticMeshComponent::GetClass()))
             {
-                UpdateBVH(static_cast<UStaticMeshComponent*>(Primitive));
+                Components.Add(static_cast<UStaticMeshComponent*>(Primitive));
             }
         });
+
+    // 전체 객체의 배치를 보고 한 번에 트리를 구성한다.
+    BVH.Build(Components);
 }
 
 void UScene::UpdateBVHForActor(AActor* Actor)
 {
     if (!Actor || Actor->GetScene() != this || bDeferBVHUpdates)
+    {
         return;
+    }
 
     // 부모 컴포넌트의 이동으로 위치가 바뀐 자식 메시도 갱신한다.
     for (UActorComponent* Component : Actor->GetComponents())
@@ -805,6 +844,7 @@ void UScene::AttachActor(AActor* Actor)
 
     for (UActorComponent* Component : Actor->GetComponents())
         RegisterComponent(Component);
+    RefreshActorTick(Actor);
 }
 
 // AttachActor->RegisterComponent, UnRegisterComponent->DetachActor 순으로 호출.
@@ -815,7 +855,7 @@ void UScene::DetachActor(AActor* Actor)
     // 등록 해제가 끝날 때까지 Owner와 Scene 연결을 유지합니다.
     for (UActorComponent* Component : Actor->GetComponents())
         UnregisterComponent(Component);
-
+    ActorTicks.Refresh(Actor, Actor->PrimaryActorTick, false);
     Actors.Remove(Actor);
     Actor->Scene = nullptr;
 }
@@ -847,7 +887,7 @@ void UScene::RegisterComponent(UActorComponent* Component)
         BillboardIcons.Add(static_cast<USpotLightComponent*>(Component));
 
     Component->bRegisteredWithScene = true;
-
+    RefreshComponentTick(Component);
     // StaticMesh의 기존 BVH 등록 경로를 유지합니다.
     if (bStaticMesh)
         UpdateBVH(static_cast<UStaticMeshComponent*>(Component));
@@ -863,7 +903,7 @@ void UScene::UnregisterComponent(UActorComponent* Component)
 
     // 해제 도중 Transform 통지가 발생해도 다시 등록되지 않게 합니다.
     Component->bRegisteredWithScene = false;
-
+    RefreshComponentTick(Component);
     const bool bStaticMesh = Component->IsA(UStaticMeshComponent::GetClass());
     if (bStaticMesh)
         RemoveFromBVH(static_cast<UStaticMeshComponent*>(Component));

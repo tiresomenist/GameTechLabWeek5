@@ -111,6 +111,7 @@ void UStaticMeshComponent::Serialize(FArchive& Archive)
 				Archive.EndMapEntry();
 			}
 			Archive.EndMap();
+			RefreshUVScrollTick();
 		}
 	}
 }

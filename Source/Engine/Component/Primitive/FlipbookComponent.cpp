@@ -12,6 +12,8 @@
 void UFlipbookComponent::Initialize()
 {
 	Super::Initialize();
+    PrimaryComponentTick.bCanEverTick = true;
+    PrimaryComponentTick.TickGroup = ETickGroup::PostUpdate;
     GResourceManager* RM = GResourceManager::GetInstance();
 	Texture =RM->GetOrLoadTexture("Assets/Textures/FlameTexture.png");
     QuadMesh = RM->GetPrimitive(GetMeshNames().Flame);
@@ -41,7 +43,7 @@ void UFlipbookComponent::Tick(float DeltaTime)
     {
         // 반복하지 않으면 마지막 프레임을 유지하고 정지함
         FramePosition = FrameCount - 1;
-        bPlaying = false;
+        SetPlaying(false);
     }
     else
     {
@@ -101,12 +103,22 @@ void UFlipbookComponent::SetAtlasGrid(int32 InColumns, int32 InRows, int32 InFra
 
 void UFlipbookComponent::SetFramesPerSecond(float Value)
 {
-    if (std::isfinite(Value)) FramesPerSecond = (std::max)(Value, 0.0f);
+    if (!std::isfinite(Value)) return;
+    FramesPerSecond = (std::max)(Value, 0.0f);
+    RefreshPlaybackTick();
 }
 
 void UFlipbookComponent::SetPlayRate(float Value)
 {
-    if (std::isfinite(Value)) PlayRate = (std::max)(Value, 0.0f);
+    if (!std::isfinite(Value)) return;
+    PlayRate = (std::max)(Value, 0.0f);
+    RefreshPlaybackTick();
+}
+
+void UFlipbookComponent::SetPlaying(bool Value)
+{
+    bPlaying = Value;
+    RefreshPlaybackTick();
 }
 
 void UFlipbookComponent::SetCurrentFrame(int32 Value)
@@ -117,7 +129,7 @@ void UFlipbookComponent::SetCurrentFrame(int32 Value)
 void UFlipbookComponent::Restart()
 {
     FramePosition = 0.0;
-    bPlaying = true;
+    SetPlaying(true);
 }
 
 FTextureUVTransform UFlipbookComponent::GetUVTransform() const
@@ -195,3 +207,11 @@ void UFlipbookComponent::Serialize(FArchive& Archive)
         Restart();
     }
 }
+
+
+// 재생 위치가 실제로 진행되는 경우에만 Tick을 활성화합니다.
+void UFlipbookComponent::RefreshPlaybackTick()
+{
+    SetComponentTickEnabled(bPlaying && FramesPerSecond > 0.0f && PlayRate > 0.0f);
+}
+
