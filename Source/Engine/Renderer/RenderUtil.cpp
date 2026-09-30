@@ -106,10 +106,9 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 		const FStaticUniformGridCell* Cell = Candidate.SourceCell;
 		if (!Cell) { continue; }
 
-		for (const FStaticUniformGridPrimitive& GridPrimitive : Cell->Primitives)
+		for (const FUniformGridPrimitive& GridPrimitive : Cell->Primitives)
 		{
-			AddPrimitive(GridPrimitive.Primitive, Candidate.bFullyInsideFrustum,
-				&GridPrimitive.WorldBounds);
+			AddPrimitive(GridPrimitive.Primitive, Candidate.bFullyInsideFrustum, &GridPrimitive.WorldBounds);
 		}
 	}
 
