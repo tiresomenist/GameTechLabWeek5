@@ -22,19 +22,37 @@ namespace
 	bool IsSameHZBView(const FRenderViewSnapshot& A, const FRenderViewSnapshot& B)
 	{
 		if (A.ViewMode != B.ViewMode) return false;
+
 		const D3D11_VIEWPORT& VA = A.Viewport;
 		const D3D11_VIEWPORT& VB = B.Viewport;
+
 		if (VA.TopLeftX != VB.TopLeftX || VA.TopLeftY != VB.TopLeftY ||
 			VA.Width != VB.Width || VA.Height != VB.Height ||
 			VA.MinDepth != VB.MinDepth || VA.MaxDepth != VB.MaxDepth) return false;
 
-		for (int32 Row = 0; Row < 4; ++Row)
+		constexpr float RotationTolerance = 0.1f;   // 약 -도/frame
+		constexpr float TranslationTolerance = 2.0f;  // 월드 단위/frame
+
+		for (int32 Row = 0; Row < 3; ++Row)
 		{
-			for (int32 Column = 0; Column < 4; ++Column)
+			for (int32 Column = 0; Column < 3; ++Column)
 			{
-				if (A.ViewProjection.M[Row][Column] != B.ViewProjection.M[Row][Column]) return false;
+				if (std::abs(A.ViewMatrix.M[Row][Column] - B.ViewMatrix.M[Row][Column]) > RotationTolerance)
+				{
+					return false;
+				}
 			}
 		}
+
+		for (int32 Column = 0; Column < 3; ++Column)
+		{
+			if (std::abs(A.ViewMatrix.M[3][Column] - B.ViewMatrix.M[3][Column]) > TranslationTolerance)
+			{
+				return false;
+			}
+		}
+
+
 		return true;
 	}
 
