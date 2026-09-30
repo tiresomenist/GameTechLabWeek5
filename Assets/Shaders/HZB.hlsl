@@ -11,7 +11,7 @@ cbuffer HZBConstants : register(b0)
 
 // CopyDepthCS
 // 현재 depth buffer -> HZB mip 0으로 복사
-[numthreads(8, 8, 1)]
+[numthreads(16, 16, 1)]
 void CopyDepthCS(uint3 DispatchThreadID : SV_DispatchThreadID)
 {
     if (DispatchThreadID.x >= SourceSize.x || DispatchThreadID.y >= SourceSize.y)
@@ -23,7 +23,7 @@ void CopyDepthCS(uint3 DispatchThreadID : SV_DispatchThreadID)
 
 // DownsampleMaxCS
 // mip N+1 생성
-[numthreads(8, 8, 1)]
+[numthreads(16, 16, 1)]
 void DownsampleMaxCS(uint3 DispatchThreadID : SV_DispatchThreadID)
 {
     const uint2 DestinationSize = max(uint2(1, 1), SourceSize / 2);
@@ -136,7 +136,8 @@ void CullCellsCS(uint3 DispatchThreadID : SV_DispatchThreadID)
     const float2 ScreenMax = ViewportOffset + float2((NdcMax.x + 1.0f) * 0.5f * ViewportWidth, (1.0f - NdcMin.y) * 0.5f * ViewportHeight);
     const float LargestExtent = max(max(ScreenMax.x - ScreenMin.x, ScreenMax.y - ScreenMin.y), 1.0f);
     
-    const uint MipLevel = min((uint) ceil(log2(LargestExtent)), HZBMipCount - 1u);
+    //const uint MipLevel = min((uint) ceil(log2(LargestExtent)), HZBMipCount - 1u);
+    const uint MipLevel = min((uint) floor(log2(LargestExtent)), HZBMipCount - 1u);
     uint MipWidth;
     uint MipHeight;
     uint MipLevels;

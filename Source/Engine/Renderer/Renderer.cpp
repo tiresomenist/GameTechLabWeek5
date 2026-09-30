@@ -700,8 +700,8 @@ bool FRenderer::BuildHZBMip0()
 	DeviceContext->CSSetShaderResources(0, 1, &SourceDepth);
 	DeviceContext->CSSetUnorderedAccessViews(0, 1, &OutputMip, nullptr);
 
-	const uint32 GroupCountX = (HierarchicalZBuffer.GetWidth() + 7) / 8;
-	const uint32 GroupCountY = (HierarchicalZBuffer.GetHeight() + 7) / 8;
+	const uint32 GroupCountX = (HierarchicalZBuffer.GetWidth() + 15) / 16;
+	const uint32 GroupCountY = (HierarchicalZBuffer.GetHeight() + 15) / 16;
 
 	DeviceContext->Dispatch(GroupCountX, GroupCountY, 1);
 
