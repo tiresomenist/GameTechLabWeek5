@@ -714,6 +714,12 @@ void UScene::UpdateStaticUniformGridForActor(AActor* Actor, TArray<uint64>& Chan
         FVector LocalMin{};
         FVector LocalMax{};
 
+        if (!StaticMesh->GetLocalBounds(LocalMin, LocalMax))
+        {
+            bStaticUniformGridDirty = true;
+            return;
+        }
+
         const FBoundingBox Bounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(StaticMesh->GetWorldMatrix());
         const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
 
