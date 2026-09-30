@@ -194,10 +194,7 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 		const int32 ViewCountX =
 			static_cast<int32>(LOD.Impostor.ViewCountX);
 
-		int32 ViewX = static_cast<int32>(
-			std::round(
-				NomalizedYaw *
-				static_cast<float>(ViewCountX)));
+		int32 ViewX = static_cast<int32>(NomalizedYaw * static_cast<float>(ViewCountX) + 0.5f);
 
 		if (ViewX >= ViewCountX)
 			ViewX = 0;
@@ -226,10 +223,7 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 		const int32 ViewCountY =
 			static_cast<int32>(LOD.Impostor.ViewCountY);
 
-		int32 ViewY = static_cast<int32>(
-			std::round(
-				(1.0f - Pitch01) *
-				static_cast<float>(ViewCountY - 1)));
+		int32 ViewY = static_cast<int32>((1.0f - Pitch01) * static_cast<float>(ViewCountY - 1) + 0.5f);
 
 		ViewY = std::clamp(ViewY, 0, ViewCountY - 1);
 

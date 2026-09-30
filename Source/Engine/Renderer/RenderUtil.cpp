@@ -104,16 +104,19 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			for (int32 Index = FirstIndex; Index < EndIndex; ++Index)
 			{
 				RenderList[Index].ObjectIndex = ObjectIndex;
+			}
 
-				if (RenderList[Index].bImpostor) {
-					Objects[ObjectIndex].ImpostorCenterWS = RenderList[Index].ImpostorCenterWS;
+			if (RenderList[FirstIndex].bImpostor)
+			{
+				const FPrimitiveRenderData& ImpostorData = RenderList[FirstIndex];
 
-					Objects[ObjectIndex].ImpostorSize = RenderList[Index].ImpostorSize;
+				Objects[ObjectIndex].ImpostorCenterWS = ImpostorData.ImpostorCenterWS;
 
-					Objects[ObjectIndex].ImpostorUV = RenderList[Index].ImpostorUV;
+				Objects[ObjectIndex].ImpostorSize = ImpostorData.ImpostorSize;
 
-					Objects[ObjectIndex].ImpostorCameraLocation = RenderList[Index].ImpostorCameraLocation;
-				}
+				Objects[ObjectIndex].ImpostorUV = ImpostorData.ImpostorUV;
+
+				Objects[ObjectIndex].ImpostorCameraLocation = ImpostorData.ImpostorCameraLocation;
 			}
 		};
 
