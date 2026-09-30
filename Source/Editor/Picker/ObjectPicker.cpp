@@ -372,15 +372,16 @@ void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ra
 	FVector BoundsMin;
 	FVector BoundsMax;
 
+	/*
 	if (!Primitive->GetLocalBounds(BoundsMin, BoundsMax))
 	{
 		return;
 	}
+	*/
 
 	//Todo: Picking cache
 	// 월드 레이를 프리미티브의 로컬 좌표로 변환한다.
 	FMatrix InverseWorld;
-
 	if (!Primitive->TryGetInverseRenderWorldMatrix(Editor->GetEditorCamera(), InverseWorld))
 	{
 		return;

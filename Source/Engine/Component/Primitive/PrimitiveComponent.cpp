@@ -31,13 +31,13 @@ bool UPrimitiveComponent::TryGetInverseRenderWorldMatrix(const UCameraComponent*
         return RenderWorld.TryInverse(OutInverse);
     }
 
-    if (!bInverseWorldMatrixCached)
+    if (bInverseWorldMatrixCached == false)
     {
         bInverseWorldMatrixValid = RenderWorld.TryInverse(CachedInverseWorldMatrix);
         bInverseWorldMatrixCached = true;
     }
 
-    if (!bInverseWorldMatrixValid)
+    if (bInverseWorldMatrixValid == false)
     {
         return false;
     }
