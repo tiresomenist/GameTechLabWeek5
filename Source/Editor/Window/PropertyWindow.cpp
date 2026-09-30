@@ -191,10 +191,11 @@ void UPropertyWindow::SetSelectedValue(bool bSetRotation)
 	{
 		UScene* Scene = this->Editor->GetCurrentScene();
 		assert(Scene != nullptr);
+		TArray<uint64> ChangedCellKeys;
 
 		Scene->UpdateBVHForActor(TransformTarget->GetOwner());
-		Scene->InvalidateStaticUniformGrid();
-		GEngine::GetInstance()->InvalidateOcclusionHistory();
+		Scene->UpdateStaticUniformGridForActor(TransformTarget->GetOwner(), ChangedCellKeys);
+		GEngine::GetInstance()->InvalidateOcclusionCells(ChangedCellKeys);
 	}
 }
 

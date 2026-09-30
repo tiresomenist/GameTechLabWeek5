@@ -146,7 +146,8 @@ FTextureUVTransform UFlipbookComponent::GetUVTransform() const
     };
 }
 
-void UFlipbookComponent::CreateRenderData (TArray<FPrimitiveRenderData>& ComponentRenderData, const UCameraComponent* Camera, bool bSelected)
+// 현재 애니메이션 프레임의 재질 정보로 빌보드 메시 요청을 생성합니다.
+void UFlipbookComponent::CreateRenderData (TArray<FPrimitiveRenderData>& ComponentRenderData, const FPrimitiveRenderContext& Context, bool bSelected)
 {
     if (!Texture || !Texture->GetSRV()||!QuadMesh){ return; }
 

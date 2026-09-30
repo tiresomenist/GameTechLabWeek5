@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Engine.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "Windows.h"
 
 #include "Engine/Object/ObjectFactory.h"
@@ -100,6 +101,9 @@ bool GEngine::Initialize(HWND InHwnd, EApplicationMode Mode, const std::function
 // 엔진의 메인 게임 루프를 실행합니다.
 void GEngine::Tick()
 {
+    FDebugCpuStats& DebugStats = FDebugCpuStats::Get();
+    DebugStats.BeginFrame();
+    FScopedDebugCpuTime CpuFrame(EDebugCpuStat::Frame);
     using Clock = std::chrono::high_resolution_clock;
 	float DeltaTime = GetTime() - LastTickTime;
 	LastTickTime = GetTime();
@@ -115,7 +119,11 @@ void GEngine::Tick()
         GSceneManager::GetInstance()->Tick(DeltaTime);
     }
 
-	Editor->Tick(DeltaTime);
+    {
+        // 편집 입력과 기즈모 갱신을 포함한 시간을 측정합니다.
+        FScopedDebugCpuTime CpuEditor(EDebugCpuStat::EditorTick);
+	    Editor->Tick(DeltaTime);
+    }
 
     auto EndGame = Clock::now();
     float CurGameMs = std::chrono::duration<float, std::milli>(EndGame - StartGame).count();
@@ -129,6 +137,9 @@ void GEngine::Tick()
     EngineStats.UpdateUnitStat(DeltaTime, GameTimeMs, Renderer.GetDrawTimeMs(),
         Renderer.GetGPUTimeMs(), Renderer.GetGPUWaitMs());
     EngineStats.UpdateMemoryStat();
+    // UI는 다음 프레임에 완료된 통계를 읽습니다.
+    CpuFrame.Finish();
+    DebugStats.EndFrame(DeltaTime);
 }
 
 // 엔진의 자원을 정리합니다.

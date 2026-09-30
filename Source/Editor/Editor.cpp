@@ -1,4 +1,5 @@
-#include "pch.h"
+﻿#include "pch.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "Editor.h"
 
 #include "Engine/Component/CameraComponent.h"
@@ -1018,6 +1019,101 @@ void FEditor::DrawStatOverlay()
 	DrawList->PopClipRect();
 }
 
+// 디버그 표시와 다음 프레임의 계측을 함께 전환합니다.
+void FEditor::ToggleDebugStats()
+{
+	FDebugCpuStats& Stats = FDebugCpuStats::Get();
+	Stats.SetEnabled(!Stats.IsEnabled());
+}
+
+// 상단 메뉴의 선택 상태에 사용합니다.
+bool FEditor::IsShowingDebugStats() const
+{
+	return FDebugCpuStats::Get().IsEnabled();
+}
+
+// 기존 Stat처럼 활성 뷰 우측 상단에 입력을 가로채지 않는 텍스트를 직접 그립니다.
+void FEditor::DrawDebugStatOverlay()
+{
+	FDebugCpuStats& Debug = FDebugCpuStats::Get();
+	if (!Debug.IsEnabled()) return;
+	const ImGuiViewport* Main = ImGui::GetMainViewport();
+	ImVec2 ClipMin = Main->WorkPos;
+	ImVec2 ClipMax(Main->WorkPos.x + Main->WorkSize.x, Main->WorkPos.y + Main->WorkSize.y);
+	D3D11_VIEWPORT ActiveViewport{};
+	const D3D11_VIEWPORT* Active = nullptr;
+	if (CurrEditedViewportIndex < static_cast<uint32>(Viewports.Num()))
+	{
+		ActiveViewport = Viewports[CurrEditedViewportIndex].GetRenderView().Viewport;
+		Active = &ActiveViewport;
+		// 기존 Stat과 같은 뷰 영역을 사용하고 뷰 툴바 아래에서 시작합니다.
+		ClipMin = ImVec2(Main->Pos.x + Active->TopLeftX, Main->Pos.y + Active->TopLeftY + 40.0f);
+		ClipMax = ImVec2(Main->Pos.x + Active->TopLeftX + Active->Width, Main->Pos.y + Active->TopLeftY + Active->Height);
+	}
+	constexpr float FontSize = 22.0f;
+	constexpr float LineHeight = 27.0f;
+	constexpr float Margin = 12.0f;
+	constexpr float ColumnGap = 28.0f;
+	const float AvailableWidth = ClipMax.x - ClipMin.x - Margin * 2.0f;
+	const float AvailableHeight = ClipMax.y - ClipMin.y - Margin * 2.0f;
+	if (AvailableWidth <= 0.0f || AvailableHeight < LineHeight) return;
+
+	const FEngineStats& EngineStats = GEngine::GetInstance()->GetEngineStats();
+	const FUnitStat& Unit = EngineStats.GetUnitStat();
+	const FRenderSubmissionCounts& Submission = EngineStats.GetSubmissionStat();
+	const D3D11_VIEWPORT& Screen = GEngine::GetInstance()->GetViewport();
+	const FDebugRenderCounts& Counts = Debug.GetRenderCounts();
+	// 표시 행 수가 고정되어 있으므로 프레임마다 동적 배열을 할당하지 않습니다.
+	char Lines[DebugCpuStatCount + 12][256]{};
+	uint32 LineCount = 0;
+	if (Debug.HasSamples())
+		sprintf_s(Lines[LineCount++], "DEBUG   %.1f FPS  /  %.2f ms", Debug.GetFPS(), 1000.0 / Debug.GetFPS());
+	else sprintf_s(Lines[LineCount++], "DEBUG   Collecting CPU samples...");
+	sprintf_s(Lines[LineCount++], "Screen %.0f x %.0f  |  View %.0f x %.0f", Screen.Width, Screen.Height,
+		Active ? Active->Width : Main->WorkSize.x, Active ? Active->Height : Main->WorkSize.y);
+	sprintf_s(Lines[LineCount++], "Game %.2f  |  Draw %.2f  |  GPU %.2f ms", Unit.GameTimeMs, Unit.DrawTimeMs, Unit.GPUTimeMs);
+	if (ObjectPicker && ObjectPicker->GetTotalPickCount() > 0)
+	{
+		sprintf_s(Lines[LineCount++], "Pick count %u  |  Last %.3f ms", ObjectPicker->GetTotalPickCount(), ObjectPicker->GetLastPickTimeMs());
+		sprintf_s(Lines[LineCount++], "Pick avg %.3f  |  Total %.3f ms", ObjectPicker->GetAveragePickTimeMs(), ObjectPicker->GetTotalPickTimeMs());
+	}
+	else sprintf_s(Lines[LineCount++], "Pick: no object pick recorded");
+	sprintf_s(Lines[LineCount++], "Requests %u  |  Draws %u  |  Tris %u", Counts.Requests, Submission.DrawCalls, Submission.Triangles);
+	sprintf_s(Lines[LineCount++], "HZB cells %u -> %u  |  History %u/%u views", Counts.CandidateCells, Counts.RenderCells, Counts.HistoryViews, Counts.Views);
+	sprintf_s(Lines[LineCount++], "CPU: avg / peak ms (calls/frame)");
+	sprintf_s(Lines[LineCount++], "0.25s / all views; nested rows overlap");
+	static constexpr const char* Labels[] = {"CPU frame", "Scene Tick", "Editor Tick", "  Gizmo Tick",
+		"BVH update", "BVH rebuild", "Grid rebuild", "GetRenderList", "BuildPassDraws", "Opaque sort",
+		"CB map/upload", "Opaque submit", "Other passes", "HZB Map", "Present"};
+	for (uint32 Index = 0; Index < DebugCpuStatCount; ++Index)
+	{
+		const FDebugCpuSample& Sample = Debug.GetSample(static_cast<EDebugCpuStat>(Index));
+		sprintf_s(Lines[LineCount++], "%s: %.3f / %.3f (%.1f)", Labels[Index], Sample.AverageMs, Sample.PeakMs, Sample.CallsPerFrame);
+	}
+
+	ImFont* Font = ImGui::GetFont();
+	float ColumnWidth = 0.0f;
+	for (uint32 Index = 0; Index < LineCount; ++Index)
+		ColumnWidth = (std::max)(ColumnWidth, Font->CalcTextSizeA(FontSize, FLT_MAX, 0.0f, Lines[Index]).x);
+	// 세로 공간이 부족하면 읽기 크기를 유지한 채 화면 너비에 맞춰 열을 나눕니다.
+	const uint32 FitRows = static_cast<uint32>(AvailableHeight / LineHeight);
+	const uint32 FitColumns = (std::max)(1u, static_cast<uint32>((AvailableWidth + ColumnGap) / (ColumnWidth + ColumnGap)));
+	const uint32 Columns = (std::min)(FitColumns, (LineCount + FitRows - 1) / FitRows);
+	const uint32 Rows = (LineCount + Columns - 1) / Columns;
+	const float TotalWidth = Columns * (ColumnWidth + ColumnGap) - ColumnGap;
+	const float StartX = (std::max)(ClipMin.x + Margin, ClipMax.x - Margin - TotalWidth);
+	ImDrawList* DrawList = ImGui::GetForegroundDrawList();
+	DrawList->PushClipRect(ClipMin, ClipMax);
+	for (uint32 Index = 0; Index < LineCount; ++Index)
+	{
+		const ImVec2 Pos(StartX + (Index / Rows) * (ColumnWidth + ColumnGap), ClipMin.y + Margin + (Index % Rows) * LineHeight);
+		// 창이나 입력 항목을 만들지 않아 글자 위에서도 기존 피킹이 가능합니다.
+		DrawList->AddText(Font, FontSize, ImVec2(Pos.x + 1.0f, Pos.y + 1.0f), IM_COL32(0, 0, 0, 255), Lines[Index]);
+		DrawList->AddText(Font, FontSize, Pos, IM_COL32(50, 255, 50, 255), Lines[Index]);
+	}
+	DrawList->PopClipRect();
+}
+
 float FEditor::DrawStatFPS(ImDrawList* DrawList, float X, float Y)
 {
 	const FUnitStat& Unit = GEngine::GetInstance()->GetEngineStats().GetUnitStat();
@@ -1135,6 +1231,7 @@ void FEditor::DrawWindows(float DeltaTime)
 	{
 		Window->Render(DeltaTime);
 	}
+	DrawDebugStatOverlay();
 }
 
 // 일반 에디터는 전체 출력 영역을 씬 뷰포트로 사용합니다.

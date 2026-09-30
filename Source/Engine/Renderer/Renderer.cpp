@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "Renderer.h"
 #include "Engine/Renderer/Device.h"
 #include "Engine/Renderer/Context.h"
@@ -238,7 +239,11 @@ void FRenderer::SwapBuffer()
 	using Clock = std::chrono::high_resolution_clock;
 	auto StartWait = Clock::now();
 
-	const HRESULT Result = SwapChain->Present(0, PresentFlags);
+	HRESULT Result;
+	{
+		FScopedDebugCpuTime CpuTime(EDebugCpuStat::Present);
+		Result = SwapChain->Present(0, PresentFlags);
+	}
 
 	auto EndWait = Clock::now();
 	float CurWaitMs = std::chrono::duration<float, std::milli>(EndWait - StartWait).count();
@@ -751,6 +756,8 @@ bool FRenderer::BuildHZBMips()
 	ID3D11Buffer* NullBuffer = nullptr;
 	DeviceContext->CSSetConstantBuffers(0, 1, &NullBuffer);
 	DeviceContext->CSSetShader(nullptr, nullptr, 0);
+
+	return true;
 }
 
 // DSV 바인딩을 해제하고 다음 프레임에서 읽을 Hi-Z를 생성한다.

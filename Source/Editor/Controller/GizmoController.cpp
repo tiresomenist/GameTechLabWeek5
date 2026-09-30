@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "Editor/Controller/GizmoController.h"
 #include "Editor/Editor.h"
 #include "Engine/Component/CameraComponent.h"
@@ -274,6 +275,7 @@ void FGizmoController::ChangeMod()
 
 void FGizmoController::Tick()
 {
+    FScopedDebugCpuTime CpuTime(EDebugCpuStat::GizmoTick);
     UCameraComponent* Camera = Editor->GetEditorCamera();
     if (!Camera) return;
 
@@ -404,12 +406,13 @@ void FGizmoController::Tick()
     }
     }
 
-    // Todo: BVH
     if (bTransformChanged && Editor->GetCurrentScene())
     {
+        TArray<uint64> ChangedCellKeys;
+
         Editor->GetCurrentScene()->UpdateBVHForActor(SelectedObject->GetOwner());
-        Editor->GetCurrentScene()->InvalidateStaticUniformGrid();
-        GEngine::GetInstance()->InvalidateOcclusionHistory();
+        Editor->GetCurrentScene()->UpdateStaticUniformGridForActor(SelectedObject->GetOwner(), ChangedCellKeys);
+        GEngine::GetInstance()->InvalidateOcclusionCells(ChangedCellKeys);
     }
 
 	if (!Input.GetKey(GInputManager::EI_LMOUSE)) EndDrag();

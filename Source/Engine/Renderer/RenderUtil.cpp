@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "RenderUtil.h"
 #include "Core/Container/Array.h"
 #include "Core/Math/Box.h"
@@ -33,12 +34,16 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 	TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects,
 	const TArray<FGridCellCandidate>& RenderGridCells, const FFrustum* Frustum)
 {
+	FScopedDebugCpuTime CpuTime(EDebugCpuStat::Gather);
 	RenderList.Empty();
 	if (!Editor || !Scene || !Camera) return;
 
 	const UActorComponent* SelectedComponent = Editor->GetSelectedSceneComponent();
+	// 기존 LOD/임포스터의 카메라 좌표 기준을 유지하며 View당 한 번만 읽습니다.
+	const FVector CameraLocation = Camera->GetRelativeLocation();
 
-	auto AddPrimitive = [&](UPrimitiveComponent* Primitive)
+	auto AddPrimitive = [&](UPrimitiveComponent* Primitive, bool bSkipPrimitiveFrustum,
+		const FBoundingBox* CachedWorldBounds = nullptr)
 		{
 			if (!Primitive->IsVisible())
 			{
@@ -49,19 +54,47 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			Object.SourcePrimitive = Primitive;
 			Object.World = Primitive->GetRenderWorldMatrix(Camera);
 			Object.SortCenterWS = Object.World.GetOrigin();
-			FVector LocalMin{};
-			FVector LocalMax{};
-			if (Primitive->GetLocalBounds(LocalMin, LocalMax))
-			{
-				Object.WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Object.World);
-				Object.bHasWorldBounds = true;
-				Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
+			bool bHasWorldCenter = CachedWorldBounds != nullptr;
 
-				if (Frustum && !Frustum->Intersects(Object.WorldBounds)) return;
+			if (CachedWorldBounds)
+			{
+				Object.SortCenterWS = (CachedWorldBounds->Min + CachedWorldBounds->Max) * 0.5f;
+
+				if (!bSkipPrimitiveFrustum)
+				{
+					if (Frustum && !Frustum->Intersects(*CachedWorldBounds)) return;
+				}
 			}
+			else {
+				FVector LocalMin{};
+				FVector LocalMax{};
+				const bool bHasLocalBounds = Primitive->GetLocalBounds(LocalMin, LocalMax);
+				bHasWorldCenter = bHasLocalBounds;
+
+				if (bHasLocalBounds)
+				{
+					if (bSkipPrimitiveFrustum)
+					{
+						// 셀 전체가 내부이면 객체 Bounds를 만들지 않고 LOD·정렬용 중심만 계산합니다.
+						Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
+					}
+					else
+					{
+						// 경계 셀과 개별 객체는 Bounds 변환 중 계산한 중심까지 함께 재사용합니다.
+						const FBoundingBox WorldBounds = FBoundingBox(LocalMin, LocalMax).
+							TransformBounds(Object.World, &Object.SortCenterWS);
+
+						if (Frustum && !Frustum->Intersects(WorldBounds)) return;
+					}
+				}
+			}
+			
 
 			const int32 FirstIndex = RenderList.Num();
-			Primitive->CreateRenderData(RenderList, Camera, Primitive == SelectedComponent);
+
+			// 캐시와 직접 계산 경로 모두 중심의 유효성을 LOD 수집에 전달합니다.
+			const FPrimitiveRenderContext Context{Camera, Object.World, Object.SortCenterWS, CameraLocation, bHasWorldCenter};
+			Primitive->CreateRenderData(RenderList, Context, Primitive == SelectedComponent);
 			const int32 EndIndex = RenderList.Num();
 			if (FirstIndex == EndIndex) { return; }
 
@@ -89,21 +122,21 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 		const FStaticUniformGridCell* Cell = Candidate.SourceCell;
 		if (!Cell) { continue; }
 
-		for (UPrimitiveComponent* Primitive : Cell->Primitives)
+		for (const FUniformGridPrimitive& GridPrimitive : Cell->Primitives)
 		{
-			AddPrimitive(Primitive);
+			AddPrimitive(GridPrimitive.Primitive, Candidate.bFullyInsideFrustum, &GridPrimitive.WorldBounds);
 		}
 	}
 
-	for (UPrimitiveComponent* Primitive : Scene->GetStaticUniformGridFallbackPrimitives())
+	for (UPrimitiveComponent* Primitive : Scene->GetStaticUniformGridFallback())
 	{
-		AddPrimitive(Primitive);
+		AddPrimitive(Primitive, false);
 	}
 
 	// 비정적 메시에는 기존 개별 경로를 유지
 	Scene->ForEachNonStaticMesh([&](UPrimitiveComponent* Primitive)
 		{
-			AddPrimitive(Primitive);
+			AddPrimitive(Primitive, false);
 		});
 
 	//SpotLight를 렌더링하기위한 임시 순회, 차후에 Billborad로 확장할것임.
@@ -129,6 +162,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			RenderList.Add(Data);
 		});
 
+	FDebugCpuStats::Get().AddRequests(static_cast<uint32>(RenderList.Num()));
 	return;
 }
 
@@ -285,15 +319,20 @@ void RenderUtil::GatherGridCellCandidates(UScene* Scene, const FFrustum* Frustum
 
 	for (const FStaticUniformGridCell& Cell : Scene->GetStaticUniformGrid())
 	{
-		if (Frustum && !Frustum->Intersects(Cell.ContentBounds))
+		if (Cell.Primitives.IsEmpty()) { continue; }
+
+		bool bFullyInsideFrustum = false;
+		if (Frustum)
 		{
-			continue;
+			if(!Frustum->Intersects(Cell.ContentBounds)) { continue; }
+			bFullyInsideFrustum = Frustum->Contains(Cell.ContentBounds);
 		}
 
 		FGridCellCandidate Candidate{};
 		Candidate.Key = Cell.Key;
 		Candidate.OcclusionBounds = Cell.ContentBounds;
 		Candidate.SourceCell = &Cell;
+		Candidate.bFullyInsideFrustum = bFullyInsideFrustum;
 
 		OutCandidates.Add(Candidate);
 	}

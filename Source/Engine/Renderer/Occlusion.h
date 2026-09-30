@@ -24,6 +24,7 @@ public:
 	void QueueReadback(ID3D11DeviceContext* Context, const TArray<uint64>& CellKeys);
 	bool TryReadback(ID3D11DeviceContext* Context);
 	bool IsVisibleLastFrame(uint64 CellKey) const;
+	void InvalidateCells(const TArray<uint64>& CellKeys);
 
 	ID3D11ShaderResourceView* GetCellSRV() const { return CellSRV.Get(); }
 	uint32 GetCellCount() const { return CellCount; }

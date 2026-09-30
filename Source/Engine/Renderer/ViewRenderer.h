@@ -91,6 +91,7 @@ public:
 	}
 	void SetHZBOcclusionEnabled(bool bEnabled) { bEnableHZBOcclusion = bEnabled; }
 	bool IsHZBOcclusionEnabled() const { return bEnableHZBOcclusion; }
+	void InvalidateOcclusionCells(const TArray<uint64>& CellKeys);
 
 private:
 	bool CreateShaders();

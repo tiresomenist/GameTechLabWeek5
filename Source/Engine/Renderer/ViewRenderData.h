@@ -24,13 +24,10 @@ struct FRenderViewSnapshot
     EViewModeIndex ViewMode = EViewModeIndex::VMI_Unlit;
 };
 
-
 struct FRenderObjectData
 {
     FMatrix World = FMatrix::Identity;
     FVector SortCenterWS{};
-    FBoundingBox WorldBounds{};
-    bool bHasWorldBounds = false;
 
     //Impostor
     FVector ImpostorCenterWS{};
@@ -46,6 +43,7 @@ struct FGridCellCandidate
     uint64 Key = 0;
     FBoundingBox OcclusionBounds;
     const FStaticUniformGridCell* SourceCell = nullptr;  // 그릴 때 내부 Primitive에 접근하기 위한 원본 Grid cell
+    bool bFullyInsideFrustum = false;
 };
 
 struct FViewRenderData

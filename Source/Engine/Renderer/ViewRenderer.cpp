@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "ViewRenderer.h"
 #include "Engine/Component/CameraComponent.h"
 #include "Engine/Renderer/Context.h"
@@ -21,19 +22,37 @@ namespace
 	bool IsSameHZBView(const FRenderViewSnapshot& A, const FRenderViewSnapshot& B)
 	{
 		if (A.ViewMode != B.ViewMode) return false;
+
 		const D3D11_VIEWPORT& VA = A.Viewport;
 		const D3D11_VIEWPORT& VB = B.Viewport;
+
 		if (VA.TopLeftX != VB.TopLeftX || VA.TopLeftY != VB.TopLeftY ||
 			VA.Width != VB.Width || VA.Height != VB.Height ||
 			VA.MinDepth != VB.MinDepth || VA.MaxDepth != VB.MaxDepth) return false;
 
-		for (int32 Row = 0; Row < 4; ++Row)
+		constexpr float RotationTolerance = 0.1f;   // 약 -도/frame
+		constexpr float TranslationTolerance = 2.0f;  // 월드 단위/frame
+
+		for (int32 Row = 0; Row < 3; ++Row)
 		{
-			for (int32 Column = 0; Column < 4; ++Column)
+			for (int32 Column = 0; Column < 3; ++Column)
 			{
-				if (A.ViewProjection.M[Row][Column] != B.ViewProjection.M[Row][Column]) return false;
+				if (std::abs(A.ViewMatrix.M[Row][Column] - B.ViewMatrix.M[Row][Column]) > RotationTolerance)
+				{
+					return false;
+				}
 			}
 		}
+
+		for (int32 Column = 0; Column < 3; ++Column)
+		{
+			if (std::abs(A.ViewMatrix.M[3][Column] - B.ViewMatrix.M[3][Column]) > TranslationTolerance)
+			{
+				return false;
+			}
+		}
+
+
 		return true;
 	}
 
@@ -517,30 +536,37 @@ void FViewRenderer::RenderView(
 		Data, &PipelineStateCache, PassDraws, PrimitiveVisibility);
 	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws, OpaqueSortScratch);
 
-	CBRingBuffer.BeginFrameMap(Context1.Get());
-	CBManager.UploadObjectConstants(Context1.Get(), &CBRingBuffer,
-		Data, PassDrawBuilder.GetReferenceObjectIndices());
-	CBManager.UploadMaterialConstants(Context1.Get(), &CBRingBuffer,
-		PassDrawBuilder.GetReferencedMaterials());
-	CBRingBuffer.EndFrameMap(Context1.Get());
+	{
+		// 상수 구성, Map, 복사, Unmap을 한 구간으로 측정합니다.
+		FScopedDebugCpuTime CpuTime(EDebugCpuStat::ConstantUpload);
+		CBRingBuffer.BeginFrameMap(Context1.Get());
+		CBManager.UploadObjectConstants(Context1.Get(), &CBRingBuffer,
+			Data, PassDrawBuilder.GetReferenceObjectIndices());
+		CBManager.UploadMaterialConstants(Context1.Get(), &CBRingBuffer,
+			PassDrawBuilder.GetReferencedMaterials());
+		CBRingBuffer.EndFrameMap(Context1.Get());
+	}
 
 	// 첫 패스를 실행하기 전에 현재 View의 상수를 반영한다.
 	UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
 	ID3D11Buffer* ViewCB = TransformConstantBuffer.Get();
 
-	PassExecutor.ExecutePass(Context1.Get(), PassDraws.OpaqueDraws,
-		PipelineStateCache, CBManager, ViewCB, SubmissionStats);
-
-	RenderBatchLine(Data.View.ViewProjection);
-
-	PassExecutor.ExecutePass(Context1.Get(), PassDraws.AdditiveDraws,
-		PipelineStateCache, CBManager, ViewCB, SubmissionStats);
-	PassExecutor.ExecutePass(Context1.Get(), PassDraws.OutlineDraws,
-		PipelineStateCache, CBManager, ViewCB, SubmissionStats);
-	PassExecutor.ExecutePass(Context1.Get(), PassDraws.GizmoDraws,
-		PipelineStateCache, CBManager, ViewCB, SubmissionStats);
-
-	RenderVisibleText(Data);
+	{
+		FScopedDebugCpuTime CpuTime(EDebugCpuStat::Opaque);
+		PassExecutor.ExecutePass(Context1.Get(), PassDraws.OpaqueDraws,
+			PipelineStateCache, CBManager, ViewCB, SubmissionStats);
+	}
+	{
+		FScopedDebugCpuTime CpuTime(EDebugCpuStat::OtherPasses);
+		RenderBatchLine(Data.View.ViewProjection);
+		PassExecutor.ExecutePass(Context1.Get(), PassDraws.AdditiveDraws,
+			PipelineStateCache, CBManager, ViewCB, SubmissionStats);
+		PassExecutor.ExecutePass(Context1.Get(), PassDraws.OutlineDraws,
+			PipelineStateCache, CBManager, ViewCB, SubmissionStats);
+		PassExecutor.ExecutePass(Context1.Get(), PassDraws.GizmoDraws,
+			PipelineStateCache, CBManager, ViewCB, SubmissionStats);
+		RenderVisibleText(Data);
+	}
 
 	UpdateTransformConstantBuffer(FMatrix::Identity, Data.View.ViewProjection);
 }
@@ -566,6 +592,8 @@ void FViewRenderer::FilterGridCellCandidates(const FRenderViewSnapshot& View,
 		{
 			OutRenderGridCells.Add(Candidate);
 		}
+		FDebugCpuStats::Get().AddVisibility(static_cast<uint32>(Candidates.Num()),
+			static_cast<uint32>(OutRenderGridCells.Num()), false);
 		return;
 	}
 
@@ -578,7 +606,17 @@ void FViewRenderer::FilterGridCellCandidates(const FRenderViewSnapshot& View,
 			OutRenderGridCells.Add(Candidate);
 		}
 	}
+	FDebugCpuStats::Get().AddVisibility(static_cast<uint32>(Candidates.Num()),
+		static_cast<uint32>(OutRenderGridCells.Num()), true);
 
+}
+
+void FViewRenderer::InvalidateOcclusionCells(const TArray<uint64>& CellKeys)
+{
+	for (auto& Entry : HZBViewStates)
+	{
+		Entry.second.Culler.InvalidateCells(CellKeys);
+	}
 }
 
 void FViewRenderer::UpdateTransformConstantBuffer(const FMatrix& World, const FMatrix& VP)

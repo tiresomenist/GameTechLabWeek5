@@ -30,12 +30,10 @@ namespace {
         float Padding[2]{};
     };
 
-    constexpr uint32 ViewCountX = 8;
-    constexpr uint32 ViewCountY = 4;
+    constexpr uint32 ViewCountX = 16;
+    constexpr uint32 ViewCountY = 8;
 
     constexpr uint32 TileSize = 256;
-
-    constexpr float PitchDegrees[ViewCountY] ={60.0f, 20.0f, -20.0f, -60.0f};
 }
 
 
@@ -111,7 +109,8 @@ bool FImpostorBaker::Bake(UStaticMesh* StaticMesh, const FString& OutputPath)
 
     for (uint32 Y = 0; Y < ViewCountY; ++Y)
     {
-        const float Pitch = PitchDegrees[Y] * PI / 180.0f;
+        const float PitchDegrees = 60.0f - 120.0f * (static_cast<float>(Y) / static_cast<float>(ViewCountY - 1));
+        const float Pitch = PitchDegrees * PI / 180.0f;
 
         const float CosPitch = std::cos(Pitch);
 
