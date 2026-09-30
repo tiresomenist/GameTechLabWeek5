@@ -74,6 +74,10 @@ namespace
 
 const FFastMatrix FFastMatrix::Identity{};
 
+FFastMatrix::FFastMatrix(FFastMatrixUninitializedTag) noexcept
+{
+}
+
 FFastMatrix::FFastMatrix(float m00, float m01, float m02, float m03,
     float m10, float m11, float m12, float m13,
     float m20, float m21, float m22, float m23,
@@ -128,6 +132,15 @@ FFastMatrix FFastMatrix::MakeRotationMatrix(const FVector& Rotation)
 {
     // 기존 FMatrix와 동일한 Euler 해석을 사용한다.
     const FQuaternion Q = FQuaternion::FromEuler(Rotation);
+    return MakeMatrix(XMMatrixRotationQuaternion(
+        XMVectorSet(Q.X, Q.Y, Q.Z, Q.W)));
+}
+
+FFastMatrix FFastMatrix::MakeRotationMatrix(const FQuaternion& Rotation)
+{
+    FQuaternion Q = Rotation;
+    Q.Normalize();
+
     return MakeMatrix(XMMatrixRotationQuaternion(
         XMVectorSet(Q.X, Q.Y, Q.Z, Q.W)));
 }

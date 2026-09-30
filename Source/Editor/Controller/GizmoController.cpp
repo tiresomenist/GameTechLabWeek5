@@ -13,7 +13,7 @@
 
 namespace
 {
-	bool WorldToPixel(const FVector& Position,const FMatrix& ViewProjection,const D3D11_VIEWPORT& Viewport, FVector& OutPixel)
+	bool WorldToPixel(const FVector& Position,const FFastMatrix& ViewProjection,const D3D11_VIEWPORT& Viewport, FVector& OutPixel)
 	{
 		const FVector4 Clip = FVector4(Position, 1.0f) * ViewProjection;
 
@@ -37,7 +37,7 @@ namespace
         FVector Direction;
 	};
 
-    FMouseRay GetMouseRay(const FVector2& Position, const FMatrix& ViewProjection, const D3D11_VIEWPORT& Viewport)
+    FMouseRay GetMouseRay(const FVector2& Position, const FFastMatrix& ViewProjection, const D3D11_VIEWPORT& Viewport)
     {
 		float NDCX = 2.0f * (Position.X - Viewport.TopLeftX) / Viewport.Width - 1.0f;
 		float NDCY = 1.0f - 2.0f * (Position.Y - Viewport.TopLeftY) / Viewport.Height;
@@ -45,7 +45,7 @@ namespace
 		FVector4 Near(NDCX, NDCY, 0.0f, 1.0f);
 		FVector4 Far(NDCX, NDCY, 1.0f, 1.0f);
         
-        FMatrix VPInverse;
+        FFastMatrix VPInverse;
 		if (!ViewProjection.TryInverse(VPInverse)) {
             return {};
 		}
@@ -105,7 +105,7 @@ void FGizmoController::CalculateAxis()
 
     Camera->SetAspectRatio(Viewport.Width / Viewport.Height);
 
-    FMatrix ViewProjection = Camera->GetViewMatrix() * Camera->GetProjectionMatrix();
+    FFastMatrix ViewProjection = Camera->GetViewMatrix() * Camera->GetProjectionMatrix();
 
     // 현재 프로젝트는 UpdateTransform()에서 축별 행렬을 갱신
     if (!ObjectAxisGizmo->UpdateTransform()) return;
@@ -188,7 +188,7 @@ bool FGizmoController::BeginDrag(int32 Axis)
     const auto& Viewport = ViewportClient.GetViewportInfo();
     if (Viewport.Width <= 0.0f || Viewport.Height <= 0.0f) return false; //창 크기가 0보다 작으면
 
-	const FMatrix ViewProjection = Camera->GetViewMatrix() * Camera->GetProjectionMatrix();
+	const FFastMatrix ViewProjection = Camera->GetViewMatrix() * Camera->GetProjectionMatrix();
 
 	if (Mode == EGizmoMode::Translate)
 	{

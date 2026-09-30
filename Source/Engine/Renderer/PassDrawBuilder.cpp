@@ -185,7 +185,7 @@ FPipelineKey FPassDrawBuilder::MakePipelineKey(const FMaterial* Material, EVerte
 }
 
 uint32 FPassDrawBuilder::CalculateDepthBucket(
-	const FVector& SortCenterWS, const FMatrix& ViewMatrix, float NearZ, float FarZ) const
+	const FVector& SortCenterWS, const FFastMatrix& ViewMatrix, float NearZ, float FarZ) const
 {
 	// 정렬에는 Z만 필요하므로 X, Y, W 성분의 변환을 생략합니다.
 	const float ViewZ =

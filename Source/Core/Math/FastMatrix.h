@@ -19,6 +19,7 @@ struct FFastMatrix
     static FFastMatrix MakeRotationYMatrix(float Radian);
     static FFastMatrix MakeRotationZMatrix(float Radian);
     static FFastMatrix MakeRotationMatrix(const FVector& Rotation);
+    static FFastMatrix MakeRotationMatrix(const FQuaternion& Rotation);
     static FFastMatrix MakeModelMatrix(
         const FVector& Location,
         const FQuaternion& Rotation,

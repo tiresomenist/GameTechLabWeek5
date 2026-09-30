@@ -3,6 +3,7 @@
 #include "pch.h"
 
 #include "Core/Math/Matrix.h"
+#include "Core/Math/FastMatrix.h"
 #include "Core/Math/Vector.h"
 #include "Core/Math/Box.h"
 
@@ -30,7 +31,7 @@ struct FFrustum
 	FPlane Near;
 	FPlane Far;
 
-	static FFrustum FrustumFromViewProjection(const FMatrix& M)
+	static FFrustum FrustumFromViewProjection(const FFastMatrix& M)
 	{
 		FFrustum result;
 
