@@ -12,13 +12,20 @@
 // Todo: BVH
 #include "Engine/Scene/SceneBVH.h"
 
-// 실제 Render Data를 만든 뒤, Primitive index가 채워진 cell
+// 정적 grid 안에서 primitive와 현재 world AABB를 보관
+struct FUniformGridPrimitive
+{
+	UPrimitiveComponent* Primitive = nullptr;
+	FBoundingBox WorldBounds;
+};
+
+// 실제 Render Data를 만든 뒤, index가 채워진 cell
 struct FStaticUniformGridCell
 {
 	uint64 Key = 0;
 	FBoundingBox SpatialBounds;  // 고정 nxn
 	FBoundingBox ContentBounds;  // world AABB 합집합
-	TArray<UPrimitiveComponent*> Primitives;
+	TArray<FUniformGridPrimitive> Primitives;
 };
 
 struct FPrimitiveRenderData;

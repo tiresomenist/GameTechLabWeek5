@@ -635,7 +635,7 @@ void UScene::BuildStaticUniformGrid() const
                 Cell.ContentBounds.Max.Y = std::max(Cell.ContentBounds.Max.Y, WorldBounds.Max.Y);
                 Cell.ContentBounds.Max.Z = std::max(Cell.ContentBounds.Max.Z, WorldBounds.Max.Z);
             }
-            Cell.Primitives.Add(Primitive);
+            Cell.Primitives.Add({ Primitive, WorldBounds });
             StaticMeshCellKeys.Add(static_cast<UStaticMeshComponent*>(Primitive), Key);
 		});
 	bStaticUniformGridDirty = false;
@@ -645,17 +645,9 @@ void UScene::RebuildCellContentBounds(FStaticUniformGridCell& Cell) const
 {
     bool bFirst = true;
 
-    for (UPrimitiveComponent* Primitive : Cell.Primitives)
+    for (const FUniformGridPrimitive& GridPrimitive : Cell.Primitives)
     {
-        FVector LocalMin{};
-        FVector LocalMax{};
-
-        if (!Primitive->GetLocalBounds(LocalMin, LocalMax))
-        {
-            continue;
-        }
-
-        const FBoundingBox Bounds =  FBoundingBox(LocalMin, LocalMax).TransformBounds(Primitive->GetWorldMatrix());
+        const FBoundingBox& Bounds = GridPrimitive.WorldBounds;
 
         if (bFirst)
         {
@@ -707,7 +699,23 @@ void UScene::UpdateStaticUniformGridForActor(AActor* Actor, TArray<uint64>& Chan
         }
 
         FStaticUniformGridCell& OldCell = StaticUniformGrid[*OldCellIndex];
-        OldCell.Primitives.Remove(StaticMesh);
+
+        bool bRemovedFromOldCell = false;
+        for (int32 PrimitiveIndex = 0; PrimitiveIndex < OldCell.Primitives.Num(); ++PrimitiveIndex)
+        {
+            if (OldCell.Primitives[PrimitiveIndex].Primitive == StaticMesh)
+            {
+                OldCell.Primitives.RemoveAt(PrimitiveIndex);
+                bRemovedFromOldCell = true;
+                break;
+            }
+        }
+
+        if (!bRemovedFromOldCell)
+        {
+            bStaticUniformGridDirty = true;
+            return;
+        }
 
         RebuildCellContentBounds(OldCell);
         ChangedCellKeys.Add(PreviousKey);
@@ -760,7 +768,7 @@ void UScene::UpdateStaticUniformGridForActor(AActor* Actor, TArray<uint64>& Chan
             NewCell.ContentBounds.Max.Y =  std::max(NewCell.ContentBounds.Max.Y, Bounds.Max.Y);
             NewCell.ContentBounds.Max.Z = std::max(NewCell.ContentBounds.Max.Z, Bounds.Max.Z);
         }
-        NewCell.Primitives.Add(StaticMesh);
+        NewCell.Primitives.Add({ StaticMesh, Bounds });
 
         StaticMeshCellKeys[StaticMesh] = NewKey;
         ChangedCellKeys.Add(NewKey);
