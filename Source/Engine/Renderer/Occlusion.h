@@ -31,6 +31,9 @@ public:
 	ID3D11UnorderedAccessView* GetVisibilityUAV() const { return VisibilityUAV.Get(); }
 	ID3D11Buffer* GetVisibilityBuffer() const { return VisibilityBuffer.Get(); }
 	bool IsReadbackPending() const { return bReadbackPending; }
+
+	void InvalidateHistory();
+
 private:
 	uint32 CellCount = 0;
 	uint32 CellCapacity = 0;
@@ -44,4 +47,5 @@ private:
 	bool bReadbackPending = false;
 	TArray<uint64> PendingCellKeys;
 	TMap<uint64, bool> LastFrameVisibility;
+	bool bDiscardPendingReadback = false;
 };

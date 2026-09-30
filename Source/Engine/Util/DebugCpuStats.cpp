@@ -20,7 +20,9 @@ FDebugCpuStats::FDebugCpuStats()
 void FDebugCpuStats::BeginFrame()
 {
     bCollecting = bEnabled;
-    if (bEnabled && !bWasEnabled)
+    bCollectingGatherDetail = bCollecting && bGatherDetailEnabled;
+    // 계측 모드 전환 전후의 시간을 같은 평균에 섞지 않습니다.
+    if (bEnabled && (!bWasEnabled || bGatherDetailEnabled != bWasGatherDetailEnabled))
     {
         for (uint32 Index = 0; Index < DebugCpuStatCount; ++Index)
         {
@@ -34,6 +36,7 @@ void FDebugCpuStats::BeginFrame()
         bHasSamples = false;
     }
     bWasEnabled = bEnabled;
+    bWasGatherDetailEnabled = bGatherDetailEnabled;
     if (!bCollecting) return;
     for (FAccumulator& Item : Frame) Item = {};
     FrameCounts = {};
@@ -44,6 +47,7 @@ void FDebugCpuStats::EndFrame(float DeltaTime)
 {
     if (!bCollecting) return;
     bCollecting = false;
+    bCollectingGatherDetail = false;
     CompletedCounts = FrameCounts;
     ++WindowFrames;
     WindowSeconds += (std::max)(static_cast<double>(DeltaTime), 0.0);
@@ -89,6 +93,19 @@ void FDebugCpuStats::AddVisibility(uint32 Candidates, uint32 Rendered, bool bUse
     FrameCounts.RenderCells += Rendered;
     ++FrameCounts.Views;
     if (bUsedHistory) ++FrameCounts.HistoryViews;
+}
+
+// 상세 수집 개수를 View별로 합산하며 SpotLight 아이콘은 제외합니다.
+void FDebugCpuStats::AddGatherCounts(const FDebugGatherCounts& Counts)
+{
+    if (!bCollectingGatherDetail) return;
+    FDebugGatherCounts& Gather = FrameCounts.Gather;
+    Gather.Visited += Counts.Visited;
+    Gather.Hidden += Counts.Hidden;
+    Gather.FrustumRejected += Counts.FrustumRejected;
+    Gather.Empty += Counts.Empty;
+    Gather.Objects += Counts.Objects;
+    Gather.Requests += Counts.Requests;
 }
 
 // 현재 프레임이 계측 대상이면 구간 시작 시각을 기록합니다.

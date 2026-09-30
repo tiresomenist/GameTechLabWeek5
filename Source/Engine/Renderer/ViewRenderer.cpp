@@ -414,11 +414,22 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 	State.PreviousFrameIndex = HZB.FrameIndex;
 	State.PreviousGeneration = HZB.Generation;
 	State.bHasPreviousView = true;
-	if (!bCanUseHistory || !D3DDevice || !DeviceContext)
+	if (!D3DDevice || !DeviceContext)
 	{
-		// 첫 프레임이나 카메라 변경 이전의 결과는 사용하지 않음
+		// 장치를 사용할 수 없는 경우에는 기존 자원 정리 동작을 유지합니다.
 		State.Culler.Release();
-		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()),
+		SubmissionStats.SetHZBCounts(
+			static_cast<uint32>(Data.GridCellCandidates.Num()),
+			Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
+		return;
+	}
+
+	if (!bCanUseHistory)
+	{
+		// 카메라나 이력 조건이 달라진 경우에는 버퍼를 보존합니다.
+		State.Culler.InvalidateHistory();
+		SubmissionStats.SetHZBCounts(
+			static_cast<uint32>(Data.GridCellCandidates.Num()),
 			Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
 		return;
 	}
@@ -439,7 +450,7 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 
 	if (HZBCells.IsEmpty())
 	{
-		State.Culler.Release();
+		State.Culler.InvalidateHistory();
 		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()),
 			Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
 		return;
@@ -570,10 +581,12 @@ void FViewRenderer::FilterGridCellCandidates(const FRenderViewSnapshot& View,
 
 	if (!bCanUseHistory)
 	{
+		// 수집 단계에서부터 이전 판정을 폐기하고, 대기 중인 결과도 적용하지 않습니다.
+		State.Culler.InvalidateHistory();
+
 		for (const FGridCellCandidate& Candidate : Candidates)
-		{
 			OutRenderGridCells.Add(Candidate);
-		}
+
 		FDebugCpuStats::Get().AddVisibility(static_cast<uint32>(Candidates.Num()),
 			static_cast<uint32>(OutRenderGridCells.Num()), false);
 		return;

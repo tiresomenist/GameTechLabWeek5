@@ -17,6 +17,7 @@ bool FHZBOcclusionCuller::UploadCells(ID3D11Device* Device, ID3D11DeviceContext*
         VisibilityBuffer.Reset();
         ReadbackBuffer.Reset();
         bReadbackPending = false;
+        bDiscardPendingReadback = false;
         PendingCellKeys.Empty();
         VisibilityUAV.Reset();
         CellCapacity = 0;
@@ -88,6 +89,15 @@ bool FHZBOcclusionCuller::UploadCells(ID3D11Device* Device, ID3D11DeviceContext*
     return true;
 }
 
+void FHZBOcclusionCuller::InvalidateHistory()
+{
+    LastFrameVisibility.Empty();
+
+    // 이전 카메라로 요청한 결과가 나중에 도착해도 다시 적용하지 않습니다.
+    if (bReadbackPending)
+        bDiscardPendingReadback = true;
+}
+
 void FHZBOcclusionCuller::Release()
 {
     CellBuffer.Reset();
@@ -99,6 +109,7 @@ void FHZBOcclusionCuller::Release()
     CellCapacity = 0;
 
     bReadbackPending = false;
+    bDiscardPendingReadback = false;
     PendingCellKeys.Empty();
     LastFrameVisibility.Empty();
 }
@@ -113,6 +124,7 @@ void FHZBOcclusionCuller::QueueReadback(ID3D11DeviceContext* Context, const TArr
     {
         PendingCellKeys[Index] = CellKeys[Index];
     }
+    bDiscardPendingReadback = false;
     Context->CopyResource(ReadbackBuffer.Get(), VisibilityBuffer.Get());
     bReadbackPending = true;
 }
@@ -129,7 +141,8 @@ bool FHZBOcclusionCuller::TryReadback(ID3D11DeviceContext* Context)
     {
         // 복사와 결과 해석을 제외한 Map 호출의 경과 시간입니다.
         FScopedDebugCpuTime CpuTime(EDebugCpuStat::Readback);
-        Result = Context->Map(ReadbackBuffer.Get(), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &Mapped);
+        Result = Context->Map(ReadbackBuffer.Get(), 0, D3D11_MAP_READ, 
+            D3D11_MAP_FLAG_DO_NOT_WAIT, &Mapped);
     }
     if (Result == DXGI_ERROR_WAS_STILL_DRAWING) return false;
     if (FAILED(Result))
@@ -137,16 +150,21 @@ bool FHZBOcclusionCuller::TryReadback(ID3D11DeviceContext* Context)
         Release();
         return false;
     }
-
-    const uint32* Visibility = static_cast<const uint32*>(Mapped.pData);
-    LastFrameVisibility.Empty();
-    for (int32 Index = 0; Index < PendingCellKeys.Num(); ++Index)
+    const bool bApplyResult = !bDiscardPendingReadback;
+    if (bApplyResult)
     {
-        LastFrameVisibility[PendingCellKeys[Index]] = Visibility[Index] != 0;
+        const uint32* Visibility = static_cast<const uint32*>(Mapped.pData);
+        LastFrameVisibility.Empty();
+        for (int32 Index = 0; Index < PendingCellKeys.Num(); ++Index)
+        {
+            LastFrameVisibility[PendingCellKeys[Index]] = Visibility[Index] != 0;
+        }
     }
     Context->Unmap(ReadbackBuffer.Get(), 0);
     bReadbackPending = false;
-    return true;
+    bDiscardPendingReadback = false;
+    PendingCellKeys.Empty();
+    return bApplyResult;
 }
 
 bool FHZBOcclusionCuller::IsVisibleLastFrame(uint64 CellKey) const

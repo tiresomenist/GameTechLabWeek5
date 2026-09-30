@@ -1064,7 +1064,7 @@ void FEditor::DrawDebugStatOverlay()
 	const D3D11_VIEWPORT& Screen = GEngine::GetInstance()->GetViewport();
 	const FDebugRenderCounts& Counts = Debug.GetRenderCounts();
 	// 표시 행 수가 고정되어 있으므로 프레임마다 동적 배열을 할당하지 않습니다.
-	char Lines[DebugCpuStatCount + 12][256]{};
+	char Lines[DebugCpuStatCount + 16][256]{};
 	uint32 LineCount = 0;
 	if (Debug.HasSamples())
 		sprintf_s(Lines[LineCount++], "DEBUG   %.1f FPS  /  %.2f ms", Debug.GetFPS(), 1000.0 / Debug.GetFPS());
@@ -1082,11 +1082,23 @@ void FEditor::DrawDebugStatOverlay()
 	sprintf_s(Lines[LineCount++], "HZB cells %u -> %u  |  History %u/%u views", Counts.CandidateCells, Counts.RenderCells, Counts.HistoryViews, Counts.Views);
 	sprintf_s(Lines[LineCount++], "CPU: avg / peak ms (calls/frame)");
 	sprintf_s(Lines[LineCount++], "0.25s / all views; nested rows overlap");
+	if (Debug.IsGatherDetailEnabled())
+	{
+		const FDebugGatherCounts& Gather = Counts.Gather;
+		sprintf_s(Lines[LineCount++], "Gather detail ON: timings include probe overhead");
+		sprintf_s(Lines[LineCount++], "Gather last frame/all views; primitives only:");
+		sprintf_s(Lines[LineCount++], "Visit %u | Hidden %u | Frustum out %u", Gather.Visited, Gather.Hidden, Gather.FrustumRejected);
+		sprintf_s(Lines[LineCount++], "Empty %u | Objects %u | Requests %u", Gather.Empty, Gather.Objects, Gather.Requests);
+	}
 	static constexpr const char* Labels[] = {"CPU frame", "Scene Tick", "Editor Tick", "  Gizmo Tick",
-		"BVH update", "BVH rebuild", "Grid rebuild", "GetRenderList", "BuildPassDraws", "Opaque sort",
+		"BVH update", "BVH rebuild", "Grid rebuild", "GetRenderList",
+		"  Gather prepare/cull", "  Gather CreateRenderData", "  Gather finalize", "  Gather icons",
+		"BuildPassDraws", "Opaque sort",
 		"CB map/upload", "Opaque submit", "Other passes", "HZB Map", "Present"};
 	for (uint32 Index = 0; Index < DebugCpuStatCount; ++Index)
 	{
+		if (!Debug.IsGatherDetailEnabled() && Index >= static_cast<uint32>(EDebugCpuStat::GatherPrepare)
+			&& Index <= static_cast<uint32>(EDebugCpuStat::GatherIcons)) continue;
 		const FDebugCpuSample& Sample = Debug.GetSample(static_cast<EDebugCpuStat>(Index));
 		sprintf_s(Lines[LineCount++], "%s: %.3f / %.3f (%.1f)", Labels[Index], Sample.AverageMs, Sample.PeakMs, Sample.CallsPerFrame);
 	}
