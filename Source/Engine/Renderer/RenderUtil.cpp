@@ -38,7 +38,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 
 	const UActorComponent* SelectedComponent = Editor->GetSelectedSceneComponent();
 
-	auto AddPrimitive = [&](UPrimitiveComponent* Primitive)
+	auto AddPrimitive = [&](UPrimitiveComponent* Primitive, bool bSkipPrimitiveFrustum)
 		{
 			if (!Primitive->IsVisible())
 			{
@@ -49,15 +49,19 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			Object.SourcePrimitive = Primitive;
 			Object.World = Primitive->GetRenderWorldMatrix(Camera);
 			Object.SortCenterWS = Object.World.GetOrigin();
+
 			FVector LocalMin{};
 			FVector LocalMax{};
 			if (Primitive->GetLocalBounds(LocalMin, LocalMax))
 			{
-				Object.WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Object.World);
-				Object.bHasWorldBounds = true;
 				Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
 
-				if (Frustum && !Frustum->Intersects(Object.WorldBounds)) return;
+				if (!bSkipPrimitiveFrustum)
+				{
+					Object.WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Object.World);
+					Object.bHasWorldBounds = true;
+					if (Frustum && !Frustum->Intersects(Object.WorldBounds)) return;
+				}
 			}
 
 			const int32 FirstIndex = RenderList.Num();
@@ -91,19 +95,19 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 
 		for (UPrimitiveComponent* Primitive : Cell->Primitives)
 		{
-			AddPrimitive(Primitive);
+			AddPrimitive(Primitive, Candidate.bFullyInsideFrustum);
 		}
 	}
 
 	for (UPrimitiveComponent* Primitive : Scene->GetStaticUniformGridFallback())
 	{
-		AddPrimitive(Primitive);
+		AddPrimitive(Primitive, false);
 	}
 
 	// 비정적 메시에는 기존 개별 경로를 유지
 	Scene->ForEachNonStaticMesh([&](UPrimitiveComponent* Primitive)
 		{
-			AddPrimitive(Primitive);
+			AddPrimitive(Primitive, false);
 		});
 
 	//SpotLight를 렌더링하기위한 임시 순회, 차후에 Billborad로 확장할것임.
@@ -285,15 +289,20 @@ void RenderUtil::GatherGridCellCandidates(UScene* Scene, const FFrustum* Frustum
 
 	for (const FStaticUniformGridCell& Cell : Scene->GetStaticUniformGrid())
 	{
-		if (Frustum && !Frustum->Intersects(Cell.ContentBounds))
+		if (Cell.Primitives.IsEmpty()) { continue; }
+
+		bool bFullyInsideFrustum = false;
+		if (Frustum)
 		{
-			continue;
+			if(!Frustum->Intersects(Cell.ContentBounds)) { continue; }
+			bFullyInsideFrustum = Frustum->Contains(Cell.ContentBounds);
 		}
 
 		FGridCellCandidate Candidate{};
 		Candidate.Key = Cell.Key;
 		Candidate.OcclusionBounds = Cell.ContentBounds;
 		Candidate.SourceCell = &Cell;
+		Candidate.bFullyInsideFrustum = bFullyInsideFrustum;
 
 		OutCandidates.Add(Candidate);
 	}

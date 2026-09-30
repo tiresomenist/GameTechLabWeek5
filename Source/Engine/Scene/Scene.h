@@ -16,7 +16,7 @@
 struct FStaticUniformGridCell
 {
 	uint64 Key = 0;
-	FBoundingBox SpatialBounds;  // 고정 4x4
+	FBoundingBox SpatialBounds;  // 고정 nxn
 	FBoundingBox ContentBounds;  // world AABB 합집합
 	TArray<UPrimitiveComponent*> Primitives;
 };
