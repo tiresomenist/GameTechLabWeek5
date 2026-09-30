@@ -124,8 +124,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 
 		for (const FUniformGridPrimitive& GridPrimitive : Cell->Primitives)
 		{
-			AddPrimitive(GridPrimitive.Primitive, Candidate.bFullyInsideFrustum,
-				&GridPrimitive.WorldBounds);
+			AddPrimitive(GridPrimitive.Primitive, Candidate.bFullyInsideFrustum, &GridPrimitive.WorldBounds);
 		}
 	}
 
