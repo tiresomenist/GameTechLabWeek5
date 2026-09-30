@@ -290,11 +290,11 @@ void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ra
 		return;
 	}
 
-	// 월드 레이를 메시의 로컬 좌표로 변환한다.
-	const FMatrix& RenderWorld = Primitive->GetRenderWorldMatrix(Editor->GetEditorCamera());
+	//Todo: Picking cache
+	// 월드 레이를 프리미티브의 로컬 좌표로 변환한다.
 	FMatrix InverseWorld;
 
-	if (!RenderWorld.TryInverse(InverseWorld))
+	if (!Primitive->TryGetInverseRenderWorldMatrix(Editor->GetEditorCamera(), InverseWorld))
 	{
 		return;
 	}
@@ -303,16 +303,15 @@ void FObjectPicker::TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ra
 	LocalRay.Origin = FVector(FVector4(Ray.Origin, 1.0f) * InverseWorld);
 	LocalRay.Direction = FVector(FVector4(Ray.Direction, 0.0f) * InverseWorld);
 
-	// 프리미티브 전체 AABB를 빗나가면 내부 삼각형을 검사하지 않는다.
-	float AABBDistance = 0.0f;
-	if (!RayAABBIntersect(LocalRay, BoundsMin, BoundsMax, ClosestDistance, AABBDistance))
-	{
-		return;
-	}
-
 	// 텍스트·플립북처럼 AABB만으로 선택하는 프리미티브를 처리한다.
 	if (Primitive->IsAABBOnlyPickable())
 	{
+		float AABBDistance = 0.0f;
+		if (!RayAABBIntersect(LocalRay, BoundsMin, BoundsMax, ClosestDistance, AABBDistance))
+		{
+			return;
+		}
+
 		ClosestDistance = AABBDistance;
 		SelectedObject = Primitive;
 		return;

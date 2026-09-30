@@ -31,9 +31,21 @@ public:
     // 카메라에 따라 모양이 바뀌는 컴포넌트(빌보드 텍스트 등)가 오버라이드한다.
     // 렌더(RenderUtil)와 피킹(FObjectPicker)이 같은 함수를 써야 보이는 곳과 클릭되는 곳이 일치한다.
     virtual const FMatrix& GetRenderWorldMatrix(const UCameraComponent* Camera) const;
+    //Todo: Picking cache
+    bool TryGetInverseRenderWorldMatrix(const UCameraComponent* Camera, FMatrix& OutInverse);
 
     virtual FMeshResource* GetMeshResource() const { return nullptr; }
 
     virtual void SubmitLineDrawRequests(const FLineDrawContext& Context, const FLineRequestConsumer& Submit) const;
+
+protected:
+    //Todo: Picking cache
+    void OnWorldBoundsChanged() override;
+
+private:
+    //Todo: Picking cache
+    FMatrix CachedInverseWorldMatrix;
+    bool bInverseWorldMatrixCached = false;
+    bool bInverseWorldMatrixValid = false;
 };
 

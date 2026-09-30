@@ -143,7 +143,8 @@ const FMatrix& USceneComponent::GetWorldMatrix() const
     return CachedWorldMatrix;
 }
 
-void USceneComponent::UpdateWorldTransform() const
+//Todo: Picking cache
+void USceneComponent::UpdateWorldTransform()
 {
     FMatrix LocalSRTMatrix = FMatrix::MakeScaleMatrix(RelativeScale3D)
         * RelativeRotation.ToRotationMatrix()

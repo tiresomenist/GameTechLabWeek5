@@ -36,5 +36,6 @@ private:
     UStaticMesh* CachedMesh = nullptr;
 
 protected:
-    void OnWorldBoundsChanged() const override;
+    //Todo: Picking cache
+    void OnWorldBoundsChanged() override;
 };

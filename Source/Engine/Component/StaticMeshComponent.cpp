@@ -260,8 +260,12 @@ UStaticMesh* UStaticMeshComponent::GetStaticMesh() const
 	return CachedMesh;
 }
 
-void UStaticMeshComponent::OnWorldBoundsChanged() const
+//Todo: Picking cache
+void UStaticMeshComponent::OnWorldBoundsChanged()
 {
+	//Todo: Picking cache
+	Super::OnWorldBoundsChanged();
+
 	AActor* Owner = GetOwner();
 	UScene* Scene = Owner ? Owner->GetScene() : nullptr;
 	if (!Scene) return;

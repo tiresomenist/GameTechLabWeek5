@@ -20,6 +20,38 @@ const FMatrix& UPrimitiveComponent::GetRenderWorldMatrix(const UCameraComponent*
 	return GetWorldMatrix();
 }
 
+//Todo: Picking cache
+bool UPrimitiveComponent::TryGetInverseRenderWorldMatrix(const UCameraComponent* Camera, FMatrix& OutInverse)
+{
+    const FMatrix& RenderWorld = GetRenderWorldMatrix(Camera);
+
+    // 카메라에 따라 달라지는 별도 렌더 행렬은 캐시하지 않는다.
+    if (&RenderWorld != &GetWorldMatrix())
+    {
+        return RenderWorld.TryInverse(OutInverse);
+    }
+
+    if (!bInverseWorldMatrixCached)
+    {
+        bInverseWorldMatrixValid = RenderWorld.TryInverse(CachedInverseWorldMatrix);
+        bInverseWorldMatrixCached = true;
+    }
+
+    if (!bInverseWorldMatrixValid)
+    {
+        return false;
+    }
+
+    OutInverse = CachedInverseWorldMatrix;
+    return true;
+}
+
+//Todo: Picking cache
+void UPrimitiveComponent::OnWorldBoundsChanged()
+{
+    bInverseWorldMatrixCached = false;
+}
+
 
 void UPrimitiveComponent::SubmitLineDrawRequests(const FLineDrawContext& Context, const FLineRequestConsumer& Submit) const
 {

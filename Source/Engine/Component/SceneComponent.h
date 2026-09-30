@@ -64,11 +64,13 @@ protected:
     TArray<USceneComponent*> AttachChildren;
 
     // 최종 월드 행렬 캐싱
-    mutable FMatrix CachedWorldMatrix;
+    FMatrix CachedWorldMatrix;
 
-    void UpdateWorldTransform() const;
+    //Todo: Picking cache
+    void UpdateWorldTransform();
 
-virtual void OnWorldBoundsChanged() const {}
+    //Todo: Picking cache
+    virtual void OnWorldBoundsChanged() {}
 
 private:
     // 행렬 회전 합성용 쿼터니언
