@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "RenderUtil.h"
 #include "Core/Container/Array.h"
 #include "Core/Math/Box.h"
@@ -33,6 +34,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 	TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects,
 	const TArray<FGridCellCandidate>& RenderGridCells, const FFrustum* Frustum)
 {
+	FScopedDebugCpuTime CpuTime(EDebugCpuStat::Gather);
 	RenderList.Empty();
 	if (!Editor || !Scene || !Camera) return;
 
@@ -129,6 +131,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			RenderList.Add(Data);
 		});
 
+	FDebugCpuStats::Get().AddRequests(static_cast<uint32>(RenderList.Num()));
 	return;
 }
 

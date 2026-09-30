@@ -30,6 +30,11 @@ public:
 	bool RayTriangleIntersect(const FRay& Ray, FVector A, FVector B, FVector C, float& OutDistance);
 	bool RayAABBIntersect(const FRay& Ray, const FVector& BoundsMin, const FVector& BoundsMax, float MaxDistance, float& OutDistance);
 	USceneComponent* Pick();
+	// 기존 로그와 같은 누적 피킹 값을 읽기 전용으로 제공합니다.
+	uint32 GetTotalPickCount() const { return TotalPickCount; }
+	double GetLastPickTimeMs() const { return LastPickTimeMs; }
+	double GetTotalPickTimeMs() const { return TotalPickTimeMs; }
+	double GetAveragePickTimeMs() const { return TotalPickCount ? TotalPickTimeMs / TotalPickCount : 0.0; }
 
 private:
 	FEditor* Editor;

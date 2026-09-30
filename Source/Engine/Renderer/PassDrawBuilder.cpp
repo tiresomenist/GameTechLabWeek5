@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "PassDrawBuilder.h"
 #include "Engine/Resource/ResourceManager.h"
 #include <algorithm>
@@ -7,6 +8,7 @@
 void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPipelineStateCache* PipelineCache, 
 	FPassDrawList& OutPassDraws, const TArray<uint32>& PrimitiveVisibility)
 {
+	FScopedDebugCpuTime CpuTime(EDebugCpuStat::BuildPasses);
 	OutPassDraws.Clear();
 	m_MaterialIdToCBIndex.Empty();
 	m_ReferencedMaterials.Empty();
