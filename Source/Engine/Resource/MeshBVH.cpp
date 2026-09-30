@@ -31,18 +31,17 @@ void FMeshBVH::Build(const TArray<FVector>& Positions, const TArray<uint32>& Ind
     TArray<FMeshTriangleInfo> TriangleInfos;
 
     // 인덱스가 유효한 삼각형 목록인지 검사한다.
+    // Todo: Magic number
+    if (Indices.IsEmpty() || Indices.Num() % 3 != 0)
     {
-        if (Indices.IsEmpty() || Indices.Num() % 3 != 0)
+        return;
+    }
+
+    for (uint32 VertexIndex : Indices)
+    {
+        if (VertexIndex >= static_cast<uint32>(Positions.Num()))
         {
             return;
-        }
-
-        for (uint32 VertexIndex : Indices)
-        {
-            if (VertexIndex >= static_cast<uint32>(Positions.Num()))
-            {
-                return;
-            }
         }
     }
 
@@ -57,13 +56,13 @@ void FMeshBVH::Build(const TArray<FVector>& Positions, const TArray<uint32>& Ind
         const FVector& B = Positions[Indices[Base + 1]];
         const FVector& C = Positions[Indices[Base + 2]];
 
-        FMeshTriangleInfo Info;
-        Info.TriangleIndex = TriangleIndex;
-        Info.BoundsMin = FVector((std::min)({ A.X, B.X, C.X }), (std::min)({ A.Y, B.Y, C.Y }), (std::min)({ A.Z, B.Z, C.Z }));
-        Info.BoundsMax = FVector((std::max)({ A.X, B.X, C.X }), (std::max)({ A.Y, B.Y, C.Y }), (std::max)({ A.Z, B.Z, C.Z }));
-        Info.Centroid = (A + B + C) / 3.0f;
+        FMeshTriangleInfo TriangleInfo;
+        TriangleInfo.TriangleIndex = TriangleIndex;
+        TriangleInfo.BoundsMin = FVector(std::min({ A.X, B.X, C.X }), std::min({ A.Y, B.Y, C.Y }), std::min({ A.Z, B.Z, C.Z }));
+        TriangleInfo.BoundsMax = FVector(std::max({ A.X, B.X, C.X }), std::max({ A.Y, B.Y, C.Y }), std::max({ A.Z, B.Z, C.Z }));
+        TriangleInfo.Centroid = (A + B + C) / 3.0f;
 
-        TriangleInfos.Add(Info);
+        TriangleInfos.Add(TriangleInfo);
     }
 
     RootOrNull = BuildNodesRecursive(TriangleInfos, 0, static_cast<uint32>(TriangleInfos.Num()));
@@ -76,52 +75,48 @@ void FMeshBVH::Build(const TArray<FVector>& Positions, const TArray<uint32>& Ind
     }
 }
 
-FMeshBVHNode* FMeshBVH::BuildNodesRecursive(TArray<FMeshTriangleInfo>& Infos, uint32 First, uint32 Count)
+FMeshBVHNode* FMeshBVH::BuildNodesRecursive(TArray<FMeshTriangleInfo>& TriangleInfos, uint32 StartIndex, uint32 Count)
 {
     assert(Count > 0);
-    assert(First + Count <= static_cast<uint32>(Infos.Num()));
-
-    FMeshBVHNode* Node = nullptr;
+    assert(StartIndex + Count <= static_cast<uint32>(TriangleInfos.Num()));
 
     // 현재 삼각형 그룹을 담당할 노드를 만들고 해제 목록에 등록한다.
-    {
-        Node = new FMeshBVHNode;
-        AllocatedNodes.Add(Node);
-    }
+    FMeshBVHNode* Node = new FMeshBVHNode;
+    AllocatedNodes.Add(Node);
 
     // 그룹에 속한 삼각형들의 AABB를 합쳐 노드 AABB를 만든다.
-    Node->LocalMin = Infos[First].BoundsMin;
-    Node->LocalMax = Infos[First].BoundsMax;
+    Node->LocalMin = TriangleInfos[StartIndex].BoundsMin;
+    Node->LocalMax = TriangleInfos[StartIndex].BoundsMax;
 
-    for (uint32 I = First + 1; I < First + Count; ++I)
+    for (uint32 i = StartIndex + 1; i < StartIndex + Count; ++i)
     {
-        const FMeshTriangleInfo& Info = Infos[I];
+        const FMeshTriangleInfo& TriangleInfo = TriangleInfos[i];
 
-        Node->LocalMin.X = (std::min)(Node->LocalMin.X, Info.BoundsMin.X);
-        Node->LocalMin.Y = (std::min)(Node->LocalMin.Y, Info.BoundsMin.Y);
-        Node->LocalMin.Z = (std::min)(Node->LocalMin.Z, Info.BoundsMin.Z);
+        Node->LocalMin.X = std::min(Node->LocalMin.X, TriangleInfo.BoundsMin.X);
+        Node->LocalMin.Y = std::min(Node->LocalMin.Y, TriangleInfo.BoundsMin.Y);
+        Node->LocalMin.Z = std::min(Node->LocalMin.Z, TriangleInfo.BoundsMin.Z);
 
-        Node->LocalMax.X = (std::max)(Node->LocalMax.X, Info.BoundsMax.X);
-        Node->LocalMax.Y = (std::max)(Node->LocalMax.Y, Info.BoundsMax.Y);
-        Node->LocalMax.Z = (std::max)(Node->LocalMax.Z, Info.BoundsMax.Z);
+        Node->LocalMax.X = std::max(Node->LocalMax.X, TriangleInfo.BoundsMax.X);
+        Node->LocalMax.Y = std::max(Node->LocalMax.Y, TriangleInfo.BoundsMax.Y);
+        Node->LocalMax.Z = std::max(Node->LocalMax.Z, TriangleInfo.BoundsMax.Z);
     }
 
     // 삼각형이 충분히 적으면 이 노드를 리프로 만든다.
     if (Count <= MAX_TRIANGLES_PER_LEAF)
     {
-        Node->FirstTriangleOffset = First;
+        Node->FirstTriangleOffset = StartIndex;
         Node->TrianglesCount = Count;
 
         return Node;
     }
 
-    FVector CentroidMin = Infos[First].Centroid;
-    FVector CentroidMax = Infos[First].Centroid;
+    FVector CentroidMin = TriangleInfos[StartIndex].Centroid;
+    FVector CentroidMax = TriangleInfos[StartIndex].Centroid;
 
     // 중심점들이 각 축에서 차지하는 범위를 구한다.
-    for (uint32 I = First + 1; I < First + Count; ++I)
+    for (uint32 i = StartIndex + 1; i < StartIndex + Count; ++i)
     {
-        const FVector& Center = Infos[I].Centroid;
+        const FVector& Center = TriangleInfos[i].Centroid;
 
         CentroidMin.X = (std::min)(CentroidMin.X, Center.X);
         CentroidMin.Y = (std::min)(CentroidMin.Y, Center.Y);
@@ -137,7 +132,7 @@ FMeshBVHNode* FMeshBVH::BuildNodesRecursive(TArray<FMeshTriangleInfo>& Infos, ui
     // 모든 중심점이 같다면 공간적으로 나눌 수 없으므로 리프로 만든다.
     if (Extent.X == 0.0f && Extent.Y == 0.0f && Extent.Z == 0.0f)
     {
-        Node->FirstTriangleOffset = First;
+        Node->FirstTriangleOffset = StartIndex;
         Node->TrianglesCount = Count;
         return Node;
     }
@@ -156,7 +151,7 @@ FMeshBVHNode* FMeshBVH::BuildNodesRecursive(TArray<FMeshTriangleInfo>& Infos, ui
     }
 
     // 선택한 축의 중심점 순서로 현재 범위만 정렬한다.
-    std::sort(Infos.begin() + First, Infos.begin() + First + Count,
+    std::sort(TriangleInfos.begin() + StartIndex, TriangleInfos.begin() + StartIndex + Count,
         [Axis](const FMeshTriangleInfo& A, const FMeshTriangleInfo& B) {
             if (A.Centroid[Axis] == B.Centroid[Axis])
             {
@@ -167,9 +162,9 @@ FMeshBVHNode* FMeshBVH::BuildNodesRecursive(TArray<FMeshTriangleInfo>& Infos, ui
         }
     );
 
-    const uint32 Middle = First + Count / 2;
-    Node->LeftChild = BuildNodesRecursive(Infos, First, Middle - First);
-    Node->RightChild = BuildNodesRecursive(Infos, Middle, First + Count - Middle);
+    const uint32 MidIndex = StartIndex + Count / 2;
+    Node->LeftChild = BuildNodesRecursive(TriangleInfos, StartIndex, MidIndex - StartIndex);
+    Node->RightChild = BuildNodesRecursive(TriangleInfos, MidIndex, StartIndex + Count - MidIndex);
 
     return Node;
 }

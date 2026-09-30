@@ -7,6 +7,16 @@
 #include "Engine/Renderer/Material.h"
 #include <utility>
 
+// uv스크롤이 필요할때 PostUpdate에서 실행.
+void UMeshComponent::Initialize()
+{
+	Super::Initialize();
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.TickGroup = ETickGroup::PostUpdate;
+	RefreshUVScrollTick();
+}
+
+
 // 컴포넌트 소멸 시 남아 있는 Override 재질을 정리한다.
 UMeshComponent::~UMeshComponent()
 {
@@ -18,6 +28,7 @@ UMeshComponent::~UMeshComponent()
 void UMeshComponent::ClearOverrideMaterials()
 {
 	OverrideMaterials.Empty();
+	RefreshUVScrollTick();
 }
 
 void UMeshComponent::Serialize(FArchive& Archive)
@@ -54,6 +65,7 @@ void UMeshComponent::SetOverrideMaterial(std::unique_ptr<FMaterial> InMaterial, 
 		OverrideMaterials.SetNum(MaterialSlot + 1);
 	}
 	OverrideMaterials[MaterialSlot] = std::move(InMaterial);
+	RefreshUVScrollTick();
 }
 
 void UMeshComponent::SetOverrideMaterial(const FString& InMaterialPath, uint32 MaterialSlot)
@@ -154,6 +166,7 @@ FMaterial* UMeshComponent::GetOrCreateOverrideMaterial(uint32 Slot)
 	}
 
 	OverrideMaterials[Slot] = std::move(NewMaterial);
+	RefreshUVScrollTick();
 	return OverrideMaterials[Slot].get();
 }
 
@@ -162,6 +175,7 @@ void UMeshComponent::ResetOverrideMaterial(uint32 Slot)
 	if (Slot < static_cast<uint32>(OverrideMaterials.Num()))
 	{
 		OverrideMaterials[Slot].reset();
+		RefreshUVScrollTick();
 	}
 }
 
@@ -170,4 +184,22 @@ bool UMeshComponent::HasOverrideMaterial(uint32 SlotIdx)
 	if (SlotIdx >= static_cast<uint32>(OverrideMaterials.Num()))
 		return false;
 	return OverrideMaterials[SlotIdx] != nullptr;
+}
+
+void UMeshComponent::RefreshUVScrollTick()
+{
+	bool bNeedsTick = false;
+	for (const auto& OwnedMaterial : OverrideMaterials)
+	{
+		const FMaterial* Material = OwnedMaterial.get();
+		if (Material && Material->bEnableUVScroll &&
+			(Material->ScrollSpeed.X != 0.0f || Material->ScrollSpeed.Y != 0.0f))
+		{
+			bNeedsTick = true;
+			break;
+		}
+	}
+
+	// 매 프레임 검사하지 않고, 머티리얼이 변경될 때 목록을 갱신합니다.
+	SetComponentTickEnabled(bNeedsTick);
 }
