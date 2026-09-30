@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "Scene.h"
 #include "SceneValidation.h"
 #include <memory>
@@ -105,6 +106,7 @@ void UScene::BeginPlay()
 // 활성화된 Actor와 Component를 그룹 순서대로 실행합니다.
 void UScene::Tick(float DeltaTime)
 {
+    FScopedDebugCpuTime CpuTime(EDebugCpuStat::SceneTick);
     // 두 목록 모두 먼저 범위를 고정하여 신규 등록은 다음 프레임에 실행합니다.
     ActorTicks.BeginTick();
     ComponentTicks.BeginTick();
@@ -561,6 +563,8 @@ const TArray<UPrimitiveComponent*>& UScene::GetStaticUniformGridFallback() const
 void UScene::BuildStaticUniformGrid() const
 {
 	if (!bStaticUniformGridDirty) return;
+	// 단순 조회는 제외하고 실제 전체 재구축만 측정합니다.
+	FScopedDebugCpuTime CpuTime(EDebugCpuStat::GridBuild);
 
 	StaticUniformGrid.Empty();
 	StaticUniformGridFallback.Empty();
@@ -729,7 +733,7 @@ void UScene::UpdateStaticUniformGridForActor(AActor* Actor, TArray<uint64>& Chan
         const FVector Center = (Bounds.Min + Bounds.Max) * 0.5f;
 
         const int32 CellX = static_cast<int32>(std::floor(Center.X / StaticUniformGridCellSize));
-        const int32 CellY = static_cast<int32>( std::floor(Center.Y / StaticUniformGridCellSize));
+        const int32 CellY = static_cast<int32>(std::floor(Center.Y / StaticUniformGridCellSize));
         const int32 CellZ = static_cast<int32>(std::floor(Center.Z / StaticUniformGridCellSize));
 
         const uint64 NewKey = MakeStaticUniformGridKey(CellX, CellY, CellZ);

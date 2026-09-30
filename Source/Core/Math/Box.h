@@ -46,11 +46,13 @@ struct FBoundingBox
         return Result;
     }*/
 
-    FBoundingBox TransformBounds(const FMatrix& World) const
+    // 월드 AABB를 만들고 필요하면 변환 중 계산한 중심도 함께 반환합니다.
+    FBoundingBox TransformBounds(const FMatrix& World, FVector* OutWorldCenter = nullptr) const
     {
         const FVector LocalCenter = (Min + Max) * 0.5f;
         const FVector LocalExtent = (Max - Min) * 0.5f;
         const FVector WorldCenter = World.TransformPosition(LocalCenter);
+        if (OutWorldCenter) *OutWorldCenter = WorldCenter;
 
         // 회전/비균등 스케일을 포함한 World AABB extent
         const FVector WorldExtent(

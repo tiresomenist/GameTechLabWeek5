@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Engine/Util/DebugCpuStats.h"
 #include "RenderUtil.h"
 #include "Core/Container/Array.h"
 #include "Core/Math/Box.h"
@@ -33,10 +34,13 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 	TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects,
 	const TArray<FGridCellCandidate>& RenderGridCells, const FFrustum* Frustum)
 {
+	FScopedDebugCpuTime CpuTime(EDebugCpuStat::Gather);
 	RenderList.Empty();
 	if (!Editor || !Scene || !Camera) return;
 
 	const UActorComponent* SelectedComponent = Editor->GetSelectedSceneComponent();
+	// 기존 LOD/임포스터의 카메라 좌표 기준을 유지하며 View당 한 번만 읽습니다.
+	const FVector CameraLocation = Camera->GetRelativeLocation();
 
 	auto AddPrimitive = [&](UPrimitiveComponent* Primitive, bool bSkipPrimitiveFrustum,
 		const FBoundingBox* CachedWorldBounds = nullptr)
@@ -50,6 +54,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			Object.SourcePrimitive = Primitive;
 			Object.World = Primitive->GetRenderWorldMatrix(Camera);
 			Object.SortCenterWS = Object.World.GetOrigin();
+			bool bHasWorldCenter = CachedWorldBounds != nullptr;
 
 			if (CachedWorldBounds)
 			{
@@ -60,25 +65,36 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 					if (Frustum && !Frustum->Intersects(*CachedWorldBounds)) return;
 				}
 			}
-			else
-			{
+			else {
 				FVector LocalMin{};
 				FVector LocalMax{};
-				if (Primitive->GetLocalBounds(LocalMin, LocalMax))
-				{
-					Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
+				const bool bHasLocalBounds = Primitive->GetLocalBounds(LocalMin, LocalMax);
+				bHasWorldCenter = bHasLocalBounds;
 
-					if (!bSkipPrimitiveFrustum)
+				if (bHasLocalBounds)
+				{
+					if (bSkipPrimitiveFrustum)
 					{
-						Object.WorldBounds = FBoundingBox(LocalMin, LocalMax).TransformBounds(Object.World);
-						Object.bHasWorldBounds = true;
-						if (Frustum && !Frustum->Intersects(Object.WorldBounds)) return;
+						// 셀 전체가 내부이면 객체 Bounds를 만들지 않고 LOD·정렬용 중심만 계산합니다.
+						Object.SortCenterWS = Object.World.TransformPosition((LocalMin + LocalMax) * 0.5f);
+					}
+					else
+					{
+						// 경계 셀과 개별 객체는 Bounds 변환 중 계산한 중심까지 함께 재사용합니다.
+						const FBoundingBox WorldBounds = FBoundingBox(LocalMin, LocalMax).
+							TransformBounds(Object.World, &Object.SortCenterWS);
+
+						if (Frustum && !Frustum->Intersects(WorldBounds)) return;
 					}
 				}
 			}
+			
 
 			const int32 FirstIndex = RenderList.Num();
-			Primitive->CreateRenderData(RenderList, Camera, Primitive == SelectedComponent);
+
+			// 캐시와 직접 계산 경로 모두 중심의 유효성을 LOD 수집에 전달합니다.
+			const FPrimitiveRenderContext Context{Camera, Object.World, Object.SortCenterWS, CameraLocation, bHasWorldCenter};
+			Primitive->CreateRenderData(RenderList, Context, Primitive == SelectedComponent);
 			const int32 EndIndex = RenderList.Num();
 			if (FirstIndex == EndIndex) { return; }
 
@@ -146,6 +162,7 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			RenderList.Add(Data);
 		});
 
+	FDebugCpuStats::Get().AddRequests(static_cast<uint32>(RenderList.Num()));
 	return;
 }
 
