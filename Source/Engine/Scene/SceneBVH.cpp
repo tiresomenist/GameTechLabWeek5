@@ -349,13 +349,6 @@ FSceneBVHNode* FSceneBVH::BuildNodesRecursive(TArray<FBuildItem>& Items, uint32 
         return Node;
     }
 
-    // 각 분할 위치의 오른쪽 그룹 AABB를 빠르게 조회하기 위한 임시 배열이다.
-    struct FBounds
-    {
-        FVector Min{};
-        FVector Max{};
-    };
-
     float BestCost = (std::numeric_limits<float>::max)();
     int BestAxis = -1;
     uint32 BestLeftCount = 0;

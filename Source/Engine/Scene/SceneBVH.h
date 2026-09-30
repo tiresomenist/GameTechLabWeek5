@@ -30,6 +30,13 @@ struct FBuildItem
     UStaticMeshComponent* Component = nullptr;
 };
 
+// 각 분할 위치의 오른쪽 그룹 AABB를 빠르게 조회하기 위한 임시 배열이다.
+struct FBounds
+{
+    FVector Min{};
+    FVector Max{};
+};
+
 class FSceneBVH final
 {
 public:
