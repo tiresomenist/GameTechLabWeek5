@@ -39,25 +39,28 @@ public:
 	double GetAveragePickTimeMs() const { return TotalPickCount ? TotalPickTimeMs / TotalPickCount : 0.0; }
 
 private:
-	FEditor* Editor;
-
-	uint32 TotalPickCount = 0;
-	double LastPickTimeMs = 0.0;
-	double TotalPickTimeMs = 0.0;
-
 	void PickPrimitives(UScene* Scene, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
 	void PickIcon(UScene* Scene, const UCameraComponent* Camera, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
 
 	// Todo: BVH
 	void TestPrimitive(UPrimitiveComponent* Primitive, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
-	bool RayAABBIntersectCached(const FRay& Ray, const FRayAABBCache& Cache, const FVector& BoundsMin, const FVector& BoundsMax, float MaxDistance, float& OutDistance);
+	bool HasRayAABBIntersected(const FRay& Ray, const FRayAABBCache& Cache, const FVector& BoundsMin, const FVector& BoundsMax, float MaxDistance, float& OutIntersectedDistance);
 	//void PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, float& ClosestDistance, USceneComponent*& SelectedObject);
 
 	// Todo: BVH Mesh
 	//bool PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, float& ClosestDistance);
 
-	void PickBVHNodeRecursive(const FSceneBVHNode* Node, const FRay& Ray, const FRayAABBCache& Cache, float& ClosestDistance, USceneComponent*& SelectedObject, float EnterDistance = -1.0f);
+	void PickSceneBVHNodeRecursive(const FSceneBVHNode* NodeOrNull, const FRay& Ray, const FRayAABBCache& Cache, float& ClosestCandidateDistance, USceneComponent*& SelectedObject, float AABBEntryDistance);
 	bool PickMeshBVHNodeRecursive(const FMeshBVHNode* Node, const FMeshBVH& BVH, const FMeshResource& Mesh, const FRay& LocalRay, const FRayAABBCache& Cache, float& ClosestDistance, float EnterDistance = -1.0f);
+
+private:
+	//static constexpr float CLOSEST_DISTANCE = 100000.0f;
+	
+	FEditor* Editor;
+
+	uint32 TotalPickCount = 0;
+	double LastPickTimeMs = 0.0;
+	double TotalPickTimeMs = 0.0;
 };
 
 

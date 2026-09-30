@@ -809,7 +809,7 @@ void UScene::RemoveFromBVH(UStaticMeshComponent* Component)
 void UScene::RebuildBVH()
 {
     TArray<UStaticMeshComponent*> Components;
-
+    
     // Scene BVH에 들어갈 정적 메시를 먼저 모두 수집한다.
     ForEachPrimitive([&](UPrimitiveComponent* Primitive)
         {
