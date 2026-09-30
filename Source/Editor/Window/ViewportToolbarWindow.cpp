@@ -2,7 +2,6 @@
 #include "ViewportToolbarWindow.h"
 
 #include "Editor/Editor.h"
-#include "Engine/Util/DebugCpuStats.h"
 
 void UViewportToolbarWindow::Render(float DeltaTime)
 {
@@ -33,18 +32,10 @@ void UViewportToolbarWindow::Render(float DeltaTime)
             }
             ImGui::EndMenu();
         }
-        // 기존 Stat 메뉴 옆에서 디버그 계측과 표시를 함께 전환합니다.
+        // 기존 Stat 메뉴 옆에서 디버그 오버레이 표시를 전환합니다.
         if (ImGui::MenuItem("Debug", nullptr, Editor->IsShowingDebugStats()))
             Editor->ToggleDebugStats();
 
-        // 상세 계측은 별도로 켜며, 결과를 볼 수 있도록 디버그 오버레이도 활성화합니다.
-        FDebugCpuStats& DebugStats = FDebugCpuStats::Get();
-        if (ImGui::MenuItem("Gather detail", nullptr, DebugStats.IsGatherDetailEnabled()))
-        {
-            DebugStats.SetGatherDetailEnabled(!DebugStats.IsGatherDetailEnabled());
-            if (DebugStats.IsGatherDetailEnabled()) DebugStats.SetEnabled(true);
-        }
-        
         ImGui::EndMainMenuBar();
     }
 

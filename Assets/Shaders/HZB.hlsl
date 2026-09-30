@@ -136,7 +136,7 @@ void CullCellsCS(uint3 DispatchThreadID : SV_DispatchThreadID)
     const float2 ScreenMax = ViewportOffset + float2((NdcMax.x + 1.0f) * 0.5f * ViewportWidth, (1.0f - NdcMin.y) * 0.5f * ViewportHeight);
     const float LargestExtent = max(max(ScreenMax.x - ScreenMin.x, ScreenMax.y - ScreenMin.y), 1.0f);
     
-    const uint MipLevel = min((uint) ceil(log2(LargestExtent)), HZBMipCount - 1u);
+    const uint MipLevel = min((uint) floor(log2(LargestExtent)), HZBMipCount - 1u);
     uint MipWidth;
     uint MipHeight;
     uint MipLevels;

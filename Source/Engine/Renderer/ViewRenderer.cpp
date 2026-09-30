@@ -1,5 +1,4 @@
 #include "pch.h"
-#include "Engine/Util/DebugCpuStats.h"
 #include "ViewRenderer.h"
 #include "Engine/Component/CameraComponent.h"
 #include "Engine/Renderer/Context.h"
@@ -548,8 +547,7 @@ void FViewRenderer::RenderView(
 	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws, OpaqueSortDrawScratch, OpaqueSortIndexScratchA, OpaqueSortIndexScratchB);
 
 	{
-		// 상수 구성, Map, 복사, Unmap을 한 구간으로 측정합니다.
-		FScopedDebugCpuTime CpuTime(EDebugCpuStat::ConstantUpload);
+		// 현재 View의 상수를 한 번의 Map/Unmap 구간에서 업로드합니다.
 		CBRingBuffer.BeginFrameMap(Context1.Get());
 		CBManager.UploadObjectConstants(Context1.Get(), &CBRingBuffer,
 			Data, PassDrawBuilder.GetReferenceObjectIndices());
@@ -563,12 +561,10 @@ void FViewRenderer::RenderView(
 	ID3D11Buffer* ViewCB = TransformConstantBuffer.Get();
 
 	{
-		FScopedDebugCpuTime CpuTime(EDebugCpuStat::Opaque);
 		PassExecutor.ExecutePass(Context1.Get(), PassDraws.OpaqueDraws,
 			PipelineStateCache, CBManager, ViewCB, SubmissionStats);
 	}
 	{
-		FScopedDebugCpuTime CpuTime(EDebugCpuStat::OtherPasses);
 		RenderBatchLine(Data.View.ViewProjection);
 		PassExecutor.ExecutePass(Context1.Get(), PassDraws.AdditiveDraws,
 			PipelineStateCache, CBManager, ViewCB, SubmissionStats);
@@ -605,8 +601,6 @@ void FViewRenderer::FilterGridCellCandidates(const FRenderViewSnapshot& View,
 		for (const FGridCellCandidate& Candidate : Candidates)
 			OutRenderGridCells.Add(Candidate);
 
-		FDebugCpuStats::Get().AddVisibility(static_cast<uint32>(Candidates.Num()),
-			static_cast<uint32>(OutRenderGridCells.Num()), false);
 		return;
 	}
 
@@ -619,8 +613,6 @@ void FViewRenderer::FilterGridCellCandidates(const FRenderViewSnapshot& View,
 			OutRenderGridCells.Add(Candidate);
 		}
 	}
-	FDebugCpuStats::Get().AddVisibility(static_cast<uint32>(Candidates.Num()),
-		static_cast<uint32>(OutRenderGridCells.Num()), true);
 
 }
 

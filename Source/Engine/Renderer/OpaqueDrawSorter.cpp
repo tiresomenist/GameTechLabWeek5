@@ -1,5 +1,4 @@
 #include "pch.h"
-#include "Engine/Util/DebugCpuStats.h"
 #include "OpaqueDrawSorter.h"
 
 void FOpaqueDrawSorter::SortOpaqueDraws(
@@ -8,7 +7,6 @@ void FOpaqueDrawSorter::SortOpaqueDraws(
 	TArray<uint32>& IndexScratchA,
 	TArray<uint32>& IndexScratchB)
 {
-	FScopedDebugCpuTime CpuTime(EDebugCpuStat::Sort);
 
 	const uint32 Count = static_cast<uint32>(Draws.Num());
 	if (Count <= 1)

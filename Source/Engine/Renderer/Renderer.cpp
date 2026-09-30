@@ -1,5 +1,4 @@
 #include "pch.h"
-#include "Engine/Util/DebugCpuStats.h"
 #include "Renderer.h"
 #include "Engine/Renderer/Device.h"
 #include "Engine/Renderer/Context.h"
@@ -239,11 +238,7 @@ void FRenderer::SwapBuffer()
 	using Clock = std::chrono::high_resolution_clock;
 	auto StartWait = Clock::now();
 
-	HRESULT Result;
-	{
-		FScopedDebugCpuTime CpuTime(EDebugCpuStat::Present);
-		Result = SwapChain->Present(0, PresentFlags);
-	}
+	const HRESULT Result = SwapChain->Present(0, PresentFlags);
 
 	auto EndWait = Clock::now();
 	float CurWaitMs = std::chrono::duration<float, std::milli>(EndWait - StartWait).count();

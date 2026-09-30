@@ -39,6 +39,9 @@ local function ConfigureApplication(ProjectName, OutputDirectory)
         -- ImGui 소스는 기존 방식대로 프로젝트 PCH를 사용하지 않습니다.
         filter "files:**/ImGui/**.cpp"
             enablepch "Off"
+        -- meshoptimizer도 프로젝트의 pch.h를 사용하지 않습니다.
+        filter "files:**/meshoptimizer/**.cpp"
+            enablepch "Off"
         filter {}
 
         -- 기존 병렬 컴파일, 호출 규약, 인코딩 설정을 유지합니다.

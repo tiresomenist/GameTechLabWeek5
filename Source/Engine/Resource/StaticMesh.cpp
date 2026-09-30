@@ -46,7 +46,9 @@ namespace
 	}
 
 	// 재배치 전 원본 정점과 인덱스를 사용하여 LOD별 단순화 결과를 생성합니다.
-	TArray<uint32> GenerateSimplifiedIndices(const TArray<FVertexPNCT>& Vertices, const TArray<uint32>& SourceIndices, float TriangleRatio)
+	TArray<uint32> GenerateSimplifiedIndices(const TArray<FVertexPNCT>& Vertices, 
+		const TArray<uint32>& SourceIndices, float TriangleRatio,float TargetError,
+		bool bAllowAttributeCollapse)
 	{
 		TArray<uint32> Result;
 
@@ -56,7 +58,6 @@ namespace
 		}
 
 		const size_t SourceIndexCount = static_cast<size_t>(SourceIndices.Num());
-
 		size_t TargetIndexCount = static_cast<size_t>(SourceIndexCount * TriangleRatio);
 
 		TargetIndexCount -= TargetIndexCount % 3;
@@ -72,27 +73,36 @@ namespace
 			return Result;
 		}
 
-		Result.resize(SourceIndexCount);
+		Result.SetNum(SourceIndexCount);
 
 		float ResultError = 0.0f;
+		size_t ResultCount = 0;
 
-		const size_t SimplifiedIndexCount =
-			meshopt_simplify(
-				Result.GetData(),
-				SourceIndices.GetData(),
-				SourceIndexCount,
+		if (bAllowAttributeCollapse) 
+		{
+			const float AttributeWeights[9] = {
+					0.5f, 0.5f, 0.5f,
+					0.0f, 0.0f, 0.0f, 0.0f,
+					1.0f, 1.0f
+					};
 
-				&Vertices[0].x,
-				static_cast<size_t>(Vertices.Num()),
-				sizeof(FVertexPNCT),
+			ResultCount = meshopt_simplifyWithAttributes(
+				Result.GetData(), SourceIndices.GetData(), SourceIndexCount,
+				&Vertices[0].x, static_cast<size_t>(Vertices.Num()), sizeof(FVertexPNCT),
+				&Vertices[0].nx, sizeof(FVertexPNCT),
+				AttributeWeights, 9, nullptr,
+				TargetIndexCount, TargetError,
+				meshopt_SimplifySparse | meshopt_SimplifyPermissive,
+				&ResultError);
+		}
+		else 
+		{
+			ResultCount = meshopt_simplify(	Result.GetData(), SourceIndices.GetData(),SourceIndexCount,
+				&Vertices[0].x,	static_cast<size_t>(Vertices.Num()), sizeof(FVertexPNCT),
+				TargetIndexCount, TargetError, meshopt_SimplifySparse, &ResultError);
 
-				TargetIndexCount,
-				0.01f,
-				meshopt_SimplifySparse,
-				&ResultError
-			);
-
-		Result.resize(SimplifiedIndexCount);
+		}
+		Result.SetNum(ResultCount);
 
 		return Result;
 	}
@@ -110,29 +120,19 @@ namespace
 	}
 
 	// 단순화, 섹션별 캐시·오버드로, LOD 전체 정점 재배치 순서로 리소스를 생성합니다.
-	FStaticMeshLOD BuildLOD(
-		GResourceManager* RM,
-		const FStaticMeshLOD& SourceLOD,
-		const FStaticMeshData& MeshData,
-		const FString& ResourceKey,
-		float TriangleRatio,
-		float ScreenSize)
+	FStaticMeshLOD BuildLOD(GResourceManager* RM,const FStaticMeshLOD& SourceLOD,
+		const FStaticMeshData& MeshData, const FString& ResourceKey, float TriangleRatio,
+		float ScreenSize, float TargetError, bool bAllowAttributeCollapse)
 	{
 		FStaticMeshLOD LOD;
 
-		if (!RM || !SourceLOD.MeshResource)
-		{
-			return LOD;
-		}
+		if (!RM || !SourceLOD.MeshResource){ return LOD; }
 
 		TArray<uint32> LODIndices;
 
 		for (const FMeshSection& SourceSection : MeshData.Sections)
 		{
-			if (SourceSection.IndexCount == 0)
-			{
-				continue;
-			}
+			if (SourceSection.IndexCount == 0) { continue; }
 
 			if (SourceSection.FirstIndex + SourceSection.IndexCount >
 				static_cast<uint32>(MeshData.Indices.Num()))
@@ -145,25 +145,16 @@ namespace
 
 			for (uint32 Index = 0; Index < SourceSection.IndexCount; ++Index)
 			{
-				SectionIndices.Add(
-					MeshData.Indices[
-						SourceSection.FirstIndex + Index
-					]
-				);
+				SectionIndices.Add(MeshData.Indices[SourceSection.FirstIndex + Index]);
 			}
 
-			TArray<uint32> SimplifiedIndices =
-				GenerateSimplifiedIndices(
-					MeshData.Vertices,
-					SectionIndices,
-					TriangleRatio
-				);
+			TArray<uint32> SimplifiedIndices = GenerateSimplifiedIndices(MeshData.Vertices, 
+				SectionIndices,	TriangleRatio, TargetError, bAllowAttributeCollapse);
 
 			if (SimplifiedIndices.Num() < 3)
 			{
 				continue;
 			}
-
 			// LOD1/2도 정점 번호를 유지하며 각 섹션 내부의 삼각형 순서만 변경합니다.
 			meshopt_optimizeVertexCache(SimplifiedIndices.GetData(), SimplifiedIndices.GetData(),
 				static_cast<size_t>(SimplifiedIndices.Num()), static_cast<size_t>(MeshData.Vertices.Num()));
@@ -171,7 +162,6 @@ namespace
 			meshopt_optimizeOverdraw(SimplifiedIndices.GetData(), SimplifiedIndices.GetData(),
 				static_cast<size_t>(SimplifiedIndices.Num()), &MeshData.Vertices[0].x,
 				static_cast<size_t>(MeshData.Vertices.Num()), sizeof(FVertexPNCT), 1.05f);
-
 			FMeshSection LODSection{};
 			LODSection.MaterialIndex = SourceSection.MaterialIndex;
 			LODSection.FirstIndex =
@@ -352,7 +342,7 @@ void UStaticMesh::BuildFromMeshData(const FStaticMeshData& MeshData)
 				MeshData,
 				MeshData.PathFileName + "_LOD1",
 				0.3f,
-				0.5f
+				0.5f, 0.02f, false
 			);
 
 		if (LOD1.MeshResource)
@@ -372,7 +362,7 @@ void UStaticMesh::BuildFromMeshData(const FStaticMeshData& MeshData)
 				MeshData,
 				MeshData.PathFileName + "_LOD2",
 				0.08f,
-				0.15f
+				0.15f, 0.05f, false
 			);
 
 		if (LOD2.MeshResource)
