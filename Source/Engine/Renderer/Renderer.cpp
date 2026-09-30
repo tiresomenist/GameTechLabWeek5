@@ -751,6 +751,8 @@ bool FRenderer::BuildHZBMips()
 	ID3D11Buffer* NullBuffer = nullptr;
 	DeviceContext->CSSetConstantBuffers(0, 1, &NullBuffer);
 	DeviceContext->CSSetShader(nullptr, nullptr, 0);
+
+	return true;
 }
 
 // DSV 바인딩을 해제하고 다음 프레임에서 읽을 Hi-Z를 생성한다.
