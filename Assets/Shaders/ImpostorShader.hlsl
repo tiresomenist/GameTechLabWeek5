@@ -64,9 +64,9 @@ PS_INPUT mainVS(VS_INPUT Input)
         WorldUp = float3(0.0f, 1.0f, 0.0f);
     }
 
-    float3 Right = normalize(cross(WorldUp, ToCamera));
+    float3 Right = normalize(cross(ToCamera, WorldUp));
 
-    float3 Up = normalize(cross(ToCamera, Right));
+    float3 Up = normalize(cross(Right, ToCamera));
 
     float3 WorldPosition = Center + Right * Input.Position.x * ImpostorSize.x + Up * Input.Position.y * ImpostorSize.y;
     

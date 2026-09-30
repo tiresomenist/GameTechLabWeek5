@@ -224,8 +224,8 @@ FStaticMeshLOD UStaticMesh::BuildImpostorLOD(const FStaticMeshLOD& SourceLOD, co
 	LOD.bImpostor = true;
 
 	LOD.Impostor.TexturePath = TexturePath;
-	LOD.Impostor.ViewCountX = 8;
-	LOD.Impostor.ViewCountY = 4;
+	LOD.Impostor.ViewCountX = 16;
+	LOD.Impostor.ViewCountY = 8;
 
 	if (SourceLOD.bHasBounds) {
 		const FVector Center = (SourceLOD.BoundsMin + SourceLOD.BoundsMax) * 0.5f;
