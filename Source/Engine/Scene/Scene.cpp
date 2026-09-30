@@ -670,6 +670,7 @@ void UScene::RebuildCellContentBounds(FStaticUniformGridCell& Cell) const
         Cell.ContentBounds.Max.X = std::max(Cell.ContentBounds.Max.X, Bounds.Max.X);
         Cell.ContentBounds.Max.Y = std::max(Cell.ContentBounds.Max.Y, Bounds.Max.Y);
         Cell.ContentBounds.Max.Z = std::max(Cell.ContentBounds.Max.Z, Bounds.Max.Z);
+        // 필요하다면 Cell에 겹치는 Object들은 Fallback
     }
 }
 
@@ -694,7 +695,7 @@ void UScene::UpdateStaticUniformGridForActor(AActor* Actor, TArray<uint64>& Chan
         if (!OldKey)
         {
             bStaticUniformGridDirty = true;
-            continue;
+            return;
         }
         
         const uint64 PreviousKey = *OldKey;
@@ -702,7 +703,7 @@ void UScene::UpdateStaticUniformGridForActor(AActor* Actor, TArray<uint64>& Chan
         if(!OldCellIndex)
         {
             bStaticUniformGridDirty = true;
-            continue;
+            return;
         }
 
         FStaticUniformGridCell& OldCell = StaticUniformGrid[*OldCellIndex];

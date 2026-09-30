@@ -130,7 +130,7 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 	if (LODCount > 1)
 	{
 		// Bounds가 수집되지 않은 경우에만 기존 LOD0 중심 계산을 수행합니다.
-		const FVector WorldCenter = Context.bHasWorldBounds ? Context.WorldCenter
+		const FVector WorldCenter = Context.bHasWorldCenter ? Context.WorldCenter
 			: World.TransformPosition((LODs[0].BoundsMin + LODs[0].BoundsMax) * 0.5f);
 		const FVector ToCamera = WorldCenter - Context.CameraLocation;
 

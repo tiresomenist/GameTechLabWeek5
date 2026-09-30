@@ -17,7 +17,7 @@ struct FPrimitiveRenderContext
 	const FMatrix& World;
 	const FVector& WorldCenter;
 	const FVector& CameraLocation;
-	bool bHasWorldBounds;
+	bool bHasWorldCenter;
 };
 
 //struct FPrimitiveRenderData

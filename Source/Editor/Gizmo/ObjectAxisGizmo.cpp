@@ -152,7 +152,6 @@ void UObjectAxisGizmo::AppendHandleRenderData(const FGizmoHandle& Handle, D3D11_
 	if (Mesh->HasBounds())
 	{
 		const FVector LocalCenter =	(Mesh->GetBoundsMin() + Mesh->GetBoundsMax()) * 0.5f;
-
 		Object.SortCenterWS = Object.World.TransformPosition(LocalCenter);
 	}
 
