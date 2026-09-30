@@ -147,3 +147,27 @@ void FConstantBufferRing::EndFrameMap(ID3D11DeviceContext* Context)
         m_pMappedData = nullptr;
     }
 }
+
+bool FConstantBufferRing::AllocateFastBatch(uint32_t DataByteSize, uint32_t Count, uint32_t& OutBaseOffset, uint32_t& OutAlignedSize)
+{
+    if (!m_pMappedData || DataByteSize == 0 || Count == 0)
+        return false;
+
+    OutAlignedSize = AlignUp(DataByteSize, CB_ALIGNMENT);
+
+    const uint64_t TotalSize =
+        static_cast<uint64_t>(OutAlignedSize) * Count;
+
+    if (m_CurrentOffset + TotalSize > m_TotalCapacity)
+    {
+        assert(false &&
+            "ConstantBufferRing capacity exceeded! Increase ring buffer size.");
+        return false;
+    }
+
+    OutBaseOffset = m_CurrentOffset;
+
+    m_CurrentOffset += static_cast<uint32_t>(TotalSize);
+
+    return true;
+}

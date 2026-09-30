@@ -5,8 +5,74 @@
 #include <wrl/client.h>
 #include <stdexcept>
 #include <utility>
+#include <dxgi1_6.h>
+#pragma comment(lib,"dxgi.lib")
 
 using Microsoft::WRL::ComPtr;
+
+namespace
+{
+    // 고성능 하드웨어 GPU부터 Device 생성을 시도하고, 실패하면 기본 GPU를 사용합니다.
+    HRESULT CreatePreferredHardwareDevice(UINT Flags, ID3D11Device** OutDevice)
+    {
+        const D3D_FEATURE_LEVEL FeatureLevels[] = { D3D_FEATURE_LEVEL_11_0 };
+        ComPtr<IDXGIFactory6> Factory;
+
+        if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(Factory.GetAddressOf()))))
+        {
+            for (uint32 Index = 0; ; ++Index)
+            {
+                ComPtr<IDXGIAdapter1> Adapter;
+                const HRESULT EnumerateResult = Factory->EnumAdapterByGpuPreference(
+                    Index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
+                    IID_PPV_ARGS(Adapter.GetAddressOf()));
+                if (FAILED(EnumerateResult)) break;
+
+                DXGI_ADAPTER_DESC1 Desc{};
+                if (FAILED(Adapter->GetDesc1(&Desc))) continue;
+                if ((Desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0) continue;
+
+                // 어댑터를 직접 지정할 때는 UNKNOWN을 사용해야 합니다.
+                ComPtr<ID3D11Device> CandidateDevice;
+                const HRESULT Result = D3D11CreateDevice(
+                    Adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, Flags,
+                    FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION,
+                    CandidateDevice.GetAddressOf(), nullptr, nullptr);
+
+                if (SUCCEEDED(Result))
+                {
+                    *OutDevice = CandidateDevice.Detach();
+                    return Result;
+                }
+            }
+        }
+
+        // 고성능 어댑터 열거 또는 생성이 실패하면 기존 생성 경로를 사용합니다.
+        return D3D11CreateDevice(
+            nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, Flags,
+            FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION,
+            OutDevice, nullptr, nullptr);
+    }
+    // 실제 생성된 Device의 GPU 이름을 Visual Studio 출력 창에 표시합니다.
+    void PrintSelectedAdapter(ID3D11Device* Device)
+    {
+        if (!Device) return;
+
+        ComPtr<IDXGIDevice> DxgiDevice;
+        if (FAILED(Device->QueryInterface(IID_PPV_ARGS(DxgiDevice.GetAddressOf())))) return;
+
+        ComPtr<IDXGIAdapter> Adapter;
+        if (FAILED(DxgiDevice->GetAdapter(Adapter.GetAddressOf()))) return;
+
+        DXGI_ADAPTER_DESC Desc{};
+        if (FAILED(Adapter->GetDesc(&Desc))) return;
+
+        // 요청한 우선순위가 아닌, 실제 Device에 연결된 GPU 이름입니다.
+        OutputDebugStringW(L"[GPU] ");
+        OutputDebugStringW(Desc.Description);
+        OutputDebugStringW(L"\n");
+    }
+}
 
 GDevice* GDevice::GetInstance()
 {
@@ -25,20 +91,17 @@ void GDevice::Initialize()
 
     try
     {
-        const D3D_FEATURE_LEVEL FeatureLevels[] = { D3D_FEATURE_LEVEL_11_0 };
 
         UINT CreateDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 
 #if defined(_DEBUG) || defined(DEBUG)
         CreateDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
-
         ComPtr<ID3D11Device> NewDevice;
 
-        //Device만 생성
-        const HRESULT Result = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE,
-            nullptr, CreateDeviceFlags, FeatureLevels, ARRAYSIZE(FeatureLevels),
-            D3D11_SDK_VERSION, NewDevice.GetAddressOf(), nullptr, nullptr);
+        // 사용 가능한 고성능 GPU를 우선 선택합니다.
+        const HRESULT Result = CreatePreferredHardwareDevice(
+            CreateDeviceFlags, NewDevice.GetAddressOf());
 
         if (FAILED(Result))
         {
@@ -47,6 +110,7 @@ void GDevice::Initialize()
 
         Device = std::move(NewDevice);
         Context.Initialize(Device.Get());
+        PrintSelectedAdapter(Device.Get());
     }
     catch (...)
     {

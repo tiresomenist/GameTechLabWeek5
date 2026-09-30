@@ -32,10 +32,10 @@ void UViewportToolbarWindow::Render(float DeltaTime)
             }
             ImGui::EndMenu();
         }
-        // 기존 Stat 메뉴 옆에서 디버그 계측과 표시를 함께 전환합니다.
+        // 기존 Stat 메뉴 옆에서 디버그 오버레이 표시를 전환합니다.
         if (ImGui::MenuItem("Debug", nullptr, Editor->IsShowingDebugStats()))
             Editor->ToggleDebugStats();
-        
+
         ImGui::EndMainMenuBar();
     }
 

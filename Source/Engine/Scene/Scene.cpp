@@ -1,5 +1,4 @@
 #include "pch.h"
-#include "Engine/Util/DebugCpuStats.h"
 #include "Scene.h"
 #include "SceneValidation.h"
 #include <memory>
@@ -27,7 +26,7 @@
 
 namespace
 {
-    constexpr float StaticUniformGridCellSize = 2.5f;
+    constexpr float StaticUniformGridCellSize = 1.95f;
 
 	uint64 MakeStaticUniformGridKey(int32 X, int32 Y, int32 Z)
 	{
@@ -106,7 +105,6 @@ void UScene::BeginPlay()
 // 활성화된 Actor와 Component를 그룹 순서대로 실행합니다.
 void UScene::Tick(float DeltaTime)
 {
-    FScopedDebugCpuTime CpuTime(EDebugCpuStat::SceneTick);
     // 두 목록 모두 먼저 범위를 고정하여 신규 등록은 다음 프레임에 실행합니다.
     ActorTicks.BeginTick();
     ComponentTicks.BeginTick();
@@ -564,7 +562,6 @@ void UScene::BuildStaticUniformGrid() const
 {
 	if (!bStaticUniformGridDirty) return;
 	// 단순 조회는 제외하고 실제 전체 재구축만 측정합니다.
-	FScopedDebugCpuTime CpuTime(EDebugCpuStat::GridBuild);
 
 	StaticUniformGrid.Empty();
 	StaticUniformGridFallback.Empty();

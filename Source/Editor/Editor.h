@@ -5,6 +5,7 @@
 
 #include "Core/Container/String.h"
 #include "Core/Container/Array.h"
+#include "Core/Container/Deque.h"
 #include "Engine/Object/ObjectFactory.h"
 #include "Engine/Renderer/RenderUtil.h"
 #include "Editor/Controller/CameraController.h"
@@ -75,6 +76,11 @@ private:
 	bool bShowStatUnit = false;
 	bool bShowStatMemory = false;
 	bool bShowStatFPS = false;
+	// 디버그 오버레이의 프레임·피킹·해상도 표시를 전환합니다.
+	bool bShowDebugStats = false;
+	// 최근 3초 구간에 걸친 프레임 간격을 보관합니다.
+	TDeque<double> DebugFrameDurations;
+	double DebugFrameSeconds = 0.0;
 
 	void InitializeGizmos();
 	void InitializeWindows();
@@ -89,6 +95,7 @@ private:
 	float DrawStatUnit(ImDrawList* DrawList, float X, float Y);
 	float DrawStatMemory(ImDrawList* DrawList, float X, float Y);
 	void DrawDebugStatOverlay();
+	void UpdateDebugFrameAverage(float DeltaTime);
 	void ApplyPendingSceneCamera();
 
 	// 등록된 Property·Outliner 창에서 진행 중인 이름 편집을 취소한다.

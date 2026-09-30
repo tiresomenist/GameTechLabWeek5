@@ -1,5 +1,4 @@
 #include "pch.h"
-#include "Engine/Util/DebugCpuStats.h"
 #include "Renderer.h"
 #include "Engine/Renderer/Device.h"
 #include "Engine/Renderer/Context.h"
@@ -239,11 +238,7 @@ void FRenderer::SwapBuffer()
 	using Clock = std::chrono::high_resolution_clock;
 	auto StartWait = Clock::now();
 
-	HRESULT Result;
-	{
-		FScopedDebugCpuTime CpuTime(EDebugCpuStat::Present);
-		Result = SwapChain->Present(0, PresentFlags);
-	}
+	const HRESULT Result = SwapChain->Present(0, PresentFlags);
 
 	auto EndWait = Clock::now();
 	float CurWaitMs = std::chrono::duration<float, std::milli>(EndWait - StartWait).count();
@@ -700,8 +695,8 @@ bool FRenderer::BuildHZBMip0()
 	DeviceContext->CSSetShaderResources(0, 1, &SourceDepth);
 	DeviceContext->CSSetUnorderedAccessViews(0, 1, &OutputMip, nullptr);
 
-	const uint32 GroupCountX = (HierarchicalZBuffer.GetWidth() + 7) / 8;
-	const uint32 GroupCountY = (HierarchicalZBuffer.GetHeight() + 7) / 8;
+	const uint32 GroupCountX = (HierarchicalZBuffer.GetWidth() + 15) / 16;
+	const uint32 GroupCountY = (HierarchicalZBuffer.GetHeight() + 15) / 16;
 
 	DeviceContext->Dispatch(GroupCountX, GroupCountY, 1);
 
@@ -745,7 +740,7 @@ bool FRenderer::BuildHZBMips()
 		DeviceContext->UpdateSubresource(HZBConstantBuffer.Get(), 0, nullptr, &Constants, 0, 0);
 		DeviceContext->CSSetShaderResources(0, 1, &SourceHiZ);
 		DeviceContext->CSSetUnorderedAccessViews(0, 1, &DestinationUAV, nullptr);
-		DeviceContext->Dispatch((DestinationWidth + 7) / 8, (DestinationHeight + 7) / 8, 1);
+		DeviceContext->Dispatch((DestinationWidth + 15) / 16, (DestinationHeight + 15) / 16, 1);
 
 		ID3D11ShaderResourceView* NullSRV = nullptr;
 		ID3D11UnorderedAccessView* NullUAV = nullptr;
@@ -767,7 +762,9 @@ void FRenderer::FinishHZBFrame()
 	Context.UnbindRenderTargets();
 
 	// 생성 경로가 실패하면 다음 프레임은 Hi-Z로 객체를 숨기지 않는다.
-	bHZBValid = BuildHZBMip0();
+	//bHZBValid = BuildHZBMip0();
+	const bool bMip0Built = BuildHZBMip0();
+	bHZBValid = bMip0Built && BuildHZBMips();
 
 	Context.SetRenderTargets(FrameBufferRTV.Get(), DepthStencilView.Get());
 }

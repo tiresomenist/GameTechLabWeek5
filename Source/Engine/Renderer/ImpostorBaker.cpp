@@ -6,8 +6,8 @@
 #include "Engine/Resource/ResourceManager.h"
 #include "Engine/Renderer/Context.h"
 #include "Engine/Log.h"
-#include "../../Core/Math/Quaternion.h"
-
+#include "Core/Math/Quaternion.h"
+#include "Core/Util/File.h"
 #include <wincodec.h>
 #include <filesystem>
 #include <cmath>
@@ -528,7 +528,7 @@ bool FImpostorBaker::SavePNG(
         return false;
     }
 
-    std::filesystem::path OutputPath(FilePath);
+    const std::filesystem::path OutputPath = File::PathFromUtf8(FilePath);
 
     if (OutputPath.has_parent_path())
     {

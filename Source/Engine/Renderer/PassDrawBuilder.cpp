@@ -1,14 +1,16 @@
 #include "pch.h"
-#include "Engine/Util/DebugCpuStats.h"
 #include "PassDrawBuilder.h"
 #include "Engine/Resource/ResourceManager.h"
 #include <algorithm>
 #include <cmath>
 
-void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPipelineStateCache* PipelineCache, 
-	FPassDrawList& OutPassDraws, const TArray<uint32>& PrimitiveVisibility)
+void FPassDrawBuilder::BuildPassDraws(
+	const FViewRenderData& ViewLayoutData,
+	FPipelineStateCache* PipelineCache,
+	FPassDrawList& OutPassDraws,
+	const TArray<uint32>& PrimitiveVisibility)
 {
-	FScopedDebugCpuTime CpuTime(EDebugCpuStat::BuildPasses);
+
 	OutPassDraws.Clear();
 	m_MaterialIdToCBIndex.Empty();
 	m_ReferencedMaterials.Empty();
@@ -16,151 +18,383 @@ void FPassDrawBuilder::BuildPassDraws(const FViewRenderData& ViewLayoutData, FPi
 
 	const auto& ViewSnapshot = ViewLayoutData.View;
 	const auto& Objects = ViewLayoutData.Objects;
+
+	const uint32 PrimitiveCount =
+		static_cast<uint32>(ViewLayoutData.Primitives.Num());
+
+	const uint32 GizmoCount =
+		static_cast<uint32>(ViewLayoutData.Gizmos.Num());
+
+	// Clear() 이후 capacity 재사용.
+	OutPassDraws.OpaqueDraws.Reserve(PrimitiveCount);
+	OutPassDraws.AdditiveDraws.Reserve(PrimitiveCount);
+	OutPassDraws.OutlineDraws.Reserve(PrimitiveCount);
+	OutPassDraws.GizmoDraws.Reserve(GizmoCount);
+
 	FPipelineKey LastPipelineKey{};
 	const FPipelineState* LastPipelineState = nullptr;
 
-	auto FindPipeline = [&](const FPipelineKey& Key) -> const FPipelineState* {
-		if (LastPipelineState && LastPipelineKey == Key) return LastPipelineState;
+	auto FindPipeline =
+		[&](const FPipelineKey& Key) -> const FPipelineState*
+		{
+			if (LastPipelineState && LastPipelineKey == Key)
+				return LastPipelineState;
 
-		const FPipelineState* State = PipelineCache->GetOrCreate(Key);
-		if (State) {
-			LastPipelineKey = Key;
-			LastPipelineState = State;
-		}
-		return State;
-	};
+			const FPipelineState* State =
+				PipelineCache->GetOrCreate(Key);
+
+			if (State)
+			{
+				LastPipelineKey = Key;
+				LastPipelineState = State;
+			}
+
+			return State;
+		};
 
 	const FMaterial* LastMaterial = nullptr;
 	uint32 LastMaterialCBIndex = InvalidRenderId;
 
-	// 현재 View에서 머티리얼의 CB 인덱스를 찾고, 처음 사용하는 머티리얼만 등록합니다.
 	auto GetOrCreateMaterialCBIndex =
-		[this, &LastMaterial, &LastMaterialCBIndex](const FMaterial* Material) -> uint32
+		[this, &LastMaterial, &LastMaterialCBIndex]
+		(const FMaterial* Material) -> uint32
 		{
-			// 직전 요청과 같은 머티리얼이면 해시 조회를 생략합니다.
 			if (Material == LastMaterial)
 				return LastMaterialCBIndex;
 
 			uint32 MaterialCBIndex;
-			if (const uint32* Existing = m_MaterialIdToCBIndex.Find(Material->MaterialId))
+
+			if (const uint32* Existing =
+				m_MaterialIdToCBIndex.Find(Material->MaterialId))
 			{
 				MaterialCBIndex = *Existing;
 			}
 			else
 			{
-				// 참조 배열의 위치를 CB 인덱스로 사용합니다.
-				MaterialCBIndex = static_cast<uint32>(m_ReferencedMaterials.Num());
+				MaterialCBIndex =
+					static_cast<uint32>(m_ReferencedMaterials.Num());
+
 				m_ReferencedMaterials.Add(Material);
-				m_MaterialIdToCBIndex.Add(Material->MaterialId, MaterialCBIndex);
+				m_MaterialIdToCBIndex.Add(
+					Material->MaterialId,
+					MaterialCBIndex);
 			}
 
-			// 기존 항목을 찾은 경우에도 직전 조회 결과를 갱신합니다.
 			LastMaterial = Material;
 			LastMaterialCBIndex = MaterialCBIndex;
+
 			return MaterialCBIndex;
 		};
 
+	// 같은 Object가 여러 Section을 가지고 있을 경우
+	// Object CB와 DepthBucket을 다시 찾거나 계산하지 않는다.
+	uint32 LastObjectIndex = InvalidRenderId;
+	uint32 LastObjectCBIndex = InvalidRenderId;
+
+	uint32 LastDepthObjectIndex = InvalidRenderId;
+	uint32 LastDepthBucket = 0;
+
+	// 같은 MeshPage가 연속해서 나오는 경우 Binding 조회를 생략한다.
+	uint32 LastMeshPageId = InvalidRenderId;
+	FMeshPageBinding LastPageBinding{};
+
 	// 일반 primitives 처리
-	for (int32 Index = 0; Index < ViewLayoutData.Primitives.Num(); ++Index)
+	for (int32 Index = 0;
+		Index < ViewLayoutData.Primitives.Num();
+		++Index)
 	{
-		// 페이지 조회와 CB 매핑보다 먼저 제외한다.
-		if (PrimitiveVisibility[Index] == 0) continue;
+		// 페이지 조회 / CB 매핑보다 먼저 제외
+		if (PrimitiveVisibility[Index] == 0)
+			continue;
 
-		const FPrimitiveRenderData& Prim = ViewLayoutData.Primitives[Index];
-		if (Prim.ObjectIndex >= Objects.Num()) continue;
-		const FRenderObjectData& ObjDatum = Objects[Prim.ObjectIndex];
+		const FPrimitiveRenderData& Prim =
+			ViewLayoutData.Primitives[Index];
+
+		if (Prim.ObjectIndex >= Objects.Num())
+			continue;
+
+		const FRenderObjectData& ObjDatum =
+			Objects[Prim.ObjectIndex];
+
 		const FMaterial* Material = Prim.Material;
-		if (!Material || Material->MaterialId == InvalidRenderId) continue;
-		FMeshPageBinding PageBinding = GResourceManager::GetInstance()->GetMeshPageBinding(Prim.Geometry.MeshPageId);
 
-		uint32 ObjectCBIdx = GetOrCreateObjectCBIndex(Prim.ObjectIndex);
-		uint32 MaterialCBIdx = GetOrCreateMaterialCBIndex(Material);
-		uint32 DepthBucket = CalculateDepthBucket(ObjDatum.SortCenterWS, ViewSnapshot.ViewMatrix);
+		if (!Material ||
+			Material->MaterialId == InvalidRenderId)
+		{
+			continue;
+		}
 
-		EPrimitiveBlendMode BlendMode = Material ? Material->BlendMode : EPrimitiveBlendMode::Opaque;
-		bool bIsTransparent = (BlendMode == EPrimitiveBlendMode::Additive);
+		// ---------------------------------------------------------
+		// MeshPageBinding 캐시
+		// ---------------------------------------------------------
+		FMeshPageBinding PageBinding;
 
-		EPipelinePass TargetPass = bIsTransparent ? EPipelinePass::Additive : EPipelinePass::Opaque;
+		if (Prim.Geometry.MeshPageId == LastMeshPageId)
+		{
+			PageBinding = LastPageBinding;
+		}
+		else
+		{
+			PageBinding =
+				GResourceManager::GetInstance()
+				->GetMeshPageBinding(
+					Prim.Geometry.MeshPageId);
 
-		FPipelineKey Key = MakePipelineKey(Material, PageBinding.VertexFormat, TargetPass, ViewSnapshot.ViewMode);
-		const FPipelineState* State = FindPipeline(Key);
-		if (!State) continue;
+			LastMeshPageId =
+				Prim.Geometry.MeshPageId;
 
+			LastPageBinding = PageBinding;
+		}
+
+		// ---------------------------------------------------------
+		// Object CB 캐시
+		// ---------------------------------------------------------
+		uint32 ObjectCBIdx;
+
+		if (Prim.ObjectIndex == LastObjectIndex)
+		{
+			ObjectCBIdx = LastObjectCBIndex;
+		}
+		else
+		{
+			ObjectCBIdx =
+				GetOrCreateObjectCBIndex(
+					Prim.ObjectIndex);
+
+			LastObjectIndex =
+				Prim.ObjectIndex;
+
+			LastObjectCBIndex =
+				ObjectCBIdx;
+		}
+
+		// ---------------------------------------------------------
+		// Material CB 캐시
+		// ---------------------------------------------------------
+		const uint32 MaterialCBIdx =
+			GetOrCreateMaterialCBIndex(Material);
+
+		// ---------------------------------------------------------
+		// BlendMode
+		// ---------------------------------------------------------
+		const bool bIsTransparent =
+			(Material->BlendMode ==
+				EPrimitiveBlendMode::Additive);
+
+		// ---------------------------------------------------------
+		// DepthBucket
+		// Opaque에서만 필요
+		// ---------------------------------------------------------
+		uint32 DepthBucket = 0;
+
+		if (!bIsTransparent)
+		{
+			if (Prim.ObjectIndex == LastDepthObjectIndex)
+			{
+				DepthBucket = LastDepthBucket;
+			}
+			else
+			{
+				DepthBucket =
+					CalculateDepthBucket(
+						ObjDatum.SortCenterWS,
+						ViewSnapshot.ViewMatrix);
+
+				LastDepthBucket = DepthBucket;
+				LastDepthObjectIndex = Prim.ObjectIndex;
+			}
+		}
+
+		const EPipelinePass TargetPass =
+			bIsTransparent
+			? EPipelinePass::Additive
+			: EPipelinePass::Opaque;
+
+		// ---------------------------------------------------------
+		// Pipeline
+		// ---------------------------------------------------------
+		const FPipelineKey Key =
+			MakePipelineKey(
+				Material,
+				PageBinding.VertexFormat,
+				TargetPass,
+				ViewSnapshot.ViewMode);
+
+		const FPipelineState* State =
+			FindPipeline(Key);
+
+		if (!State)
+			continue;
+
+		// ---------------------------------------------------------
+		// Draw 생성
+		// ---------------------------------------------------------
 		FPreparedDraw Draw;
+
 		Draw.Source = &Prim;
 		Draw.PipelineId = State->PipelineId;
 		Draw.ObjectConstantIndex = ObjectCBIdx;
 		Draw.MaterialConstantIndex = MaterialCBIdx;
 		Draw.DepthBucket = DepthBucket;
-		Draw.MaterialId = Material ? Material->MaterialId : InvalidRenderId;
+		Draw.MaterialId = Material->MaterialId;
 		Draw.MeshPageId = Prim.Geometry.MeshPageId;
 		Draw.ObjectIndex = Prim.ObjectIndex;
-		Draw.SortKey =
-			(static_cast<uint64>(Draw.PipelineId) << 48) |
-			(static_cast<uint64>(Draw.MaterialId) << 32) |
-			(static_cast<uint64>(Draw.DepthBucket) << 16) |
-			(static_cast<uint64>(Draw.MeshPageId));
 
-		if (bIsTransparent) {
-			OutPassDraws.AdditiveDraws.Add(Draw);
-		}
-		else {
+		// Opaque만 SortKey가 필요하다.
+		if (!bIsTransparent)
+		{
+			Draw.SortKey =
+				(static_cast<uint64>(Draw.PipelineId) << 48) |
+				(static_cast<uint64>(Draw.MaterialId) << 32) |
+				(static_cast<uint64>(Draw.DepthBucket) << 16) |
+				(static_cast<uint64>(Draw.MeshPageId));
+
 			OutPassDraws.OpaqueDraws.Add(Draw);
 		}
+		else
+		{
+			OutPassDraws.AdditiveDraws.Add(Draw);
+		}
 
-		const bool bSelected = (Prim.Flags & Primitive_Selected) != 0;
-		const bool bAllowOutline = (Prim.Flags & Primitive_AllowOutline) != 0;
+		// ---------------------------------------------------------
+		// Outline
+		// ---------------------------------------------------------
+		const bool bSelected =
+			(Prim.Flags & Primitive_Selected) != 0;
 
-		if (bSelected && bAllowOutline) {
-			FPipelineKey OutlineKey = MakePipelineKey(Material, PageBinding.VertexFormat, EPipelinePass::Outline, ViewSnapshot.ViewMode);
-			const FPipelineState* OutlineState = FindPipeline(OutlineKey);
-			if (OutlineState) {
+		const bool bAllowOutline =
+			(Prim.Flags & Primitive_AllowOutline) != 0;
+
+		if (bSelected && bAllowOutline)
+		{
+			const FPipelineKey OutlineKey =
+				MakePipelineKey(
+					Material,
+					PageBinding.VertexFormat,
+					EPipelinePass::Outline,
+					ViewSnapshot.ViewMode);
+
+			const FPipelineState* OutlineState =
+				FindPipeline(OutlineKey);
+
+			if (OutlineState)
+			{
 				FPreparedDraw OutlineDraw = Draw;
-				OutlineDraw.PipelineId = OutlineState->PipelineId;
-				OutPassDraws.OutlineDraws.Add(OutlineDraw);
+				OutlineDraw.PipelineId =
+					OutlineState->PipelineId;
+
+				OutPassDraws.OutlineDraws.Add(
+					OutlineDraw);
 			}
 		}
 	}
 
-
+	// ---------------------------------------------------------
 	// 기즈모 처리
-	for (const FPrimitiveRenderData& GizmoPrim : ViewLayoutData.Gizmos)
+	// ---------------------------------------------------------
+	for (const FPrimitiveRenderData& GizmoPrim :
+		ViewLayoutData.Gizmos)
 	{
-		if (GizmoPrim.ObjectIndex >= Objects.Num()) continue;
+		if (GizmoPrim.ObjectIndex >= Objects.Num())
+			continue;
 
-		const FRenderObjectData& ObjDatum = Objects[GizmoPrim.ObjectIndex];
-		const FMaterial* Material = GizmoPrim.Material;
-		if (!Material || Material->MaterialId == InvalidRenderId) continue;
-		FMeshPageBinding PageBinding = GResourceManager::GetInstance()->GetMeshPageBinding(GizmoPrim.Geometry.MeshPageId);
+		const FRenderObjectData& ObjDatum =
+			Objects[GizmoPrim.ObjectIndex];
 
-		uint32 ObjectCBIdx = GetOrCreateObjectCBIndex(GizmoPrim.ObjectIndex);
-		uint32 MaterialCBIdx = GetOrCreateMaterialCBIndex(Material);
-		uint32 DepthBucket = CalculateDepthBucket(ObjDatum.SortCenterWS, ViewSnapshot.ViewMatrix);
-		FPipelineKey Key;
-		if (GizmoPrim.Topology == D3D10_PRIMITIVE_TOPOLOGY_LINELIST) {
-			Key = MakePipelineKey(Material, PageBinding.VertexFormat, EPipelinePass::Line, ViewSnapshot.ViewMode);
+		const FMaterial* Material =
+			GizmoPrim.Material;
+
+		if (!Material ||
+			Material->MaterialId == InvalidRenderId)
+		{
+			continue;
 		}
-		else {
-			Key = MakePipelineKey(Material, PageBinding.VertexFormat, EPipelinePass::Gizmo, ViewSnapshot.ViewMode);
+
+		// ---------------------------------------------------------
+		// MeshPageBinding 캐시
+		// ---------------------------------------------------------
+		FMeshPageBinding PageBinding;
+
+		if (GizmoPrim.Geometry.MeshPageId == LastMeshPageId)
+		{
+			PageBinding = LastPageBinding;
 		}
-		const FPipelineState* State = FindPipeline(Key);
-		if (!State) continue;
+		else
+		{
+			PageBinding =
+				GResourceManager::GetInstance()
+				->GetMeshPageBinding(
+					GizmoPrim.Geometry.MeshPageId);
+
+			LastMeshPageId =
+				GizmoPrim.Geometry.MeshPageId;
+
+			LastPageBinding = PageBinding;
+		}
+
+		// ---------------------------------------------------------
+		// Object CB 캐시
+		// ---------------------------------------------------------
+		uint32 ObjectCBIdx;
+
+		if (GizmoPrim.ObjectIndex == LastObjectIndex)
+		{
+			ObjectCBIdx = LastObjectCBIndex;
+		}
+		else
+		{
+			ObjectCBIdx =
+				GetOrCreateObjectCBIndex(
+					GizmoPrim.ObjectIndex);
+
+			LastObjectIndex =
+				GizmoPrim.ObjectIndex;
+
+			LastObjectCBIndex =
+				ObjectCBIdx;
+		}
+
+		// Gizmo에서도 Material 캐시는 재사용
+		const uint32 MaterialCBIdx =
+			GetOrCreateMaterialCBIndex(Material);
+
+		EPipelinePass GizmoPass;
+
+		if (GizmoPrim.Topology ==
+			D3D10_PRIMITIVE_TOPOLOGY_LINELIST)
+		{
+			GizmoPass = EPipelinePass::Line;
+		}
+		else
+		{
+			GizmoPass = EPipelinePass::Gizmo;
+		}
+
+		const FPipelineKey Key =
+			MakePipelineKey(
+				Material,
+				PageBinding.VertexFormat,
+				GizmoPass,
+				ViewSnapshot.ViewMode);
+
+		const FPipelineState* State =
+			FindPipeline(Key);
+
+		if (!State)
+			continue;
 
 		FPreparedDraw Draw;
+
 		Draw.Source = &GizmoPrim;
 		Draw.PipelineId = State->PipelineId;
 		Draw.ObjectConstantIndex = ObjectCBIdx;
 		Draw.MaterialConstantIndex = MaterialCBIdx;
-		Draw.DepthBucket = DepthBucket;
-		Draw.MaterialId = Material ? Material->MaterialId : InvalidRenderId;
+		Draw.DepthBucket = 0;
+		Draw.MaterialId = Material->MaterialId;
 		Draw.MeshPageId = GizmoPrim.Geometry.MeshPageId;
 		Draw.ObjectIndex = GizmoPrim.ObjectIndex;
-		Draw.SortKey =
-			(static_cast<uint64>(Draw.PipelineId) << 48) |
-			(static_cast<uint64>(Draw.MaterialId) << 32) |
-			(static_cast<uint64>(Draw.DepthBucket) << 16) |
-			(static_cast<uint64>(Draw.MeshPageId));
 
+		// Gizmo는 현재 정렬하지 않으므로 SortKey 계산 안 함.
 		OutPassDraws.GizmoDraws.Add(Draw);
 	}
 }

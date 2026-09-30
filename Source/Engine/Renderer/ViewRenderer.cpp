@@ -1,5 +1,4 @@
 #include "pch.h"
-#include "Engine/Util/DebugCpuStats.h"
 #include "ViewRenderer.h"
 #include "Engine/Component/CameraComponent.h"
 #include "Engine/Renderer/Context.h"
@@ -432,11 +431,22 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 	State.PreviousFrameIndex = HZB.FrameIndex;
 	State.PreviousGeneration = HZB.Generation;
 	State.bHasPreviousView = true;
-	if (!bCanUseHistory || !D3DDevice || !DeviceContext)
+	if (!D3DDevice || !DeviceContext)
 	{
-		// 첫 프레임이나 카메라 변경 이전의 결과는 사용하지 않음
+		// 장치를 사용할 수 없는 경우에는 기존 자원 정리 동작을 유지합니다.
 		State.Culler.Release();
-		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()),
+		SubmissionStats.SetHZBCounts(
+			static_cast<uint32>(Data.GridCellCandidates.Num()),
+			Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
+		return;
+	}
+
+	if (!bCanUseHistory)
+	{
+		// 카메라나 이력 조건이 달라진 경우에는 버퍼를 보존합니다.
+		State.Culler.InvalidateHistory();
+		SubmissionStats.SetHZBCounts(
+			static_cast<uint32>(Data.GridCellCandidates.Num()),
 			Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
 		return;
 	}
@@ -457,7 +467,7 @@ void FViewRenderer::PreparePrimitiveVisibility(const FViewRenderData& Data, cons
 
 	if (HZBCells.IsEmpty())
 	{
-		State.Culler.Release();
+		State.Culler.InvalidateHistory();
 		SubmissionStats.SetHZBCounts(static_cast<uint32>(Data.GridCellCandidates.Num()),
 			Data.HZBRenderCellCount, bEnableHZBOcclusion, bDispatched);
 		return;
@@ -534,11 +544,10 @@ void FViewRenderer::RenderView(
 	PreparePrimitiveVisibility(Data, HZB);
 	PassDrawBuilder.BuildPassDraws(
 		Data, &PipelineStateCache, PassDraws, PrimitiveVisibility);
-	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws, OpaqueSortScratch);
+	FOpaqueDrawSorter::SortOpaqueDraws(PassDraws.OpaqueDraws, OpaqueSortDrawScratch, OpaqueSortIndexScratchA, OpaqueSortIndexScratchB);
 
 	{
-		// 상수 구성, Map, 복사, Unmap을 한 구간으로 측정합니다.
-		FScopedDebugCpuTime CpuTime(EDebugCpuStat::ConstantUpload);
+		// 현재 View의 상수를 한 번의 Map/Unmap 구간에서 업로드합니다.
 		CBRingBuffer.BeginFrameMap(Context1.Get());
 		CBManager.UploadObjectConstants(Context1.Get(), &CBRingBuffer,
 			Data, PassDrawBuilder.GetReferenceObjectIndices());
@@ -552,12 +561,10 @@ void FViewRenderer::RenderView(
 	ID3D11Buffer* ViewCB = TransformConstantBuffer.Get();
 
 	{
-		FScopedDebugCpuTime CpuTime(EDebugCpuStat::Opaque);
 		PassExecutor.ExecutePass(Context1.Get(), PassDraws.OpaqueDraws,
 			PipelineStateCache, CBManager, ViewCB, SubmissionStats);
 	}
 	{
-		FScopedDebugCpuTime CpuTime(EDebugCpuStat::OtherPasses);
 		RenderBatchLine(Data.View.ViewProjection);
 		PassExecutor.ExecutePass(Context1.Get(), PassDraws.AdditiveDraws,
 			PipelineStateCache, CBManager, ViewCB, SubmissionStats);
@@ -588,12 +595,12 @@ void FViewRenderer::FilterGridCellCandidates(const FRenderViewSnapshot& View,
 
 	if (!bCanUseHistory)
 	{
+		// 수집 단계에서부터 이전 판정을 폐기하고, 대기 중인 결과도 적용하지 않습니다.
+		State.Culler.InvalidateHistory();
+
 		for (const FGridCellCandidate& Candidate : Candidates)
-		{
 			OutRenderGridCells.Add(Candidate);
-		}
-		FDebugCpuStats::Get().AddVisibility(static_cast<uint32>(Candidates.Num()),
-			static_cast<uint32>(OutRenderGridCells.Num()), false);
+
 		return;
 	}
 
@@ -606,8 +613,6 @@ void FViewRenderer::FilterGridCellCandidates(const FRenderViewSnapshot& View,
 			OutRenderGridCells.Add(Candidate);
 		}
 	}
-	FDebugCpuStats::Get().AddVisibility(static_cast<uint32>(Candidates.Num()),
-		static_cast<uint32>(OutRenderGridCells.Num()), true);
 
 }
 

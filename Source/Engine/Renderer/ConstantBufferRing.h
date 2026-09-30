@@ -36,6 +36,19 @@ public:
 	bool BeginFrameMap(ID3D11DeviceContext* Context);
 	FCBRangeAllocation AllocateFast(const void* Data, uint32_t DataByteSize);
 	void EndFrameMap(ID3D11DeviceContext* Context);
+
+	bool AllocateFastBatch(uint32_t DataByteSize, uint32_t Count, uint32_t& OutBaseOffset, uint32_t& OutAlignedSize);
+
+	uint8_t* GetMappedWritePtr(uint32_t ByteOffset)
+	{
+		return m_pMappedData + ByteOffset;
+	}
+
+	ID3D11Buffer* GetBuffer() const
+	{
+		return m_Buffer.Get();
+	}
+
 public:
 	static constexpr uint32_t CB_ALIGNMENT = 256;
 	static uint32_t AlignUp(uint32_t Size, uint32_t Alignment) {

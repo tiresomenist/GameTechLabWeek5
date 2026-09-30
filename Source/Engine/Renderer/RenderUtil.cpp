@@ -1,5 +1,4 @@
 #include "pch.h"
-#include "Engine/Util/DebugCpuStats.h"
 #include "RenderUtil.h"
 #include "Core/Container/Array.h"
 #include "Core/Math/Box.h"
@@ -29,12 +28,10 @@ namespace
 	}
 }
 
-// 현재 View의 Bounds와 Frustum을 검사하고 객체별 렌더 요청을 수집한다.
 void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComponent* Camera,
 	TArray<FPrimitiveRenderData>& RenderList, TArray<FRenderObjectData>& Objects,
 	const TArray<FGridCellCandidate>& RenderGridCells, const FFrustum* Frustum)
 {
-	FScopedDebugCpuTime CpuTime(EDebugCpuStat::Gather);
 	RenderList.Empty();
 	if (!Editor || !Scene || !Camera) return;
 
@@ -88,12 +85,12 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 					}
 				}
 			}
-			
+
 
 			const int32 FirstIndex = RenderList.Num();
 
 			// 캐시와 직접 계산 경로 모두 중심의 유효성을 LOD 수집에 전달합니다.
-			const FPrimitiveRenderContext Context{Camera, Object.World, Object.SortCenterWS, CameraLocation, bHasWorldCenter};
+			const FPrimitiveRenderContext Context{ Camera, Object.World, Object.SortCenterWS, CameraLocation, bHasWorldCenter };
 			Primitive->CreateRenderData(RenderList, Context, Primitive == SelectedComponent);
 			const int32 EndIndex = RenderList.Num();
 			if (FirstIndex == EndIndex) { return; }
@@ -104,16 +101,19 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			for (int32 Index = FirstIndex; Index < EndIndex; ++Index)
 			{
 				RenderList[Index].ObjectIndex = ObjectIndex;
+			}
 
-				if (RenderList[Index].bImpostor) {
-					Objects[ObjectIndex].ImpostorCenterWS = RenderList[Index].ImpostorCenterWS;
+			if (RenderList[FirstIndex].bImpostor)
+			{
+				const FPrimitiveRenderData& ImpostorData = RenderList[FirstIndex];
 
-					Objects[ObjectIndex].ImpostorSize = RenderList[Index].ImpostorSize;
+				Objects[ObjectIndex].ImpostorCenterWS = ImpostorData.ImpostorCenterWS;
 
-					Objects[ObjectIndex].ImpostorUV = RenderList[Index].ImpostorUV;
+				Objects[ObjectIndex].ImpostorSize = ImpostorData.ImpostorSize;
 
-					Objects[ObjectIndex].ImpostorCameraLocation = RenderList[Index].ImpostorCameraLocation;
-				}
+				Objects[ObjectIndex].ImpostorUV = ImpostorData.ImpostorUV;
+
+				Objects[ObjectIndex].ImpostorCameraLocation = ImpostorData.ImpostorCameraLocation;
 			}
 		};
 
@@ -162,7 +162,6 @@ void RenderUtil::GetRenderList(FEditor* Editor, UScene* Scene, const UCameraComp
 			RenderList.Add(Data);
 		});
 
-	FDebugCpuStats::Get().AddRequests(static_cast<uint32>(RenderList.Num()));
 	return;
 }
 

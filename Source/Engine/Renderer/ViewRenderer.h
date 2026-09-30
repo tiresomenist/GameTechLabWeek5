@@ -87,7 +87,9 @@ public:
 	{
 		// 배열 용량은 유지하면서 Source와 Material 참조를 제거합니다.
 		PassDraws.Clear();
-		OpaqueSortScratch.Empty();
+		OpaqueSortDrawScratch.Empty();
+		OpaqueSortIndexScratchA.Empty();
+		OpaqueSortIndexScratchB.Empty();
 		PassDrawBuilder.ReleaseViewReferences();
 	}
 	void SetHZBOcclusionEnabled(bool bEnabled) { bEnableHZBOcclusion = bEnabled; }
@@ -175,7 +177,11 @@ private:
 	FConstantBufferManager CBManager;
 	FPassExecutor PassExecutor;
 	FPassDrawList PassDraws;
-	TArray<FPreparedDraw> OpaqueSortScratch;
+
+	TArray<FPreparedDraw> OpaqueSortDrawScratch;
+	TArray<uint32> OpaqueSortIndexScratchA;
+	TArray<uint32> OpaqueSortIndexScratchB;
+
 	FRenderSubmissionStats SubmissionStats;
 
 	TArray<uint32> PrimitiveVisibility;

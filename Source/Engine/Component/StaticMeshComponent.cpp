@@ -180,24 +180,35 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 			0.0f);
 
 		const FVector ToCamera =
-			(Context.CameraLocation - ImpostorCenterWS).GetNormalized();
+			Context.CameraLocation - ImpostorCenterWS;
 
-		const float Yaw = std::atan2(ToCamera.Y, ToCamera.X);
+		const float Yaw =
+			std::atan2(ToCamera.Y, ToCamera.X);
 
-		float NomalizedYaw = Yaw / (2.0f * PI);
+		float NomalizedYaw =
+			Yaw / (2.0f * PI);
 
 		if (NomalizedYaw < 0.0f)
 			NomalizedYaw += 1.0f;
 
-		int32 ViewX = static_cast<int32>(
-			std::round(
-				NomalizedYaw *
-				static_cast<float>(LOD.Impostor.ViewCountX)));
+		const int32 ViewCountX =
+			static_cast<int32>(LOD.Impostor.ViewCountX);
 
-		ViewX %= static_cast<int32>(LOD.Impostor.ViewCountX);
+		int32 ViewX = static_cast<int32>(NomalizedYaw * static_cast<float>(ViewCountX) + 0.5f);
+
+		if (ViewX >= ViewCountX)
+			ViewX = 0;
+
+		const float Distance = ToCamera.Length();
+		const float InvDistance =
+			Distance > 0.0001f ? 1.0f / Distance : 0.0f;
 
 		const float Pitch =
-			std::asin(std::clamp(ToCamera.Z, -1.0f, 1.0f));
+			std::asin(
+				std::clamp(
+					ToCamera.Z * InvDistance,
+					-1.0f,
+					1.0f));
 
 		constexpr float PitchMin = -60.0f * PI / 180.0f;
 		constexpr float PitchMax = 60.0f * PI / 180.0f;
@@ -209,21 +220,18 @@ void UStaticMeshComponent::CreateRenderData(TArray<FPrimitiveRenderData>& Compon
 			(ClampedPitch - PitchMin) /
 			(PitchMax - PitchMin);
 
-		int32 ViewY = static_cast<int32>(
-			std::round(
-				(1.0f - Pitch01) *
-				static_cast<float>(LOD.Impostor.ViewCountY - 1)));
+		const int32 ViewCountY =
+			static_cast<int32>(LOD.Impostor.ViewCountY);
 
-		ViewY = std::clamp(
-			ViewY,
-			0,
-			static_cast<int32>(LOD.Impostor.ViewCountY - 1));
+		int32 ViewY = static_cast<int32>((1.0f - Pitch01) * static_cast<float>(ViewCountY - 1) + 0.5f);
+
+		ViewY = std::clamp(ViewY, 0, ViewCountY - 1);
 
 		const float UVScaleX =
-			1.0f / static_cast<float>(LOD.Impostor.ViewCountX);
+			1.0f / static_cast<float>(ViewCountX);
 
 		const float UVScaleY =
-			1.0f / static_cast<float>(LOD.Impostor.ViewCountY);
+			1.0f / static_cast<float>(ViewCountY);
 
 		ImpostorUV = FVector4(
 			UVScaleX,

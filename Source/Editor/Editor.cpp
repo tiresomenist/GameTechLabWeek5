@@ -1,5 +1,4 @@
 ﻿#include "pch.h"
-#include "Engine/Util/DebugCpuStats.h"
 #include "Editor.h"
 
 #include "Engine/Component/CameraComponent.h"
@@ -349,6 +348,7 @@ void FEditor::InitializeGrids()
 
 void FEditor::Tick(float DeltaTime)
 {
+	UpdateDebugFrameAverage(DeltaTime);
 	ApplyPendingSceneCamera();
 
 	//CameraController.Tick(DeltaTime);
@@ -1019,24 +1019,37 @@ void FEditor::DrawStatOverlay()
 	DrawList->PopClipRect();
 }
 
-// 디버그 표시와 다음 프레임의 계측을 함께 전환합니다.
+// 프레임 간격을 누적하고 최근 3초보다 오래된 프레임을 제거합니다.
+void FEditor::UpdateDebugFrameAverage(float DeltaTime)
+{
+	if (DeltaTime <= 0.0f) return;
+	double FrameSeconds = static_cast<double>(DeltaTime);
+	DebugFrameDurations.PushLast(FrameSeconds);
+	DebugFrameSeconds += FrameSeconds;
+	// 3초 경계를 걸치는 프레임은 유지하여 긴 프레임도 평균에 반영합니다.
+	while (DebugFrameDurations.Num() > 1 && DebugFrameSeconds - DebugFrameDurations[0] >= 3.0)
+	{
+		DebugFrameSeconds -= DebugFrameDurations[0];
+		DebugFrameDurations.PopFirst();
+	}
+}
+
+// 디버그 오버레이 표시를 전환합니다.
 void FEditor::ToggleDebugStats()
 {
-	FDebugCpuStats& Stats = FDebugCpuStats::Get();
-	Stats.SetEnabled(!Stats.IsEnabled());
+	bShowDebugStats = !bShowDebugStats;
 }
 
 // 상단 메뉴의 선택 상태에 사용합니다.
 bool FEditor::IsShowingDebugStats() const
 {
-	return FDebugCpuStats::Get().IsEnabled();
+	return bShowDebugStats;
 }
 
 // 기존 Stat처럼 활성 뷰 우측 상단에 입력을 가로채지 않는 텍스트를 직접 그립니다.
 void FEditor::DrawDebugStatOverlay()
 {
-	FDebugCpuStats& Debug = FDebugCpuStats::Get();
-	if (!Debug.IsEnabled()) return;
+	if (!bShowDebugStats) return;
 	const ImGuiViewport* Main = ImGui::GetMainViewport();
 	ImVec2 ClipMin = Main->WorkPos;
 	ImVec2 ClipMax(Main->WorkPos.x + Main->WorkSize.x, Main->WorkPos.y + Main->WorkSize.y);
@@ -1058,39 +1071,22 @@ void FEditor::DrawDebugStatOverlay()
 	const float AvailableHeight = ClipMax.y - ClipMin.y - Margin * 2.0f;
 	if (AvailableWidth <= 0.0f || AvailableHeight < LineHeight) return;
 
-	const FEngineStats& EngineStats = GEngine::GetInstance()->GetEngineStats();
-	const FUnitStat& Unit = EngineStats.GetUnitStat();
-	const FRenderSubmissionCounts& Submission = EngineStats.GetSubmissionStat();
 	const D3D11_VIEWPORT& Screen = GEngine::GetInstance()->GetViewport();
-	const FDebugRenderCounts& Counts = Debug.GetRenderCounts();
 	// 표시 행 수가 고정되어 있으므로 프레임마다 동적 배열을 할당하지 않습니다.
-	char Lines[DebugCpuStatCount + 12][256]{};
+	char Lines[4][256]{};
 	uint32 LineCount = 0;
-	if (Debug.HasSamples())
-		sprintf_s(Lines[LineCount++], "DEBUG   %.1f FPS  /  %.2f ms", Debug.GetFPS(), 1000.0 / Debug.GetFPS());
-	else sprintf_s(Lines[LineCount++], "DEBUG   Collecting CPU samples...");
+	// 순간 FPS의 평균 대신 프레임 수 / 누적 시간으로 실제 평균 FPS를 구합니다.
+	const double FPS = DebugFrameSeconds > 0.0 ? DebugFrameDurations.Num() / DebugFrameSeconds : 0.0;
+	const double FrameMs = FPS > 0.0 ? 1000.0 / FPS : 0.0;
+	sprintf_s(Lines[LineCount++], "DEBUG (3s avg)   %.1f FPS  /  %.2f ms", FPS, FrameMs);
 	sprintf_s(Lines[LineCount++], "Screen %.0f x %.0f  |  View %.0f x %.0f", Screen.Width, Screen.Height,
 		Active ? Active->Width : Main->WorkSize.x, Active ? Active->Height : Main->WorkSize.y);
-	sprintf_s(Lines[LineCount++], "Game %.2f  |  Draw %.2f  |  GPU %.2f ms", Unit.GameTimeMs, Unit.DrawTimeMs, Unit.GPUTimeMs);
 	if (ObjectPicker && ObjectPicker->GetTotalPickCount() > 0)
 	{
 		sprintf_s(Lines[LineCount++], "Pick count %u  |  Last %.3f ms", ObjectPicker->GetTotalPickCount(), ObjectPicker->GetLastPickTimeMs());
 		sprintf_s(Lines[LineCount++], "Pick avg %.3f  |  Total %.3f ms", ObjectPicker->GetAveragePickTimeMs(), ObjectPicker->GetTotalPickTimeMs());
 	}
 	else sprintf_s(Lines[LineCount++], "Pick: no object pick recorded");
-	sprintf_s(Lines[LineCount++], "Requests %u  |  Draws %u  |  Tris %u", Counts.Requests, Submission.DrawCalls, Submission.Triangles);
-	sprintf_s(Lines[LineCount++], "HZB cells %u -> %u  |  History %u/%u views", Counts.CandidateCells, Counts.RenderCells, Counts.HistoryViews, Counts.Views);
-	sprintf_s(Lines[LineCount++], "CPU: avg / peak ms (calls/frame)");
-	sprintf_s(Lines[LineCount++], "0.25s / all views; nested rows overlap");
-	static constexpr const char* Labels[] = {"CPU frame", "Scene Tick", "Editor Tick", "  Gizmo Tick",
-		"BVH update", "BVH rebuild", "Grid rebuild", "GetRenderList", "BuildPassDraws", "Opaque sort",
-		"CB map/upload", "Opaque submit", "Other passes", "HZB Map", "Present"};
-	for (uint32 Index = 0; Index < DebugCpuStatCount; ++Index)
-	{
-		const FDebugCpuSample& Sample = Debug.GetSample(static_cast<EDebugCpuStat>(Index));
-		sprintf_s(Lines[LineCount++], "%s: %.3f / %.3f (%.1f)", Labels[Index], Sample.AverageMs, Sample.PeakMs, Sample.CallsPerFrame);
-	}
-
 	ImFont* Font = ImGui::GetFont();
 	float ColumnWidth = 0.0f;
 	for (uint32 Index = 0; Index < LineCount; ++Index)
