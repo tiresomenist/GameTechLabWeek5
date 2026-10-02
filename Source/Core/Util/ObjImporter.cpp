@@ -671,8 +671,8 @@ namespace
         const int32 DropAxis = NX >= NY && NX >= NZ ? 0 : (NY >= NZ ? 1 : 2);
         for (FEarPoint& P : Points)
         {
-            if (std::abs(P.X * Normal.X + P.Y * Normal.Y + P.Z * Normal.Z) > PlaneTolerance)
-                ParseError(Path, LineNumber, "Non-planar polygon is not supported");
+            //if (std::abs(P.X * Normal.X + P.Y * Normal.Y + P.Z * Normal.Z) > PlaneTolerance)
+            //    ParseError(Path, LineNumber, "Non-planar polygon is not supported");
 
             if (DropAxis == 0) P = { P.Y, P.Z, 0.0 };
             else if (DropAxis == 1) P = { P.X, P.Z, 0.0 };
